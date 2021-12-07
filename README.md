@@ -53,7 +53,7 @@ Steps to run the connector
 
 ## Using Intellij IDEA
 
-Import the project into IntelliJ IDEA and all the maven commands are enabled. Refer Build the connector section for next steps
+Import the project into IntelliJ IDEA and all the maven commands are enabled automatically. Refer Build the connector section for next steps
 
 # Authors
 
