@@ -32,17 +32,17 @@ public class LoadSolaceConnector implements Runnable{
         sparkSession.sparkContext().defaultMinPartitions();
 
         Dataset<Row> dataset = sparkSession.readStream()
-                .option("host", "tcps://mr-1oqbbo5qa1jx.messaging.solace.cloud:55443")
-                .option("vpn", "solaceelk")
-                .option("username", "solace-cloud-client")
-                .option("password", "ffdhb83a9c63etes2mocui9c9t")
-                .option("queue", "Q/Notifications")
+                .option("host", "")
+                .option("vpn", "")
+                .option("username", "")
+                .option("password", "")
+                .option("queue", "")
                 .option("batchSize", 10)
-                .option("checkpointLocation", "/Users/sravanthotakura/Documents/Spark3Test")
+                .option("checkpointLocation", "")
                 .format("com.solace.connector.spark.SolaceSparkStream").load();
 
         DataStreamWriter dsw = dataset.writeStream()
-                .option("checkpointLocation", "/Users/sravanthotakura/Documents/Spark3Test")
+                .option("checkpointLocation", "")
                 .foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataFrame, batchId) ->
                         dataFrame.show()
                 );
