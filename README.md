@@ -24,7 +24,7 @@ This repository contains code that connects to specified Solace service and inse
 ## Architecture
 
 <p align="center">
-   <img width="600" height="300" src="https://user-images.githubusercontent.com/83568543/154064550-b41efce5-6d63-45f9-b5c4-381071a4ea0f.png"/>
+   <img width="700" height="400" src="https://user-images.githubusercontent.com/83568543/154064550-b41efce5-6d63-45f9-b5c4-381071a4ea0f.png"/>
 </p>
 
 # Prerequisites
