@@ -24,7 +24,7 @@ This repository contains code that connects to specified Solace service and inse
 ## Architecture
 
 <p align="center">
-![Spark Connector Architecture](https://user-images.githubusercontent.com/83568543/154063331-9e336223-8324-43f1-9c91-c19c89e75159.png)
+   <img width="200" src="https://user-images.githubusercontent.com/83568543/154063331-9e336223-8324-43f1-9c91-c19c89e75159.png"/>
 </p>
 
 # Prerequisites
