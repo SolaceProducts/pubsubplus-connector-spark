@@ -40,10 +40,14 @@ public class SolacePartitionReader implements PartitionReader<InternalRow> {
 //            System.exit(0);
 //        }
         log.info("SolaceSparkConnector - Creating internal row for solace record " + solaceTextRecord.getMessageId());
+        Long timestamp = solaceTextRecord.getSenderTimestamp();
+        if(solaceTextRecord.getSenderTimestamp() == 0) {
+            timestamp = System.currentTimeMillis();
+        }
         InternalRow row = InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
                 new Object[]{UTF8String.fromString(Long.toString(solaceTextRecord.getMessageId())),
                         solaceTextRecord.getPayload(), UTF8String.fromString(solaceTextRecord.getDestination()),
-                        DateTimeUtils.fromJavaTimestamp(new Timestamp(solaceTextRecord.getSenderTimestamp()))})).seq());
+                        DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp))})).seq());
         log.info("SolaceSparkConnector - Internal Row Created: " + row.getString(0));
         return row;
     }

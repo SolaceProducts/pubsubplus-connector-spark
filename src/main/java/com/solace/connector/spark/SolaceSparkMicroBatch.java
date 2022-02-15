@@ -70,14 +70,20 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
             while (iterator.hasNext()) {
                 key = iterator.next();
                 com.solace.connector.spark.Message value = key.getValue();
-                temp.add(value);
                 try {
-                    k = k + 1;
-                    if (k == size || !iterator.hasNext()) {
-                        currentOffset = "";
-                        List<String> msgIDs = temp.stream().map(value1 -> value1.message.getMessageId()).collect(Collectors.toList());
-                        currentOffset = String.join(",", msgIDs);
-                        break;
+                    if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(value.message.getMessageId())) {
+                        log.info("SolaceSparkConnector - Acknowledging previously processed message " + value.message.getMessageId());
+                        value.message.ackMessage();
+                        iterator.remove();
+                    } else {
+                        k = k + 1;
+                        temp.add(value);
+                        if (k == size || !iterator.hasNext()) {
+                            currentOffset = "";
+                            List<String> msgIDs = temp.stream().map(value1 -> value1.message.getMessageId()).collect(Collectors.toList());
+                            currentOffset = String.join(",", msgIDs);
+                            break;
+                        }
                     }
                 } catch (Exception e) {
                     log.error("SolaceSparkConnector - Error converting message to Solace Text Record " + e.getMessage());
@@ -88,6 +94,7 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
         } finally {
             reentrantLock.unlock();
         }
+
         return new SolaceOffset(currentOffset);
     }
 

@@ -1,7 +1,9 @@
 package com.solace.connector.spark;
 
 import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import com.solacesystems.jcsmp.SDTMap;
+import com.solacesystems.jcsmp.impl.ReplicationGroupMessageIdImpl;
 
 import java.io.Serializable;
 import java.util.HashMap;
