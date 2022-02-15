@@ -21,9 +21,13 @@ This repository contains code that connects to specified Solace service and inse
 * Message are acknowledged to Solace once commit method is triggered from Spark. Commit is triggered from Spark on successful write operation.
 * Message IDs are persisted in checkpoint location once commit is successfull. This helps in deduplication of messages and guaranteed processing.
 
+## Architecture
+
+![Spark Connector Architecture](https://user-images.githubusercontent.com/83568543/154063331-9e336223-8324-43f1-9c91-c19c89e75159.png)
+
 # Prerequisites
 
-Java 8
+Java
 
 # Build the connector
 
