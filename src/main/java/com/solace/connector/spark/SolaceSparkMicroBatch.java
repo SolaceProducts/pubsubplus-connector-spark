@@ -71,7 +71,7 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
                 key = iterator.next();
                 com.solace.connector.spark.Message value = key.getValue();
                 try {
-                    if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(value.message.getMessageId())) {
+                    if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(",") && Arrays.asList(lastOffsetCommitted.split(",")).contains(value.message.getMessageId())) {
                         log.info("SolaceSparkConnector - Acknowledging previously processed message " + value.message.getMessageId());
                         value.message.ackMessage();
                         iterator.remove();
@@ -119,18 +119,18 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
 //                            messageIDs = lastOffsetCommitted.split(":")[1];
 //                        }
 
-                        if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(value.message.getMessageId())) {
+                        if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(",") && Arrays.asList(lastOffsetCommitted.split(",")).contains(value.message.getMessageId())) {
                             log.info("SolaceSparkConnector - Acknowledging previously processed message " + value.message.getMessageId());
                             value.message.ackMessage();
                             iterator.remove();
-                        } else if (endOffset.contains(value.message.getMessageId())) {
+                        } else if (endOffset.contains(",") && Arrays.asList(endOffset.split(",")).contains(value.message.getMessageId())) {
                             rowChunk.add(value);
                             k = k + 1;
                             iterator.remove();
                             if (k == size || !iterator.hasNext()) {
                                 batches.put(batchCount, rowChunk);
 //                                currentOffset = "";
-//                                List<String> msgIDs = rowChunk.stream().map(value1 -> value1.message.getMessageId()).collect(Collectors.toList());
+//                                List<String> msgIDs = rowChunk.stream().map(value1 -> value1.message.getApplicationMessageId()).collect(Collectors.toList());
 //                                currentOffset = String.join(",", msgIDs);
                                 ArrayList<SolaceRecord> partitionData = new ArrayList(rowChunk.stream().map(message -> {
                                     try {
@@ -217,7 +217,7 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
                     ListIterator<com.solace.connector.spark.Message> messageIterator = message.getValue().listIterator();
                     while (messageIterator.hasNext()) {
                         com.solace.connector.spark.Message msg = messageIterator.next();
-                        if ((committedOffsetStr.length() > 0 && committedOffsetStr.contains(msg.message.getMessageId()))) {
+                        if ((committedOffsetStr.length() > 0 && committedOffsetStr.contains(",") && Arrays.asList(committedOffsetStr.split(",")).contains(msg.message.getMessageId()))) {
                             msg.message.ackMessage();
                             log.info("SolaceSparkConnector - Acknowledged Solace Message with ID " + msg.message.getMessageId());
                             removeBatch = true;
@@ -335,24 +335,34 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
         private void consume() {
             while (isRunning) {
                 try {
-                    BytesXMLMessage msg = flowReceiver.receive();
-                    if (msg != null) {
-                        reentrantLock.lock();
-                        synchronized (messages) {
-                            messages.put(msg.getMessageId(), new Message(msg, Instant.now()));
+                    if(flowReceiver != null && !flowReceiver.isClosed()) {
+                        BytesXMLMessage msg = flowReceiver.receive();
+                        if (msg != null) {
+                            reentrantLock.lock();
+                            synchronized (messages) {
+                                log.info("SolaceSparkConnector - Received MessageID String while reading - " + msg.getMessageId());
+                                log.info("SolaceSparkConnector - Received MessageID Long while reading - " + msg.getMessageIdLong());
+                                messages.put(msg.getMessageId(), new Message(msg, Instant.now()));
+                            }
                         }
                     }
                 } catch (Exception w) {
-                    log.error("SolaceSparkConnector - Exception connecting to Solace" + w.getMessage());
-                    try {
-                        log.info("SolaceSparkConnector - Retrying connection");
-                        flowReceiver.close();
-                        flowReceiver = session.createFlow(null, flow_prop, new EndpointProperties());
-                        flowReceiver.start();
-                    } catch (Exception restartEx) {
-                        log.error("SolaceSparkConnector - Error while reconnecting to Solace " + restartEx.getMessage());
-                        close();
-                        throw new RuntimeException(restartEx.getMessage());
+                    if(w instanceof NullPointerException) {
+                        log.error("SolaceSparkConnector - Exception while reading messages from Solace. Check if message id is null " + w);
+                        throw new RuntimeException(w.getMessage());
+                    } else {
+                        log.error("SolaceSparkConnector - Exception connecting to Solace " + w.toString());
+                        try {
+                            log.info("SolaceSparkConnector - Retrying connection");
+                            flowReceiver.close();
+                            flowReceiver = session.createFlow(null, flow_prop, new EndpointProperties());
+                            flowReceiver.start();
+                            log.info("SolaceSparkConnector - Reconnected successfully");
+                        } catch (Exception restartEx) {
+                            log.error("SolaceSparkConnector - Error while reconnecting to Solace " + restartEx.getMessage());
+                            close();
+                            throw new RuntimeException(restartEx.getMessage());
+                        }
                     }
                 } finally {
                     if (reentrantLock.isLocked()) {

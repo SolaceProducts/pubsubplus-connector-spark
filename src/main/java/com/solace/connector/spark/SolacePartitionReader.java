@@ -45,9 +45,10 @@ public class SolacePartitionReader implements PartitionReader<InternalRow> {
             timestamp = System.currentTimeMillis();
         }
         InternalRow row = InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
-                new Object[]{UTF8String.fromString(Long.toString(solaceTextRecord.getMessageId())),
+                new Object[]{UTF8String.fromString(solaceTextRecord.getMessageId()),
                         solaceTextRecord.getPayload(), UTF8String.fromString(solaceTextRecord.getDestination()),
                         DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp))})).seq());
+        log.info("SolaceSparkConnector - Received Message ID while creating internal row - " + solaceTextRecord.getMessageId());
         log.info("SolaceSparkConnector - Internal Row Created: " + row.getString(0));
         return row;
     }

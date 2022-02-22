@@ -4,6 +4,7 @@ import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import com.solacesystems.jcsmp.SDTMap;
 import com.solacesystems.jcsmp.impl.ReplicationGroupMessageIdImpl;
+import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 
 public class SolaceRecord implements Serializable {
+    private static final Logger log = Logger.getLogger(SolaceRecord.class);
     private static final long serialVersionUID = 42L;
 
     // Application properties
@@ -19,7 +21,7 @@ public class SolaceRecord implements Serializable {
 
     private final String destination;
     private final long expiration;
-    private final long messageId;
+    private final String messageId;
     private final int priority;
     private final boolean redelivered;
     private final String replyTo;
@@ -31,7 +33,7 @@ public class SolaceRecord implements Serializable {
     /**
      * Define a new Solace text record.
      */
-    public SolaceRecord(String destination, long expiration, long messageId,
+    public SolaceRecord(String destination, long expiration, String messageId,
                             int priority, boolean redelivered, String replyTo, long receiveTimestamp,
                             long senderTimestamp, Long sequenceNumber, long timeToLive,
                             Map<String, Object> properties, byte[] text) {
@@ -66,7 +68,7 @@ public class SolaceRecord implements Serializable {
     /**
      * Return the text record messageId.
      */
-    public long getMessageId() {
+    public String getMessageId() {
         return messageId;
     }
 
@@ -197,10 +199,12 @@ public class SolaceRecord implements Serializable {
                 msgData = msg.getAttachmentByteBuffer().array();
             }
 
+            log.info("SolaceSparkConnector - Received Message ID String - " + msg.getMessageId());
+            log.info("SolaceSparkConnector - Received Message ID Long - " + msg.getMessageIdLong());
             return new SolaceRecord(
                     msg.getDestination().getName(),
                     msg.getExpiration(),
-                    msg.getMessageIdLong(),
+                    msg.getMessageId(),
                     msg.getPriority(),
                     msg.getRedelivered(),
                     // null means no replyto property
