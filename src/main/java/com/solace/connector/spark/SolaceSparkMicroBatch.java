@@ -119,11 +119,12 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
 //                            messageIDs = lastOffsetCommitted.split(":")[1];
 //                        }
 
-                        if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(",") && Arrays.asList(lastOffsetCommitted.split(",")).contains(value.message.getMessageId())) {
-                            log.info("SolaceSparkConnector - Acknowledging previously processed message " + value.message.getMessageId());
-                            value.message.ackMessage();
-                            iterator.remove();
-                        } else if (endOffset.contains(",") && Arrays.asList(endOffset.split(",")).contains(value.message.getMessageId())) {
+//                        if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(",") && Arrays.asList(lastOffsetCommitted.split(",")).contains(value.message.getMessageId())) {
+//                            log.info("SolaceSparkConnector - Acknowledging previously processed message " + value.message.getMessageId());
+//                            value.message.ackMessage();
+//                            iterator.remove();
+//                        } else
+                        if (endOffset.contains(",") && Arrays.asList(endOffset.split(",")).contains(value.message.getMessageId())) {
                             rowChunk.add(value);
                             k = k + 1;
                             iterator.remove();
@@ -208,6 +209,10 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
                     committedOffset = (SolaceOffset) end;
                 }
 
+//                if(batches.size() == 0 && committedOffset.getOffset().contains(",")) {
+//                    lastOffsetCommitted = committedOffset.getOffset();
+//                }
+
                 log.info("SolaceSparkConnector - Last Committed Offset " + committedOffset);
                 boolean removeBatch = false;
                 Iterator<Map.Entry<Integer, List<com.solace.connector.spark.Message>>> iterator = batches.entrySet().iterator();
@@ -248,6 +253,7 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
 
     @Override
     public void stop() {
+        currentOffset = lastOffsetCommitted;
         log.info("SolaceSparkConnector - Closing Solace Session");
         solaceReader.close();
         log.info("SolaceSparkConnector - Successfully Closed Solace Session");
