@@ -9,24 +9,32 @@ import org.apache.spark.sql.connector.read.PartitionReader;
 import scala.collection.JavaConversions;
 
         import java.io.IOException;
-        import java.sql.Timestamp;
+import java.io.Serializable;
+import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.Arrays;
-        import java.util.List;
+import java.util.HashMap;
+import java.util.List;
 
-public class SolacePartitionReader implements PartitionReader<InternalRow> {
+public class SolacePartitionReader implements PartitionReader<InternalRow>, Serializable {
 
     private static final Logger log = Logger.getLogger(SolacePartitionReader.class);
+    private static List<String> addedRows = new ArrayList<>();
     private List<SolaceRecord> payload;
     private int records = 0;
-    SolacePartitionReader(List<SolaceRecord> input) {
+    private boolean isRestarted = false;
+    SolacePartitionReader(List<SolaceRecord> input, boolean isRestarted) {
         log.info("SolaceSparkConnector - Initializing partition reader for records of size " + input.size());
+        System.out.println("SolaceSparkConnector - Initializing partition reader for records of size " + input.size());
         this.payload = input;
+        this.isRestarted = isRestarted;
     }
 
     @Override
     public boolean next() {
         log.info("SolaceSparkConnector - Checking for next available record. Is record available: " + (records < payload.size()));
-        return records < payload.size();
+        System.out.println("SolaceSparkConnector - Checking for next available record. Is record available: " + (records < payload.size()));
+        return records < payload.size() && ((payload.get(records).isRedelivered()) || (!payload.get(records).isRedelivered() && !addedRows.contains(payload.get(records).getMessageId())));
     }
 
     @Override
@@ -40,6 +48,7 @@ public class SolacePartitionReader implements PartitionReader<InternalRow> {
 //            System.exit(0);
 //        }
         log.info("SolaceSparkConnector - Creating internal row for solace record " + solaceTextRecord.getMessageId());
+        System.out.println("SolaceSparkConnector - Creating internal row for solace record " + solaceTextRecord.getMessageId());
         Long timestamp = solaceTextRecord.getSenderTimestamp();
         if(solaceTextRecord.getSenderTimestamp() == 0) {
             timestamp = System.currentTimeMillis();
@@ -50,6 +59,7 @@ public class SolacePartitionReader implements PartitionReader<InternalRow> {
                         DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp))})).seq());
         log.info("SolaceSparkConnector - Received Message ID while creating internal row - " + solaceTextRecord.getMessageId());
         log.info("SolaceSparkConnector - Internal Row Created: " + row.getString(0));
+        addedRows.add(solaceTextRecord.getMessageId());
         return row;
     }
 

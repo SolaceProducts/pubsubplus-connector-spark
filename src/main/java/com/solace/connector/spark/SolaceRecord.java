@@ -199,8 +199,7 @@ public class SolaceRecord implements Serializable {
                 msgData = msg.getAttachmentByteBuffer().array();
             }
 
-            log.info("SolaceSparkConnector - Received Message ID String - " + msg.getMessageId());
-            log.info("SolaceSparkConnector - Received Message ID Long - " + msg.getMessageIdLong());
+            // log.info("SolaceSparkConnector - Received Message ID String in Input partition - " + msg.getMessageId());
             return new SolaceRecord(
                     msg.getDestination().getName(),
                     msg.getExpiration(),

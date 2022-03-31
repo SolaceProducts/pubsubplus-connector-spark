@@ -12,9 +12,10 @@ import java.util.List;
 public class SolacePartitionReaderFactory implements PartitionReaderFactory, Serializable {
 
     private static final Logger log = Logger.getLogger(SolacePartitionReaderFactory.class);
-
-    public SolacePartitionReaderFactory() {
+    private boolean isRestarted = false;
+    public SolacePartitionReaderFactory(boolean isRestarted) {
         log.info("SolaceSparkConnector - Initializing Partition reader factory");
+        this.isRestarted = isRestarted;
     }
 //    public SolacePartitionReaderFactory(StructType schema, String fileName) {
 //        this.schema = schema;
@@ -25,7 +26,7 @@ public class SolacePartitionReaderFactory implements PartitionReaderFactory, Ser
     public PartitionReader<InternalRow> createReader(InputPartition partition) {
         List<SolaceRecord> inputPartition = ((SolaceInputPartition) partition).getValues();
         log.info("SolaceSparkConnector - Creating reader for input partition of size " + inputPartition.size());
-        return new SolacePartitionReader(((SolaceInputPartition) partition).getValues());
+        return new SolacePartitionReader(((SolaceInputPartition) partition).getValues(), isRestarted);
     }
 
 //    @Override
