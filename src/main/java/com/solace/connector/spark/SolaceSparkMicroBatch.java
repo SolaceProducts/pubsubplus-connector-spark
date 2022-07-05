@@ -72,6 +72,9 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
 
     @Override
     public Offset latestOffset() {
+        if(isException) {
+            return new SolaceOffset(lastOffsetCommitted);
+        }
         throw new RuntimeException("");
     }
 
@@ -114,7 +117,11 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
             reentrantLock.unlock();
         }
 
-        return new SolaceOffset(currentOffset);
+        if(isException) {
+            return new SolaceOffset(lastOffsetCommitted);
+        } else {
+            return new SolaceOffset(currentOffset);
+        }
     }
 
     @Override

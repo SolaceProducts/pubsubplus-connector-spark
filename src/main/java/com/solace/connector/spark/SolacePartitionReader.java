@@ -34,7 +34,7 @@ public class SolacePartitionReader implements PartitionReader<InternalRow>, Seri
     public boolean next() {
         log.info("SolaceSparkConnector - Checking for next available record. Is record available: " + (records < payload.size()));
         System.out.println("SolaceSparkConnector - Checking for next available record. Is record available: " + (records < payload.size()));
-        return records < payload.size() && ((payload.get(records).isRedelivered()) || (!payload.get(records).isRedelivered() && !addedRows.contains(payload.get(records).getMessageId())));
+        return records < payload.size() && (payload.get(records).isRedelivered() || (!payload.get(records).isRedelivered() && !addedRows.contains(payload.get(records).getMessageId())));
     }
 
     @Override
