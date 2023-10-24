@@ -1,6 +1,7 @@
-package com.solace.connector.spark;
+package com.solace.connector.spark.archive;
 
 //import connector.csv.ValueConverters;
+import com.solace.connector.spark.SolaceRecord;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.util.DateTimeUtils;
@@ -13,7 +14,6 @@ import java.io.Serializable;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 
 public class SolacePartitionReader implements PartitionReader<InternalRow>, Serializable {
@@ -28,13 +28,16 @@ public class SolacePartitionReader implements PartitionReader<InternalRow>, Seri
         System.out.println("SolaceSparkConnector - Initializing partition reader for records of size " + input.size());
         this.payload = input;
         this.isRestarted = isRestarted;
+        records = 0;
     }
 
     @Override
     public boolean next() {
         log.info("SolaceSparkConnector - Checking for next available record. Is record available: " + (records < payload.size()));
         System.out.println("SolaceSparkConnector - Checking for next available record. Is record available: " + (records < payload.size()));
-        return records < payload.size() && (payload.get(records).isRedelivered() || (!payload.get(records).isRedelivered() && !addedRows.contains(payload.get(records).getMessageId())));
+        return records < payload.size();
+//                && (payload.get(records).isRedelivered() || (!payload.get(records).isRedelivered()));
+                // && !addedRows.contains(payload.get(records).getMessageId())));
     }
 
     @Override

@@ -1,6 +1,8 @@
-package com.solace.connector.spark;
+package com.solace.connector.spark.archive;
 
-import org.apache.log4j.Logger;
+import com.solace.connector.spark.SolaceRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReader;
@@ -11,7 +13,7 @@ import java.util.List;
 
 public class SolacePartitionReaderFactory implements PartitionReaderFactory, Serializable {
 
-    private static final Logger log = Logger.getLogger(SolacePartitionReaderFactory.class);
+    private static final Logger log = LoggerFactory.getLogger(SolacePartitionReaderFactory.class);
     private boolean isRestarted = false;
     public SolacePartitionReaderFactory(boolean isRestarted) {
         log.info("SolaceSparkConnector - Initializing Partition reader factory");

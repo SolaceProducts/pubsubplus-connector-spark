@@ -16,7 +16,7 @@ public class SolaceSparkStream implements TableProvider {
 
     @Override
     public StructType inferSchema(CaseInsensitiveStringMap options) {
-        return getTable(new StructType().add("Test", DataTypes.StringType), new Transform[]{}, options.asCaseSensitiveMap()).schema();
+        return getTable(new StructType(), new Transform[]{}, options.asCaseSensitiveMap()).schema();
         //return new StructType();
     }
 

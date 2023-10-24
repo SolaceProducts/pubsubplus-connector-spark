@@ -1,6 +1,7 @@
-package com.solace.connector.spark;
+package com.solace.connector.spark.archive;
 
 import com.google.gson.Gson;
+import com.solace.connector.spark.SolaceRecord;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.*;
 import org.apache.log4j.Level;
@@ -27,11 +28,11 @@ import java.util.stream.Collectors;
 public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissionControl, Serializable {
 
     private static final org.apache.log4j.Logger log = Logger.getLogger("application.log");
-    private Map<String, com.solace.connector.spark.Message> messages = new ConcurrentHashMap<>();
-    private Map<Integer, List<com.solace.connector.spark.Message>> batches = new ConcurrentHashMap<>();
+    private Map<String, Message> messages = new ConcurrentHashMap<>();
+    private Map<Integer, List<Message>> batches = new ConcurrentHashMap<>();
     private ArrayList<SolaceInputPartition> solaceInputPartitions = new ArrayList<>();
     private Map<Integer, Integer> mapBatchToPartitions = new ConcurrentHashMap<>();
-    private List<com.solace.connector.spark.Message> rowChunk = new ArrayList<>();
+    private List<Message> rowChunk = new ArrayList<>();
     private String currentOffset = "0";
     private String lastOffsetCommitted = "";
     private int size = 0;
@@ -81,14 +82,14 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
     @Override
     public Offset latestOffset(Offset start, ReadLimit readLimit) {
         try {
-            ArrayList<com.solace.connector.spark.Message> temp = new ArrayList<>();
+            ArrayList<Message> temp = new ArrayList<>();
             reentrantLock.lock();
-            Iterator<Map.Entry<String, com.solace.connector.spark.Message>> iterator = messages.entrySet().iterator();
-            Map.Entry<String, com.solace.connector.spark.Message> key;
+            Iterator<Map.Entry<String, Message>> iterator = messages.entrySet().iterator();
+            Map.Entry<String, Message> key;
             int k = 0;
                 while (iterator.hasNext()) {
                 key = iterator.next();
-                com.solace.connector.spark.Message value = key.getValue();
+                Message value = key.getValue();
                 //log.info("SolaceSparkConnector - Message ID " + value.message.getMessageId());
                 try {
                     if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(",") && Arrays.asList(lastOffsetCommitted.split(",")).contains(value.message.getMessageId())) {
@@ -99,7 +100,7 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
                         k = k + 1;
                         temp.add(value);
                         //log.info("SolaceSparkConnector - Added Message ID " + value.message.getMessageId());
-                        if (k == size || !iterator.hasNext()) {
+                        if (size == 1 || k == size || !iterator.hasNext()) {
                             currentOffset = "";
                             List<String> msgIDs = temp.stream().map(value1 -> value1.message.getMessageId()).collect(Collectors.toList());
                             currentOffset = String.join(",", msgIDs);
@@ -131,15 +132,15 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
             log.info("SolaceSparkConnector - Creating Input Partitions, Current messages size " + messages.size());
             rowChunk = new ArrayList<>();
             String endOffset = ((SolaceOffset) end).getOffset();
-            log.info("SolaceSparkConnector - End Offset " + endOffset + "--- Start offset " + (start != null ? ((SolaceOffset) start).getOffset() : ""));
+            log.info("SolaceSparkConnector - End Offset " + endOffset + " --- Start offset " + (start != null ? ((SolaceOffset) start).getOffset() : ""));
             try {
                 int k = 0;
                 reentrantLock.lock();
-                Iterator<Map.Entry<String, com.solace.connector.spark.Message>> iterator = messages.entrySet().iterator();
-                Map.Entry<String, com.solace.connector.spark.Message> key;
+                Iterator<Map.Entry<String, Message>> iterator = messages.entrySet().iterator();
+                Map.Entry<String, Message> key;
                 while (iterator.hasNext()) {
                     key = iterator.next();
-                    com.solace.connector.spark.Message value = key.getValue();
+                    Message value = key.getValue();
                     try {
 //                        String messageIDs = "";
 //                        if(lastOffsetCommitted != null && lastOffsetCommitted.contains(":") && lastOffsetCommitted.split(":").length > 1) {
@@ -151,38 +152,50 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
 //                            value.message.ackMessage();
 //                            iterator.remove();
 //                        } else
-                        if (endOffset.contains(",") && Arrays.asList(endOffset.split(",")).contains(value.message.getMessageId())) {
-                            rowChunk.add(value);
-                            k = k + 1;
-                            log.info("Removing message after adding to batch " + value.message.getMessageId());
-                            iterator.remove();
-                        }
+//                        if (lastOffsetCommitted.length() > 0 && lastOffsetCommitted.contains(",") && Arrays.asList(lastOffsetCommitted.split(",")).contains(value.message.getMessageId())) {
+//                            log.info("SolaceSparkConnector - Acknowledging previously processed message " + value.message.getMessageId());
+//                            value.message.ackMessage();
+//                            iterator.remove();
+//                        } else {
+                            log.info("Current Message " + value.message.getMessageId());
+                            if (endOffset.trim().equals(value.message.getMessageId()) || (endOffset.contains(",") && Arrays.asList(endOffset.split(",")).contains(value.message.getMessageId()))) {
+                                rowChunk.add(value);
+                                k = k + 1;
+                                log.info("Removing message after adding to batch " + value.message.getMessageId());
+                                iterator.remove();
+                            }
 
-                        if (k == size || !iterator.hasNext()) {
-                            batches.put(batchCount, rowChunk);
-                            log.info("Current K value " + k);
-                            log.info("Has Iterators " + iterator.hasNext());
-                            log.info("Current Batch " + batchCount);
-                            log.info("Current Batch Size " + rowChunk.size());
-                            List<String> msgIDs = rowChunk.stream().map(value1 -> value1.message.getMessageId()).collect(Collectors.toList());
-                            log.info("Current Batch Data " + msgIDs);
+                            log.info("Current RowChunk " + rowChunk.size());
+                            log.info("Current State " + (size == 1 || k == size || !iterator.hasNext() && (rowChunk.size() > 0)));
+                            if (size == 1 || k == size || !iterator.hasNext() && (rowChunk.size() > 0)) {
+                                batches.put(batchCount, rowChunk);
+                                log.info("Current K value " + k);
+                                log.info("Has Iterators " + iterator.hasNext());
+                                log.info("Current Batch " + batchCount);
+                                log.info("Current Batch Size " + rowChunk.size());
+                                List<String> msgIDs = rowChunk.stream().map(value1 -> value1.message.getMessageId()).collect(Collectors.toList());
+                                log.info("Current Batch Data " + msgIDs);
 //                                currentOffset = "";
 //                                List<String> msgIDs = rowChunk.stream().map(value1 -> value1.message.getApplicationMessageId()).collect(Collectors.toList());
 //                                currentOffset = String.join(",", msgIDs);
-                            ArrayList<SolaceRecord> partitionData = new ArrayList(rowChunk.stream().map(message -> {
-                                try {
-                                    return SolaceRecord.getMapper().map(message.message);
-                                } catch (Exception exception) {
-                                    log.error("Error mapping to solace records. " + exception.getMessage());
-                                    throw new RuntimeException(exception.getMessage());
-                                }
-                            }).collect(Collectors.toList()));
-                            isPartitionAdded = true;
-                            solaceInputPartitions.add(new SolaceInputPartition(partitionData, Integer.toString(batchCount)));
-                            mapBatchToPartitions.put(batchCount, solaceInputPartitions.size() - 1);
-                            batchCount++;
-                            break;
-                        }
+                                ArrayList<SolaceRecord> partitionData = new ArrayList(rowChunk.stream().map(message -> {
+                                    try {
+                                        return SolaceRecord.getMapper().map(message.message);
+                                    } catch (Exception exception) {
+                                        log.error("Error mapping to solace records. " + exception.getMessage());
+                                        throw new RuntimeException(exception.getMessage());
+                                    }
+                                }).collect(Collectors.toList()));
+
+                                isPartitionAdded = true;
+                                int index = batchCount;
+                                solaceInputPartitions.add(new SolaceInputPartition(partitionData, ""));
+                                mapBatchToPartitions.put(index, solaceInputPartitions.size() - 1);
+                                batchCount++;
+
+                                break;
+                            }
+//                        }
                     } catch (Exception e) {
                         log.error("SolaceSparkConnector - Error converting message to Solace Text Record " + e.getMessage());
                         throw new RuntimeException(e.getMessage());
@@ -253,18 +266,22 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
 
                 log.info("SolaceSparkConnector - Last Committed Offset " + committedOffset);
                 boolean removeBatch = false;
-                Iterator<Map.Entry<Integer, List<com.solace.connector.spark.Message>>> iterator = batches.entrySet().iterator();
+                Iterator<Map.Entry<Integer, List<Message>>> iterator = batches.entrySet().iterator();
                 while (iterator.hasNext()) {
-                    Map.Entry<Integer, List<com.solace.connector.spark.Message>> message = iterator.next();
+                    removeBatch = false;
+                    Map.Entry<Integer, List<Message>> message = iterator.next();
                     String committedOffsetStr = committedOffset.getOffset();
-                    ListIterator<com.solace.connector.spark.Message> messageIterator = message.getValue().listIterator();
-                    while (messageIterator.hasNext()) {
-                        com.solace.connector.spark.Message msg = messageIterator.next();
-                        if ((committedOffsetStr.length() > 0 && committedOffsetStr.contains(",") && Arrays.asList(committedOffsetStr.split(",")).contains(msg.message.getMessageId()))) {
+                    int committedOffsets = committedOffsetStr.split(",").length;
+                    int ackedMsgs = 0;
+                    ListIterator<Message> messageIterator = message.getValue().listIterator();
+                    while (messageIterator.hasNext() && (committedOffsets > 0 && ackedMsgs < committedOffsets)) {
+                        Message msg = messageIterator.next();
+                        if (committedOffsetStr.equals(msg.message.getMessageId()) || (committedOffsetStr.length() > 0 && committedOffsetStr.contains(",") && Arrays.asList(committedOffsetStr.split(",")).contains(msg.message.getMessageId()))) {
                             messages.remove(msg.message.getMessageId());
                             msg.message.ackMessage();
                             log.info("SolaceSparkConnector - Acknowledged Solace Message with ID " + msg.message.getMessageId());
                             removeBatch = true;
+                            ackedMsgs++;
                         } else {
                             removeBatch = false;
                         }
@@ -276,9 +293,14 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
                         log.info("SolaceSparkConnector - Clearing input partition");
                         int index = mapBatchToPartitions.get(message.getKey());
                         if (solaceInputPartitions.size() > index && solaceInputPartitions.get(index) != null) {
-                            if(solaceInputPartitions.get(index).preferredLocations()[0].equals(index)) {
-                                solaceInputPartitions.remove(index);
-                            }
+                            System.out.println("Removing Input Partition " + index);
+                            System.out.println("Preferred Locations Input Partition " + solaceInputPartitions.get(index).preferredLocations()[0]);
+                            solaceInputPartitions.remove(index);
+                            System.out.println("Removed Input Partition " + index);
+//                            if(solaceInputPartitions.get(index).preferredLocations()[0].equals(Integer.toString(index))) {
+//                                // solaceInputPartitions.remove(index);
+//                                System.out.println("Removed Input Partition " + index);
+//                            }
                         }
                         iterator.remove();
                     }
@@ -294,6 +316,8 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
 
     @Override
     public void stop() {
+        System.out.println("Current Offset @@@" + currentOffset);
+        System.out.println("Last Committed Offset @@@" + lastOffsetCommitted);
         currentOffset = lastOffsetCommitted;
         log.info("SolaceSparkConnector - Closing Solace Session");
         solaceReader.close();
@@ -355,6 +379,8 @@ public class SolaceSparkMicroBatch implements MicroBatchStream, SupportsAdmissio
                 flow_prop.setEndpoint(queue);
                 // will ack the messages in checkpoint
                 flow_prop.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
+                flow_prop.setTransportWindowSize(255);
+                flow_prop.setWindowedAckMaxSize(255);
                 // bind to the queue, passing null as message listener for no async callback
                 flowReceiver = session.createFlow(null, flow_prop, new EndpointProperties());
                 flowReceiver.start();

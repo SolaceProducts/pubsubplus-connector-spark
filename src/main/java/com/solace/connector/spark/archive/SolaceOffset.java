@@ -1,4 +1,4 @@
-package com.solace.connector.spark;
+package com.solace.connector.spark.archive;
 
 import com.google.gson.Gson;
 import org.apache.spark.sql.connector.read.streaming.Offset;

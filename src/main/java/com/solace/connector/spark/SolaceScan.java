@@ -1,5 +1,6 @@
 package com.solace.connector.spark;
 
+import com.solace.connector.spark.streaming.SolaceMicroBatch;
 import org.apache.spark.sql.connector.read.Batch;
 import org.apache.spark.sql.connector.read.Scan;
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream;
@@ -40,7 +41,7 @@ public class SolaceScan implements Scan {
 
     @Override
     public MicroBatchStream toMicroBatchStream(String checkpointLocation) {
-        return new SolaceSparkMicroBatch(schema,properties,options);
+        return new SolaceMicroBatch(schema,properties,options);
     }
 
 //    @Override

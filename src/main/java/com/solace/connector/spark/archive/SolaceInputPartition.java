@@ -1,5 +1,6 @@
-package com.solace.connector.spark;
+package com.solace.connector.spark.archive;
 
+import com.solace.connector.spark.SolaceRecord;
 import org.apache.spark.sql.connector.read.InputPartition;
 
 import java.util.List;
