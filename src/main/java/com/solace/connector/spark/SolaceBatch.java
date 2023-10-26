@@ -1,6 +1,5 @@
 package com.solace.connector.spark;
 
-import com.solace.connector.spark.archive.SolaceInputPartition;
 import org.apache.spark.sql.connector.read.Batch;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
@@ -30,7 +29,7 @@ public class SolaceBatch implements Batch {
 
     @Override
     public InputPartition[] planInputPartitions() {
-        return new InputPartition[]{new SolaceInputPartition(new ArrayList<>(), "")};
+        return null;
     }
 
     @Override

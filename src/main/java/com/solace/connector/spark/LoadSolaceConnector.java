@@ -24,28 +24,28 @@ public class LoadSolaceConnector implements Runnable {
         this.sparkSession = sparkSession;
     }
 
-    private static JavaStreamingContext createContext() throws Exception {
-        final SparkConf sparkConf = new SparkConf().setAppName("JavaCustomReceiver").setMaster("local[*]");
-
-        JavaStreamingContext streamingContext = new JavaStreamingContext(sparkConf, new Duration(10000));
-
-        JavaDStream<SolaceRecord> customReceiverStream = streamingContext.receiverStream(new SolaceReliableReceiver("tcps://mr-connection-h0zr2jc6v7f.messaging.solace.cloud:55443", "sjthotak_solace", "solace-cloud-client", "qu03808nfjfprlk3ck458u7bv4", "queue.orders.incoming"));
-
-        JavaDStream<SolaceRecord> messages = customReceiverStream.map(message -> message);
-
-//        JavaDStream<String> statusKeyValues = messages.map(msg -> msg);
-
-        messages.foreachRDD(rdd -> {
-            rdd.collect().forEach(s -> {
-                System.out.println(s.getDestination());
-            });
-            rdd.cache();
-            rdd.checkpoint();
-        });
-
-        streamingContext.checkpoint("/Users/sravanthotakura/Work/streamcheckpoint.txt");
-        return streamingContext;
-    }
+//    private static JavaStreamingContext createContext() throws Exception {
+//        final SparkConf sparkConf = new SparkConf().setAppName("JavaCustomReceiver").setMaster("local[*]");
+//
+//        JavaStreamingContext streamingContext = new JavaStreamingContext(sparkConf, new Duration(10000));
+//
+//        JavaDStream<SolaceRecord> customReceiverStream = streamingContext.receiverStream(new SolaceReliableReceiver("tcps://mr-connection-h0zr2jc6v7f.messaging.solace.cloud:55443", "sjthotak_solace", "solace-cloud-client", "qu03808nfjfprlk3ck458u7bv4", "queue.orders.incoming"));
+//
+//        JavaDStream<SolaceRecord> messages = customReceiverStream.map(message -> message);
+//
+////        JavaDStream<String> statusKeyValues = messages.map(msg -> msg);
+//
+//        messages.foreachRDD(rdd -> {
+//            rdd.collect().forEach(s -> {
+//                System.out.println(s.getDestination());
+//            });
+//            rdd.cache();
+//            rdd.checkpoint();
+//        });
+//
+//        streamingContext.checkpoint("/Users/sravanthotakura/Work/streamcheckpoint.txt");
+//        return streamingContext;
+//    }
 
     public static void readParquet() {
         SparkSession sparkSession = SparkSession.builder()

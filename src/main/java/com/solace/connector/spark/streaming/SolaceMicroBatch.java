@@ -30,7 +30,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
     private static Logger log = LoggerFactory.getLogger(SolaceMicroBatch.class);
     int latestOffsetValue = 0;
-    int batchSize = 0;
+    int batchSize = 1;
 //    int numOfPartitions = 0;
 
     EventListener eventListener;
@@ -52,6 +52,40 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         eventListener = new EventListener();
         appSingleton.setCallback(eventListener);
         eventListener.setAppSingleton(appSingleton);
+        if(!properties.containsKey("host") || properties.get("host") == null || properties.get("host").isEmpty()) {
+            log.error("SolaceSparkConnector - Please provide Solace Host name in configuration options");
+            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Host name in configuration options");
+        }
+        if(!properties.containsKey("vpn") || properties.get("vpn") == null || properties.get("vpn").isEmpty()) {
+            log.error("SolaceSparkConnector - Please provide Solace VPN name in configuration options");
+            throw new RuntimeException("SolaceSparkConnector - Please provide Solace VPN name in configuration options");
+        }
+
+        if(!properties.containsKey("username") || properties.get("username") == null || properties.get("username").isEmpty()) {
+            log.error("SolaceSparkConnector - Please provide Solace Username in configuration options");
+            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Username in configuration options");
+        }
+
+        if(!properties.containsKey("password") || properties.get("password") == null || properties.get("password").isEmpty()) {
+            log.error("SolaceSparkConnector - Please provide Solace Password in configuration options");
+            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Password in configuration options");
+        }
+
+        if(!properties.containsKey("queue") || properties.get("queue") == null || properties.get("queue").isEmpty()) {
+            log.error("SolaceSparkConnector - Please provide Solace Queue name in configuration options");
+            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
+        }
+
+        if(!properties.containsKey("batchSize") || properties.get("batchSize") == null || properties.get("batchSize").isEmpty()) {
+            log.error("SolaceSparkConnector - Please provide Batch size in configuration options");
+            throw new RuntimeException("SolaceSparkConnector - Please provide Batch Size in configuration options");
+        }
+
+        if(Integer.parseInt(properties.get("batchSize").toString()) <= 0) {
+            log.error("SolaceSparkConnector - Please set Batch size to minimum of 1");
+            throw new RuntimeException("SolaceSparkConnector - Please set Batch size to minimum of 1");
+        }
+
         log.info("SolaceSparkConnector - Solace Connection Details Host : " + properties.get("host") + ", VPN : " + properties.get("vpn") + ", Username : " + properties.get("username"));
         initBroker = new InitBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"));
         initBroker.setReceiver(eventListener);
