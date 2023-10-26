@@ -45,6 +45,8 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
     boolean isCommitTriggered = false;
 
+    boolean ackLastProcessedMessages = false;
+
     List<SolaceMessage> recordsSentForProcessing = new ArrayList<>();
 
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
@@ -86,6 +88,8 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             throw new RuntimeException("SolaceSparkConnector - Please set Batch size to minimum of 1");
         }
 
+        ackLastProcessedMessages = properties.containsKey("ackLastProcessedMessages") ? Boolean.valueOf(properties.get("ackLastProcessedMessages").toString()) : false;
+        log.info("SolaceSparkConnector - Ack Last processed messages is set to " + ackLastProcessedMessages);
         log.info("SolaceSparkConnector - Solace Connection Details Host : " + properties.get("host") + ", VPN : " + properties.get("vpn") + ", Username : " + properties.get("username"));
         initBroker = new InitBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"));
         initBroker.setReceiver(eventListener);
@@ -119,20 +123,33 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             for (int j = 0; j < batchSize; j++) {
                 SolaceRecord solaceRecord = this.appSingleton.messages.poll();
                 if (solaceRecord != null) {
-                    if(offsetJson != null && offsetJson.has("messageIDs")) {
-                        List<String> messageIDsInLastOffset = Arrays.asList(offsetJson.get("messageIDs").getAsString().split(","));
-                        if(messageIDsInLastOffset.contains(solaceRecord.getMessageId())) {
-                            if(this.appSingleton.messageMap.containsKey(solaceRecord.getMessageId())) {
-                                this.appSingleton.messageMap.get(solaceRecord.getMessageId()).bytesXMLMessage.ackMessage();
-                            }
+                    if(ackLastProcessedMessages) {
+                        if (offsetJson != null && offsetJson.has("messageIDs")) {
+                            List<String> messageIDsInLastOffset = Arrays.asList(offsetJson.get("messageIDs").getAsString().split(","));
+                            if (messageIDsInLastOffset.contains(solaceRecord.getMessageId())) {
+                                if (this.appSingleton.messageMap.containsKey(solaceRecord.getMessageId())) {
+                                    log.info("SolaceSparkConnector - Previous offset " + offsetJson.toString());
+                                    log.info("SolaceSparkConnector - Acknowledging previously processed message with ID :: " + solaceRecord.getMessageId());
+                                    this.appSingleton.messageMap.get(solaceRecord.getMessageId()).bytesXMLMessage.ackMessage();
+                                }
 
-                            if(this.appSingleton.processedMessageIDs.contains(solaceRecord.getMessageId())) {
-                                this.appSingleton.processedMessageIDs.remove(solaceRecord.getMessageId());
+                                if (this.appSingleton.processedMessageIDs.contains(solaceRecord.getMessageId())) {
+                                    this.appSingleton.processedMessageIDs.remove(solaceRecord.getMessageId());
+                                }
+                            } else {
+                                this.appSingleton.processedMessageIDs.add(solaceRecord.getMessageId());
+                                recordList.add(solaceRecord);
                             }
+                        } else {
+                            log.info("SolaceSparkConnector - Trying to check if messages are already processed but offset is not available. Hence reprocessing it.");
+                            this.appSingleton.processedMessageIDs.add(solaceRecord.getMessageId());
+                            recordList.add(solaceRecord);
                         }
+                    } else {
+                        this.appSingleton.processedMessageIDs.add(solaceRecord.getMessageId());
+                        recordList.add(solaceRecord);
                     }
-                    this.appSingleton.processedMessageIDs.add(solaceRecord.getMessageId());
-                    recordList.add(solaceRecord);
+
                 }
             }
 
