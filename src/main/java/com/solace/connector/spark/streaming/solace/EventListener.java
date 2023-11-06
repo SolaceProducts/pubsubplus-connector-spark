@@ -28,9 +28,9 @@ public class EventListener implements XMLMessageListener, Serializable {
 
 //            System.out.println("Message received. ......");
 //            log.info("SolaceSparkConnector - Message received from Solace");
-            SolaceRecord solaceRecord = SolaceRecord.getMapper().map(msg);
+//            SolaceRecord solaceRecord = SolaceRecord.getMapper().map(msg);
             this.appSingleton.messageMap.put(msg.getMessageId(), new SolaceMessage(msg));
-            this.appSingleton.messages.add(solaceRecord);
+//            this.appSingleton.messages.add(solaceRecord);
 
 //            log.info("SolaceSparkConnector - Message added to internal map. Count :: " + this.appSingleton.messages.size());
 

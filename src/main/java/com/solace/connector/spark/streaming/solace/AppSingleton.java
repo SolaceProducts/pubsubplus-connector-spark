@@ -16,7 +16,7 @@ public class AppSingleton implements Serializable {
     static private AppSingleton instance;
     private EventListener listener = null;
 
-    public ConcurrentLinkedQueue<SolaceRecord> messages;
+//    public ConcurrentLinkedQueue<SolaceRecord> messages;
 
     public ConcurrentHashMap<String, SolaceMessage> messageMap;
 
@@ -24,7 +24,7 @@ public class AppSingleton implements Serializable {
 
 
     private AppSingleton() {
-        this.messages = new ConcurrentLinkedQueue<>();
+//        this.messages = new ConcurrentLinkedQueue<>();
         this.messageMap = new ConcurrentHashMap();
         this.processedMessageIDs = new ArrayList<>();
 //        log.info("AppSingleton CREATED!!!");

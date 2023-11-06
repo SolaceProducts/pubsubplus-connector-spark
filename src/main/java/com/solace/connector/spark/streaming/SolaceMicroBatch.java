@@ -121,7 +121,14 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             log.info("SolaceSparkConnector - Creating new records list");
             recordList = new ArrayList<>();
             for (int j = 0; j < batchSize; j++) {
-                SolaceRecord solaceRecord = this.appSingleton.messages.poll();
+                Object key = this.appSingleton.messageMap.keySet().stream().toArray()[j];
+                BytesXMLMessage bytesXMLMessage = this.appSingleton.messageMap.get(key).bytesXMLMessage;
+                SolaceRecord solaceRecord = null;
+                try {
+                    solaceRecord = SolaceRecord.getMapper().map(bytesXMLMessage);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
                 if (solaceRecord != null) {
                     if(ackLastProcessedMessages) {
                         if (offsetJson != null && offsetJson.has("messageIDs")) {
