@@ -10,7 +10,7 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="Maven: com.solacesystems:sol-jcsmp:10.13.0" level="project" />
+    <orderEntry type="library" name="Maven: com.solacesystems:sol-jcsmp:10.21.0" level="project" />
     <orderEntry type="library" name="Maven: commons-logging:commons-logging:1.2" level="project" />
     <orderEntry type="library" name="Maven: org.osgi:org.osgi.annotation:6.0.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.servicemix.bundles:org.apache.servicemix.bundles.jzlib:1.0.7_2" level="project" />
