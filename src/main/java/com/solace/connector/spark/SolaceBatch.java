@@ -29,7 +29,7 @@ public class SolaceBatch implements Batch {
 
     @Override
     public InputPartition[] planInputPartitions() {
-        return new InputPartition[]{new SolaceInputPartition(new ArrayList<>(), "")};
+        return null;
     }
 
     @Override
