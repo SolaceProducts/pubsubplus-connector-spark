@@ -5,13 +5,17 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.solacecoe.connectors</groupId>
-    <artifactId>solace-spark-connector</artifactId>
+    <artifactId>pubsubplus-connector-spark</artifactId>
     <version>1.0.0</version>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
     </properties>
+
+    <name>pubsubplus-connector-mqtt</name>
+    <description>Solace PubSub+ Connector for Spark streams data from Solace PubSub+ broker to Spark Data Sources.</description>
+    <inceptionYear>2022</inceptionYear>
 
     <dependencies>
         <dependency>

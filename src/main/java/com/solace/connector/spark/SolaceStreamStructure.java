@@ -4,10 +4,7 @@ import org.apache.spark.sql.connector.catalog.SupportsRead;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableCapability;
 import org.apache.spark.sql.connector.read.ScanBuilder;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.Metadata;
-import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
 import java.util.HashSet;
@@ -50,11 +47,16 @@ public class SolaceStreamStructure implements SupportsRead, Table {
     }
 
     private static StructType getSchema() {
+//        StructField[] headers = new StructField[]{
+//                new StructField("key", DataTypes.StringType, true, Metadata.empty()),
+//                new StructField("value", DataTypes.StringType, true, Metadata.empty())
+//        };
         StructField[] structFields = new StructField[]{
-                new StructField("MessageId", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("Value", DataTypes.BinaryType, true, Metadata.empty()),
+                new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
+                new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
                 new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty())
+                new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty()),
+                new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
         };
         return new StructType(structFields);
     }

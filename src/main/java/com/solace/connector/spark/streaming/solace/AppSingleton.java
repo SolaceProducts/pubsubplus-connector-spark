@@ -22,6 +22,8 @@ public class AppSingleton implements Serializable {
 
     public List<String> processedMessageIDs;
 
+    public String solaceOffsetIndicator = "MESSAGE_ID";
+
 
     private AppSingleton() {
 //        this.messages = new ConcurrentLinkedQueue<>();

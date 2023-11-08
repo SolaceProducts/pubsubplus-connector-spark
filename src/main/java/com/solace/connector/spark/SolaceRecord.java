@@ -1,5 +1,6 @@
 package com.solace.connector.spark;
 
+import com.solace.connector.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import com.solacesystems.jcsmp.SDTMap;
@@ -174,12 +175,17 @@ public class SolaceRecord implements Serializable {
         }
     }
 
-    public static Mapper getMapper() {
-        return new Mapper();
+    public static Mapper getMapper(String solaceOffsetIndicator) {
+        return new Mapper(solaceOffsetIndicator);
     }
 
     public static class Mapper implements InboundMessageMapper<SolaceRecord> {
         private static final long serialVersionUID = 42L;
+        private String solaceOffsetIndicator;
+
+        public Mapper(String solaceOffsetIndicator) {
+            this.solaceOffsetIndicator = solaceOffsetIndicator;
+        }
 
         @Override
         public SolaceRecord map(BytesXMLMessage msg) throws Exception {
@@ -199,11 +205,12 @@ public class SolaceRecord implements Serializable {
                 msgData = msg.getAttachmentByteBuffer().array();
             }
 
+            String messageID = SolaceUtils.getMessageID(msg, this.solaceOffsetIndicator);
             // log.info("SolaceSparkConnector - Received Message ID String in Input partition - " + msg.getMessageId());
             return new SolaceRecord(
                     msg.getDestination().getName(),
                     msg.getExpiration(),
-                    msg.getMessageId(),
+                    messageID,
                     msg.getPriority(),
                     msg.getRedelivered(),
                     // null means no replyto property

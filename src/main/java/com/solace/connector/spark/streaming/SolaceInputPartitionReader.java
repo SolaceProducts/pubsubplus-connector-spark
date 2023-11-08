@@ -6,17 +6,23 @@ import com.solace.connector.spark.SolaceRecord;
 import com.solace.connector.spark.streaming.solace.AppSingleton;
 import com.solace.connector.spark.streaming.solace.SolaceMessage;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
 import org.apache.spark.sql.catalyst.util.DateTimeUtils;
+import org.apache.spark.sql.catalyst.util.GenericArrayData;
+import org.apache.spark.sql.catalyst.util.MapData;
 import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.unsafe.types.UTF8String;
 import scala.collection.JavaConversions;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,10 +78,17 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         if (solaceRecord.getSenderTimestamp() == 0) {
             timestamp = System.currentTimeMillis();
         }
+        Map<String, Object> userProperties = solaceRecord.getProperties();
+        MapData mapData = new ArrayBasedMapData(new GenericArrayData(userProperties.keySet().stream().map(key -> UTF8String.fromString(key)).toArray()), new GenericArrayData(userProperties.values().stream().map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
+//        GenericArrayData headers = new GenericArrayData(userProperties.keySet().stream().map((key) -> {
+//            return InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
+//                    new Object[]{UTF8String.fromString(key), userProperties.get(key)
+//                    })).seq());
+//        }).toArray());
         InternalRow row = InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
                 new Object[]{UTF8String.fromString(solaceRecord.getMessageId().toString()),
                         solaceRecord.getPayload(), UTF8String.fromString(solaceRecord.getDestination()),
-                        DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp))
+                        DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp)),mapData
                 })).seq());
 //        this.appSingleton.processedMessageIDs.add(solaceTextRecord.getMessageId());
 //        log.info("SolaceSparkConnector - Count of processed messages :: " + this.appSingleton.processedMessageIDs.size());

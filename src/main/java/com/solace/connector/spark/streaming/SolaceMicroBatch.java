@@ -3,10 +3,7 @@ package com.solace.connector.spark.streaming;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.solace.connector.spark.SolaceRecord;
-import com.solace.connector.spark.streaming.solace.AppSingleton;
-import com.solace.connector.spark.streaming.solace.EventListener;
-import com.solace.connector.spark.streaming.solace.InitBroker;
-import com.solace.connector.spark.streaming.solace.SolaceMessage;
+import com.solace.connector.spark.streaming.solace.*;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
@@ -49,8 +46,13 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
     List<SolaceMessage> recordsSentForProcessing = new ArrayList<>();
 
+//    private SolaceOffsetIndicator solaceOffsetIndicator = SolaceOffsetIndicator.MESSAGE_ID;
+
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
         appSingleton = AppSingleton.getInstance();
+        if(properties.get("offset_indicator") != null && properties.get("offset_indicator").toString().length() > 0) {
+            appSingleton.solaceOffsetIndicator = properties.get("offset_indicator").toString();
+        }
         eventListener = new EventListener();
         appSingleton.setCallback(eventListener);
         eventListener.setAppSingleton(appSingleton);
@@ -125,7 +127,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 BytesXMLMessage bytesXMLMessage = this.appSingleton.messageMap.get(key).bytesXMLMessage;
                 SolaceRecord solaceRecord = null;
                 try {
-                    solaceRecord = SolaceRecord.getMapper().map(bytesXMLMessage);
+                    solaceRecord = SolaceRecord.getMapper(this.appSingleton.solaceOffsetIndicator).map(bytesXMLMessage);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
