@@ -17,6 +17,8 @@ public class SolaceStreamStructure implements SupportsRead, Table {
     private final Map<String, String> properties;
     private Set<TableCapability> capabilities;
 
+    private CaseInsensitiveStringMap options;
+
     public SolaceStreamStructure(StructType schema, Map<String, String> properties) {
         this.schema = schema;
         this.properties = properties;
@@ -24,6 +26,7 @@ public class SolaceStreamStructure implements SupportsRead, Table {
 
     @Override
     public ScanBuilder newScanBuilder(CaseInsensitiveStringMap options) {
+        this.options = options;
         return new SolaceScanBuilder(schema, properties, options);
     }
 
@@ -34,7 +37,8 @@ public class SolaceStreamStructure implements SupportsRead, Table {
 
     @Override
     public StructType schema() {
-        return getSchema();
+        boolean includeHeaders = this.properties.containsKey("includeHeaders") ? Boolean.valueOf(this.properties.get("includeHeaders").toString()) : false;
+        return getSchema(includeHeaders);
     }
 
     @Override
@@ -46,19 +50,26 @@ public class SolaceStreamStructure implements SupportsRead, Table {
         return capabilities;
     }
 
-    private static StructType getSchema() {
-//        StructField[] headers = new StructField[]{
-//                new StructField("key", DataTypes.StringType, true, Metadata.empty()),
-//                new StructField("value", DataTypes.StringType, true, Metadata.empty())
-//        };
+    private static StructType getSchema(boolean includeHeaders) {
+        if(includeHeaders) {
+            StructField[] structFields = new StructField[]{
+                    new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
+                    new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
+                    new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
+                    new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty()),
+                    new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
+            };
+            return new StructType(structFields);
+        }
+
         StructField[] structFields = new StructField[]{
                 new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
                 new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
                 new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty()),
-                new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
+                new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty())
         };
         return new StructType(structFields);
+
     }
 
 }

@@ -15,40 +15,30 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.App;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionControl {
-
     private static Logger log = LoggerFactory.getLogger(SolaceMicroBatch.class);
     int latestOffsetValue = 0;
     int batchSize = 1;
-//    int numOfPartitions = 0;
-
-    EventListener eventListener;
-
-    JsonObject offsetJson = new JsonObject();
-
-    InitBroker initBroker;
-
-    SolaceInputPartition[] inputPartitions;
-
-    AppSingleton appSingleton;
-
     boolean isCommitTriggered = false;
-
     boolean ackLastProcessedMessages = false;
-
-    List<SolaceMessage> recordsSentForProcessing = new ArrayList<>();
+    boolean includeHeaders = false;
+    EventListener eventListener;
+    JsonObject offsetJson = new JsonObject();
+    InitBroker initBroker;
+    SolaceInputPartition[] inputPartitions;
+    AppSingleton appSingleton;
 
 //    private SolaceOffsetIndicator solaceOffsetIndicator = SolaceOffsetIndicator.MESSAGE_ID;
 
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
+        log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
+        // Initialize classes required for Solace connectivity
         appSingleton = AppSingleton.getInstance();
         if(properties.get("offset_indicator") != null && properties.get("offset_indicator").toString().length() > 0) {
             appSingleton.solaceOffsetIndicator = properties.get("offset_indicator").toString();
@@ -56,6 +46,8 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         eventListener = new EventListener();
         appSingleton.setCallback(eventListener);
         eventListener.setAppSingleton(appSingleton);
+
+        // User configuration validation
         if(!properties.containsKey("host") || properties.get("host") == null || properties.get("host").isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Host name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Host name in configuration options");
@@ -92,16 +84,16 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
         ackLastProcessedMessages = properties.containsKey("ackLastProcessedMessages") ? Boolean.valueOf(properties.get("ackLastProcessedMessages").toString()) : false;
         log.info("SolaceSparkConnector - Ack Last processed messages is set to " + ackLastProcessedMessages);
+        includeHeaders = properties.containsKey("includeHeaders") ? Boolean.valueOf(properties.get("includeHeaders").toString()) : false;
+        log.info("SolaceSparkConnector - includeHeaders is set to " + includeHeaders);
+        batchSize = Integer.parseInt(properties.get("batchSize").toString());
+        log.info("SolaceSparkConnector - Batch Size is set to " + batchSize);
+
+        // Initialize connection to Solace Broker
         log.info("SolaceSparkConnector - Solace Connection Details Host : " + properties.get("host") + ", VPN : " + properties.get("vpn") + ", Username : " + properties.get("username"));
         initBroker = new InitBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"));
         initBroker.setReceiver(eventListener);
         log.info("SolaceSparkConnector - Acquired connection to Solace broker");
-
-        batchSize = Integer.parseInt(properties.get("batchSize").toString());
-        log.info("SolaceSparkConnector - Batch Size is set to " + batchSize);
-
-//        numOfPartitions = Integer.parseInt(properties.get("partitions").toString());
-//        log.info("SolaceSparkConnector - Number of partitions is set to " + numOfPartitions);
 
         log.info("SolaceSparkConnector - Initialization Completed");
     }
@@ -133,6 +125,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 }
                 if (solaceRecord != null) {
                     if(ackLastProcessedMessages) {
+                        // based on last successful offset, extract the message ID and see if same message is received, if so ack the message
                         if (offsetJson != null && offsetJson.has("messageIDs")) {
                             List<String> messageIDsInLastOffset = Arrays.asList(offsetJson.get("messageIDs").getAsString().split(","));
                             if (messageIDsInLastOffset.contains(solaceRecord.getMessageId())) {
@@ -187,9 +180,8 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
     @Override
     public PartitionReaderFactory createReaderFactory() {
-//        this.appSingleton.processedMessageIDs = new ArrayList<>();
         log.info("SolaceSparkConnector - Create reader factory with batchSize :: " + batchSize + " and offsets :: " + offsetJson.toString());
-        return new SolaceDataSourceReaderFactory(batchSize, offsetJson.toString());
+        return new SolaceDataSourceReaderFactory(includeHeaders);
     }
 
     @Override
@@ -218,7 +210,6 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     public void commit(Offset end) {
         log.info("SolaceSparkConnector - Commit triggered");
         BasicOffset basicOffset = (BasicOffset) end;
-
         log.info("SolaceSparkConnector - Processed message ID's by Spark " + basicOffset.json());
 
         if(basicOffset != null && basicOffset.messageIDs != null && basicOffset.messageIDs.length() > 0) {
@@ -226,6 +217,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             for(String messageID: messageIDs) {
                 if(this.appSingleton.messageMap.containsKey(messageID)) {
                     this.appSingleton.messageMap.get(messageID).bytesXMLMessage.ackMessage();
+                    log.info("SolaceSparkConnector - Acknowledged message with ID :: " + messageID);
                     this.appSingleton.messageMap.remove(messageID);
                     if(this.appSingleton.processedMessageIDs.contains(messageID)) {
                         this.appSingleton.processedMessageIDs.remove(messageID);
@@ -233,7 +225,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 }
             }
         }
-//        this.appSingleton.processedMessageIDs = new ArrayList<>();
+
         isCommitTriggered = true;
     }
 

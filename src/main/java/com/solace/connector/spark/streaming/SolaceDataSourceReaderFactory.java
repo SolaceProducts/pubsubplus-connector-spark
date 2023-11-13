@@ -14,19 +14,17 @@ import java.util.List;
 public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
 
     private static final Logger log = LoggerFactory.getLogger(SolaceDataSourceReaderFactory.class);
-    private int batchSize;
-    private String offsetJson;
+    private boolean includeHeaders;
 
-    public SolaceDataSourceReaderFactory(int batchSize, String offsetJson) {
+    public SolaceDataSourceReaderFactory(boolean includeHeaders) {
+        this.includeHeaders = includeHeaders;
         log.info("SolaceSparkConnector - Initializing Partition reader factory");
-        this.batchSize = batchSize;
-        this.offsetJson = offsetJson;
     }
 
     @Override
     public PartitionReader<InternalRow> createReader(InputPartition partition) {
         SolaceInputPartition solaceInputPartition = (SolaceInputPartition) partition;
         log.info("SolaceSparkConnector - Creating reader for input partition reader factory");
-        return new SolaceInputPartitionReader(solaceInputPartition, batchSize, offsetJson);
+        return new SolaceInputPartitionReader(solaceInputPartition, includeHeaders);
     }
 }

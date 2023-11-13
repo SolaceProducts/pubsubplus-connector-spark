@@ -29,24 +29,15 @@ import org.slf4j.LoggerFactory;
 public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
 
     private static Logger log = LoggerFactory.getLogger(SolaceInputPartitionReader.class);
-
     SolaceInputPartition solaceInputPartition;
-
-    int batchSize = 0;
-//    private List<String> previousMessageIDs = new ArrayList<>();
     int index = 0;
-
+    boolean includeHeaders = false;
     SolaceRecord solaceRecord = null;
 
-    public SolaceInputPartitionReader(SolaceInputPartition inputPartition, int batchSize, String offsetJson) {
+    public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders) {
+        this.includeHeaders = includeHeaders;
         log.info("SolaceSparkConnector - Initializing Solace Input Partition reader");
         this.solaceInputPartition = inputPartition;
-        this.batchSize = batchSize;
-//        JsonObject offset = new Gson().fromJson(offsetJson, JsonObject.class);
-//        if(offset.has("messageIDs")) {
-//            previousMessageIDs = Arrays.asList(offset.get("messageIDs").getAsString().split(","));
-//        }
-//        AppSingleton.processedMessageIDs = new ArrayList<>();
     }
 
     @Override
@@ -79,17 +70,22 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             timestamp = System.currentTimeMillis();
         }
         Map<String, Object> userProperties = solaceRecord.getProperties();
-        MapData mapData = new ArrayBasedMapData(new GenericArrayData(userProperties.keySet().stream().map(key -> UTF8String.fromString(key)).toArray()), new GenericArrayData(userProperties.values().stream().map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
-//        GenericArrayData headers = new GenericArrayData(userProperties.keySet().stream().map((key) -> {
-//            return InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
-//                    new Object[]{UTF8String.fromString(key), userProperties.get(key)
-//                    })).seq());
-//        }).toArray());
-        InternalRow row = InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
-                new Object[]{UTF8String.fromString(solaceRecord.getMessageId().toString()),
-                        solaceRecord.getPayload(), UTF8String.fromString(solaceRecord.getDestination()),
-                        DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp)),mapData
-                })).seq());
+        InternalRow row;
+        if(this.includeHeaders) {
+            log.info("SolaceSparkConnector - Adding event headers to Spark row");
+            MapData mapData = new ArrayBasedMapData(new GenericArrayData(userProperties.keySet().stream().map(key -> UTF8String.fromString(key)).toArray()), new GenericArrayData(userProperties.values().stream().map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
+            row = InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
+                    new Object[]{UTF8String.fromString(solaceRecord.getMessageId().toString()),
+                            solaceRecord.getPayload(), UTF8String.fromString(solaceRecord.getDestination()),
+                            DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp)),mapData
+                    })).seq());
+        } else {
+            row = InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
+                    new Object[]{UTF8String.fromString(solaceRecord.getMessageId().toString()),
+                            solaceRecord.getPayload(), UTF8String.fromString(solaceRecord.getDestination()),
+                            DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp))
+                    })).seq());
+        }
 //        this.appSingleton.processedMessageIDs.add(solaceTextRecord.getMessageId());
 //        log.info("SolaceSparkConnector - Count of processed messages :: " + this.appSingleton.processedMessageIDs.size());
         index++;

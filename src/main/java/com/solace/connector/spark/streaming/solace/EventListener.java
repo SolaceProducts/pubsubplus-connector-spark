@@ -1,15 +1,12 @@
 package com.solace.connector.spark.streaming.solace;
 
 import java.io.Serializable;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import com.solace.connector.spark.SolaceRecord;
 import com.solace.connector.spark.streaming.solace.utils.SolaceUtils;
-import com.solacesystems.jcsmp.*;
+import com.solacesystems.jcsmp.XMLMessageListener;
+import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.JCSMPException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.App;
 
 
 public class EventListener implements XMLMessageListener, Serializable {
@@ -37,6 +34,7 @@ public class EventListener implements XMLMessageListener, Serializable {
 
 //            System.out.println("====+++++====");
         } catch (Exception e) {
+            log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);
             throw new RuntimeException(e);
         }
 
