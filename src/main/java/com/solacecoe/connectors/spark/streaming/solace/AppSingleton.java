@@ -1,4 +1,4 @@
-package com.solace.connector.spark.streaming.solace;
+package com.solacecoe.connectors.spark.streaming.solace;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

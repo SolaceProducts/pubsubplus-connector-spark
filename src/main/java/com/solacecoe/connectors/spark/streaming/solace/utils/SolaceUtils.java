@@ -1,4 +1,4 @@
-package com.solace.connector.spark.streaming.solace.utils;
+package com.solacecoe.connectors.spark.streaming.solace.utils;
 
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.SDTException;

@@ -1,9 +1,11 @@
-package com.solace.connector.spark.streaming;
+package com.solacecoe.connectors.spark.streaming;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.solace.connector.spark.SolaceRecord;
-import com.solace.connector.spark.streaming.solace.*;
+import com.solacecoe.connectors.spark.SolaceRecord;
+import com.solacecoe.connectors.spark.streaming.solace.AppSingleton;
+import com.solacecoe.connectors.spark.streaming.solace.EventListener;
+import com.solacecoe.connectors.spark.streaming.solace.InitBroker;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
@@ -27,19 +29,13 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     int batchSize = 1;
     boolean isCommitTriggered = false;
     boolean ackLastProcessedMessages = false;
+    boolean skipMessageReprocessingIfTasksAreRunningLate = false;
     boolean includeHeaders = false;
     EventListener eventListener;
     JsonObject offsetJson = new JsonObject();
     InitBroker initBroker;
     SolaceInputPartition[] inputPartitions;
     AppSingleton appSingleton;
-
-//    private SolaceOffsetIndicator solaceOffsetIndicator = SolaceOffsetIndicator.MESSAGE_ID;
-    boolean isCommitTriggered = false;
-
-    boolean ackLastProcessedMessages = false;
-
-    boolean skipMessageReprocessingIfTasksAreRunningLate = false;
 
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");

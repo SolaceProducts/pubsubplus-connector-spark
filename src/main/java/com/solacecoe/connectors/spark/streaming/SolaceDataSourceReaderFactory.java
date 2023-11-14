@@ -1,15 +1,11 @@
-package com.solace.connector.spark.streaming;
+package com.solacecoe.connectors.spark.streaming;
 
-import com.solace.connector.spark.SolaceRecord;
-import com.solace.connector.spark.streaming.solace.AppSingleton;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
 
 public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
 

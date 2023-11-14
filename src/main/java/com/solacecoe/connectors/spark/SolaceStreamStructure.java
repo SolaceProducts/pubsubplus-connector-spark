@@ -1,4 +1,4 @@
-package com.solace.connector.spark;
+package com.solacecoe.connectors.spark;
 
 import org.apache.spark.sql.connector.catalog.SupportsRead;
 import org.apache.spark.sql.connector.catalog.Table;
@@ -57,7 +57,7 @@ public class SolaceStreamStructure implements SupportsRead, Table {
                     new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
                     new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
                     new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty()),
-                    new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
+                        new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
             };
             return new StructType(structFields);
         }

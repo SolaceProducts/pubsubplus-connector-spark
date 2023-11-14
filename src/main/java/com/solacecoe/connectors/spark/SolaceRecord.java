@@ -1,10 +1,8 @@
-package com.solace.connector.spark;
+package com.solacecoe.connectors.spark;
 
-import com.solace.connector.spark.streaming.solace.utils.SolaceUtils;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.BytesXMLMessage;
-import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import com.solacesystems.jcsmp.SDTMap;
-import com.solacesystems.jcsmp.impl.ReplicationGroupMessageIdImpl;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;

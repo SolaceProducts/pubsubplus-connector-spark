@@ -1,10 +1,6 @@
-package com.solace.connector.spark.streaming;
+package com.solacecoe.connectors.spark.streaming;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.solace.connector.spark.SolaceRecord;
-import com.solace.connector.spark.streaming.solace.AppSingleton;
-import com.solace.connector.spark.streaming.solace.SolaceMessage;
+import com.solacecoe.connectors.spark.SolaceRecord;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
 import org.apache.spark.sql.catalyst.util.DateTimeUtils;
@@ -18,10 +14,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,13 +45,13 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 //            } else {
                 log.info("SolaceSparkConnector - Next message is available");
                 log.info("SolaceSparkConnector - Current processing index " + index);
-                log.info("SolaceSparkConnector - Current received messages from Solace " + this.solaceInputPartition.getValues().size());
+                log.info("SolaceSparkConnector - Total messages in InputPartition " + this.solaceInputPartition.getValues().size());
                 return true;
 //            }
         }
 
         log.info("SolaceSparkConnector - Next message is not available");
-        log.info("SolaceSparkConnector - Current received messages from Solace " + this.solaceInputPartition.getValues().size());
+        log.info("SolaceSparkConnector - Total messages in InputPartition " + this.solaceInputPartition.getValues().size());
         log.info("SolaceSparkConnector - Current processing index " + index);
         return false;
     }
@@ -69,10 +62,14 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         if (solaceRecord.getSenderTimestamp() == 0) {
             timestamp = System.currentTimeMillis();
         }
-        Map<String, Object> userProperties = solaceRecord.getProperties();
         InternalRow row;
         if(this.includeHeaders) {
             log.info("SolaceSparkConnector - Adding event headers to Spark row");
+            Map<String, Object> userProperties = (solaceRecord.getProperties() != null) ? solaceRecord.getProperties() : new HashMap<>();
+            userProperties.put("solace_sequence_number", solaceRecord.getSequenceNumber() == null ? "" : solaceRecord.getSequenceNumber());
+            userProperties.put("solace_expiration", solaceRecord.getExpiration());
+            userProperties.put("solace_time_to_live", solaceRecord.getTimeToLive());
+            userProperties.put("solace_priority", solaceRecord.getPriority());
             MapData mapData = new ArrayBasedMapData(new GenericArrayData(userProperties.keySet().stream().map(key -> UTF8String.fromString(key)).toArray()), new GenericArrayData(userProperties.values().stream().map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
             row = InternalRow.apply(JavaConversions.asScalaBuffer(Arrays.asList(
                     new Object[]{UTF8String.fromString(solaceRecord.getMessageId().toString()),

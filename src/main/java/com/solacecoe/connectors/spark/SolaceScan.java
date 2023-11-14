@@ -1,6 +1,6 @@
-package com.solace.connector.spark;
+package com.solacecoe.connectors.spark;
 
-import com.solace.connector.spark.streaming.SolaceMicroBatch;
+import com.solacecoe.connectors.spark.streaming.SolaceMicroBatch;
 import org.apache.spark.sql.connector.read.Batch;
 import org.apache.spark.sql.connector.read.Scan;
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream;

@@ -1,15 +1,15 @@
-package com.solace.connector.spark;
+package com.solacecoe.connectors.spark;
 
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableProvider;
 import org.apache.spark.sql.connector.expressions.Transform;
-import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.sources.DataSourceRegister;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
 import java.util.Map;
 
-public class SolaceSparkStream implements TableProvider {
+public class SolaceSparkStream implements TableProvider, DataSourceRegister {
 
     public SolaceSparkStream(){
     }
@@ -28,6 +28,11 @@ public class SolaceSparkStream implements TableProvider {
     @Override
     public Table getTable(StructType schema, Transform[] partitioning, Map<String, String> properties) {
         return new SolaceStreamStructure(schema, properties);
+    }
+
+    @Override
+    public String shortName() {
+        return "solace";
     }
 
 //    @Override

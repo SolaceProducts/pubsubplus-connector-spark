@@ -1,4 +1,4 @@
-package com.solace.connector.spark;
+package com.solacecoe.connectors.spark;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.function.Function0;
@@ -78,7 +78,8 @@ public class LoadSolaceConnector implements Runnable {
                 .option("password", "t0cih0msica2ked2d3b79eudn1")
                 .option("queue", "queue.orders.incoming")
                 .option("batchSize", 1)
-                .option("offset_indicator", "CORRELATION_ID")
+//                .option("offset_indicator", "CORRELATION_ID")
+                .option("includeHeaders", true)
                 .format("com.solace.connector.spark.SolaceSparkStream").load();
 
         DataStreamWriter dsw = dataset.writeStream()

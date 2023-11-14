@@ -1,7 +1,8 @@
-package com.solace.connector.spark.streaming.solace;
+package com.solacecoe.connectors.spark.streaming.solace;
 
 import java.io.Serializable;
-import com.solace.connector.spark.streaming.solace.utils.SolaceUtils;
+
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;
