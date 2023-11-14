@@ -35,6 +35,11 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     AppSingleton appSingleton;
 
 //    private SolaceOffsetIndicator solaceOffsetIndicator = SolaceOffsetIndicator.MESSAGE_ID;
+    boolean isCommitTriggered = false;
+
+    boolean ackLastProcessedMessages = false;
+
+    boolean skipMessageReprocessingIfTasksAreRunningLate = false;
 
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
@@ -83,6 +88,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         }
 
         ackLastProcessedMessages = properties.containsKey("ackLastProcessedMessages") ? Boolean.valueOf(properties.get("ackLastProcessedMessages").toString()) : false;
+        skipMessageReprocessingIfTasksAreRunningLate = properties.containsKey("skipMessageReprocessingIfTasksAreRunningLate") ? Boolean.valueOf(properties.get("skipMessageReprocessingIfTasksAreRunningLate").toString()) : false;
         log.info("SolaceSparkConnector - Ack Last processed messages is set to " + ackLastProcessedMessages);
         includeHeaders = properties.containsKey("includeHeaders") ? Boolean.valueOf(properties.get("includeHeaders").toString()) : false;
         log.info("SolaceSparkConnector - includeHeaders is set to " + includeHeaders);
@@ -105,6 +111,14 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         return new BasicOffset(latestOffsetValue, String.join(",", this.appSingleton.processedMessageIDs));
     }
 
+    private boolean shouldAddMessage(String messageID) {
+        if(skipMessageReprocessingIfTasksAreRunningLate && this.appSingleton.processedMessageIDs.contains(messageID)) {
+            return false;
+        }
+
+        return true;
+    }
+
     @Override
     public InputPartition[] planInputPartitions(Offset start, Offset end) {
         int size = 1;
@@ -123,7 +137,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
-                if (solaceRecord != null) {
+                if (solaceRecord != null && shouldAddMessage(solaceRecord.getMessageId())) {
                     if(ackLastProcessedMessages) {
                         // based on last successful offset, extract the message ID and see if same message is received, if so ack the message
                         if (offsetJson != null && offsetJson.has("messageIDs")) {
