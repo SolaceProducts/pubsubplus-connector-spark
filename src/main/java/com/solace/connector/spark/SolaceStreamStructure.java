@@ -51,8 +51,8 @@ public class SolaceStreamStructure implements SupportsRead, Table {
 
     private static StructType getSchema() {
         StructField[] structFields = new StructField[]{
-                new StructField("MessageId", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("Value", DataTypes.BinaryType, true, Metadata.empty()),
+                new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
+                new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
                 new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
                 new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty())
         };
