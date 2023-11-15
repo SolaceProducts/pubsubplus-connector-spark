@@ -41,8 +41,8 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
         appSingleton = AppSingleton.getInstance();
-        if(properties.get("offset_indicator") != null && properties.get("offset_indicator").toString().length() > 0) {
-            appSingleton.solaceOffsetIndicator = properties.get("offset_indicator").toString();
+        if(properties.get("offsetIndicator") != null && properties.get("offsetIndicator").toString().length() > 0) {
+            appSingleton.solaceOffsetIndicator = properties.get("offsetIndicator").toString();
         }
         eventListener = new EventListener();
         appSingleton.setCallback(eventListener);
@@ -84,7 +84,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         }
 
         ackLastProcessedMessages = properties.containsKey("ackLastProcessedMessages") ? Boolean.valueOf(properties.get("ackLastProcessedMessages").toString()) : false;
-        skipMessageReprocessingIfTasksAreRunningLate = properties.containsKey("skipMessageReprocessingIfTasksAreRunningLate") ? Boolean.valueOf(properties.get("skipMessageReprocessingIfTasksAreRunningLate").toString()) : false;
+        skipMessageReprocessingIfTasksAreRunningLate = properties.containsKey("skipDuplicates") ? Boolean.valueOf(properties.get("skipDuplicates").toString()) : false;
         log.info("SolaceSparkConnector - Ack Last processed messages is set to " + ackLastProcessedMessages);
         includeHeaders = properties.containsKey("includeHeaders") ? Boolean.valueOf(properties.get("includeHeaders").toString()) : false;
         log.info("SolaceSparkConnector - includeHeaders is set to " + includeHeaders);

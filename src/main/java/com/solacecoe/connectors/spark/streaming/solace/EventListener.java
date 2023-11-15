@@ -43,7 +43,8 @@ public class EventListener implements XMLMessageListener, Serializable {
 
     @Override
     public void onException(JCSMPException e) {
-        System.out.printf("Consumer received exception: %s%n", e);
+        log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
+        throw new RuntimeException(e);
     }
 
 
