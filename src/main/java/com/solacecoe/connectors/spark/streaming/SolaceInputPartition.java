@@ -1,9 +1,7 @@
-package com.solace.connector.spark.streaming;
+package com.solacecoe.connectors.spark.streaming;
 
 
-import com.solace.connector.spark.SolaceRecord;
-import com.solace.connector.spark.streaming.solace.AppSingleton;
-import com.solace.connector.spark.streaming.solace.SolaceMessage;
+import com.solacecoe.connectors.spark.SolaceRecord;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

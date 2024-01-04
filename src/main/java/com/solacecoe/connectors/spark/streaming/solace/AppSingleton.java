@@ -1,7 +1,5 @@
-package com.solace.connector.spark.streaming.solace;
+package com.solacecoe.connectors.spark.streaming.solace;
 
-import com.solace.connector.spark.SolaceRecord;
-import com.solacesystems.jcsmp.BytesXMLMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,7 +7,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class AppSingleton implements Serializable {
     private static Logger log = LoggerFactory.getLogger(AppSingleton.class);
@@ -21,6 +18,8 @@ public class AppSingleton implements Serializable {
     public ConcurrentHashMap<String, SolaceMessage> messageMap;
 
     public List<String> processedMessageIDs;
+
+    public String solaceOffsetIndicator = "MESSAGE_ID";
 
 
     private AppSingleton() {

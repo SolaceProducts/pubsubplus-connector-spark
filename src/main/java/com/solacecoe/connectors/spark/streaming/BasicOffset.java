@@ -1,4 +1,4 @@
-package com.solace.connector.spark.streaming;
+package com.solacecoe.connectors.spark.streaming;
 
 import org.apache.spark.sql.connector.read.streaming.Offset;
 

@@ -1,4 +1,4 @@
-package com.solace.connector.spark;
+package com.solacecoe.connectors.spark;
 
 import org.apache.spark.sql.connector.read.Batch;
 import org.apache.spark.sql.connector.read.InputPartition;

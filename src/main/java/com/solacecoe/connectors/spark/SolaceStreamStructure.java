@@ -1,13 +1,10 @@
-package com.solace.connector.spark;
+package com.solacecoe.connectors.spark;
 
 import org.apache.spark.sql.connector.catalog.SupportsRead;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableCapability;
 import org.apache.spark.sql.connector.read.ScanBuilder;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.Metadata;
-import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
 import java.util.HashSet;
@@ -20,6 +17,8 @@ public class SolaceStreamStructure implements SupportsRead, Table {
     private final Map<String, String> properties;
     private Set<TableCapability> capabilities;
 
+    private CaseInsensitiveStringMap options;
+
     public SolaceStreamStructure(StructType schema, Map<String, String> properties) {
         this.schema = schema;
         this.properties = properties;
@@ -27,6 +26,7 @@ public class SolaceStreamStructure implements SupportsRead, Table {
 
     @Override
     public ScanBuilder newScanBuilder(CaseInsensitiveStringMap options) {
+        this.options = options;
         return new SolaceScanBuilder(schema, properties, options);
     }
 
@@ -37,7 +37,8 @@ public class SolaceStreamStructure implements SupportsRead, Table {
 
     @Override
     public StructType schema() {
-        return getSchema();
+        boolean includeHeaders = this.properties.containsKey("includeHeaders") ? Boolean.valueOf(this.properties.get("includeHeaders").toString()) : false;
+        return getSchema(includeHeaders);
     }
 
     @Override
@@ -49,7 +50,18 @@ public class SolaceStreamStructure implements SupportsRead, Table {
         return capabilities;
     }
 
-    private static StructType getSchema() {
+    private static StructType getSchema(boolean includeHeaders) {
+        if(includeHeaders) {
+            StructField[] structFields = new StructField[]{
+                    new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
+                    new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
+                    new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
+                    new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty()),
+                        new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
+            };
+            return new StructType(structFields);
+        }
+
         StructField[] structFields = new StructField[]{
                 new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
                 new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
@@ -57,6 +69,7 @@ public class SolaceStreamStructure implements SupportsRead, Table {
                 new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty())
         };
         return new StructType(structFields);
+
     }
 
 }

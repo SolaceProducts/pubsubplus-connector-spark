@@ -1,11 +1,13 @@
-package com.solace.connector.spark.streaming.solace;
+package com.solacecoe.connectors.spark.streaming.solace;
 
 import com.solacesystems.jcsmp.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
 public class InitBroker implements Serializable {
-
+    private static Logger log = LoggerFactory.getLogger(InitBroker.class);
     private JCSMPSession session;
     private String host;
     private String vpn;
@@ -31,7 +33,7 @@ public class InitBroker implements Serializable {
             session = JCSMPFactory.onlyInstance().createSession(properties);
             session.connect();
         } catch (Exception e) {
-
+            log.error("SolaceSparkConnector - Exception connecting to Solace ", e);
         }
     }
 
@@ -56,7 +58,8 @@ public class InitBroker implements Serializable {
 
             cons.start();
         } catch (Exception e) {
-
+            log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
+            close();
         }
         // log.info("Listening for messages: "+ this.queueName);
     }
