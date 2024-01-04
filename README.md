@@ -29,7 +29,7 @@ This repository contains code that connects to specified Solace service and inse
 
 # Prerequisites
 
-Java
+Apache Spark 3.1.2, Scala 2.12
 
 # Build the connector
 
@@ -37,23 +37,67 @@ Java
 
 # Running the connector
 
-## Local environment
-
-Navigate to the file `LoadSolaceConnector.java` and update the options to specify the relevant Solace Service details(Host, VPN, User, Password, Queue, BatchSize) and run the file.
-
 ## Databricks environment
 
-The following are the prerequisites to run the connector in DataBricks environment
+Create a Databricks cluster with Runtime with above Spark version and follow the steps below
 
-* Runtime 9.1 LTS (includes Apache Spark 3.1.2, Scala 2.12)
+1. In the libraries section upload the pubsubplus-connector-spark jar and also add the following maven dependencies using install new option available in Databricks cluster libraries section
 
-Steps to run the connector
+<p align="center">
+   <img src="https://github.com/SolaceTechCOE/spark-connector-v3/assets/83568543/b2bc0f68-d80e-422c-8fd3-af89034cdaca"/>
+</p>
 
-* Create a cluster in Databricks using the specified Runtime
-* Upload the Jar file generated from `mvn clean install` command in the libraries section
-* Add `com.solacesystems:sol-jcsmp:version and log4j:log4j:version` as maven dependency
-* Create a notebook with the code required to run the connector and attach it to cluster. Refer `LoadSolaceConnector.java` for the code to run the connector(Notebooks are generally written in scala)
-* Run the notebook and you should be able to see the connector reading data from Solace and inserting into Spark Internal rows
+## Running as a Job
+If you are running Spark Connector as a job, use the jar files provided as part of distribution to configure your job. In case of thin jar you need to provide dependencies as in above screenshot for the job. For class name and other connector configuration please refer sample scripts and configuration option sections
+
+## Thin Jar vs Fat Jar
+Thin jar is light weight jar where only Spark Streaming API related dependencies are included. In this case Solace and Log4j related dependencies should be added during configuration of Spark Job. Spark supports adding these dependencies via maven or actual jars.
+
+```com.solacesystems:sol-jcsmp:10.21.0``` & ```log4j:log4j:1.2.17```
+
+Fat jar includes all the dependencies and it can be used directly without any additional dependencies.
+
+## Solace Spark Schema
+
+Solace Spark Connector transforms the incoming message to Spark row with below schema.
+
+| Column Name  | Column Type |
+| ------------- | ------------- |
+| Id  | String  |
+| Payload  | Binary  |
+| Topic  | String  |
+| TimeStamp  | Timestamp  |
+| Headers  | Map<string, binary>  |
+
+## Using Sample Script
+
+### Databricks
+
+1.	Solace_Read_Stream_Script.txt
+
+Create a new notebook in Databricks environment and set the language to Scala. Copy the Script to notebook and provide the required details. Once started, script reads data from Solace Queue and writes to parquet files. 
+
+2.	Read_Parquet_Script.txt
+This scripts reads the data from parquet and displays the count of records. The output should match the number of records available in Solace queue before processing.
+
+## Spark Job or Spark Submit
+
+Spark Job or Spark Submit requires jar as input. You can convert above Scala scripts to jar and provide it as input and add pubsubplus-connector-solace jar(thin or fat) as dependency. In case of thin jar please note that additional dependencies need to be configured as mentioned in Thin Jar vs Fat Jar section.
+
+## Configuration Options
+| Config Option  | Type | Valid Values | Default Value | Description |
+| ------------- | ------------- | ------------- | ------------- | ------------- |
+| host  | String  | tcp(s)://hostname:port  | Empty  | Fully Qualified Solace Hostname with protocol and port number  |
+| vpn  | String  |   | Empty  | Solace VPN Name  |
+| username | String |  | Empty | Solace Client Username |
+| password | String |  | Empty | Solace Client Password |
+| queue | String |  | Empty | Solace Queue name |
+| batchSize | Integer |  | 1 | Set number of messages to be processed in batch. Default is set to 1 |
+| ackLastProcessedMessages | Boolean |  | false | Set this value to true if connector needs to determine processed messages in last run. The connector purely depends on offset file generated during Spark commit. In some cases connector may acknowledge the message based on offset but same may not be available in your downstream systems. In general we recommend leaving this false and handle process/reprocess of messages in downstream systems | 
+| skipDuplicates | Boolean |  | false | Set this value to true if connector needs check for duplicates before adding to Spark row. This scenario occurs when the tasks are executing more than expected time and message is not acknowledged before the start of next task. In such cases the message will be added again to Spark row. |
+| offsetIndicator | String |  | MESSAGE_ID | Set this value if your Solace Message has unique ID in message header. Supported Values are <ul><li> MESSAGE_ID </li><li> CORRELATION_ID </li> <li> APPLICATION_MESSAGE_ID </li> <li> CUSTOM_USER_PROPERTY </li> </ul> CUSTOM_USER_PROPERTY refers to one of headers in user properties header |
+| includeHeaders | Boolean |  | false | Set this value to true if message headers need to be included in output |
+
 
 # Exploring the Code using IDE
 
