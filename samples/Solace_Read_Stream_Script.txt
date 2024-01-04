@@ -1,0 +1,40 @@
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.functions.{col,from_json}
+import org.apache.spark.sql.streaming.Trigger
+import org.apache.spark.sql.SparkSession;
+
+try {
+    val streamName = "test-solace-spark-connector"
+    // spark.sparkContext.defaultMinPartitions;
+    spark.sparkContext.setCheckpointDir(s"/stream_checkpoints/solace_test/$streamName/");
+    val struct_stream = spark.readStream.format("solace")
+    .option("host", "") // solace host name tcp://<host-name>:<port>
+    .option("vpn", "") // solace vpn name
+    .option("username", "") // solace username
+    .option("password", "") // solace password
+    .option("queue", "") // solace queue name
+    .option("batchSize", 1) // batch size. Minimum value is 1
+    .option("ackLastProcessedMessages", false) // set this value to true if connector needs to determine processed messages in last run. The connector purely depends on offset file generated during Spark commit. In some cases commit may be successful but Spark job may take longer to write data and interruption might occur due to shutdown in restart. In such cases connector assumes message is already processed based on offset generated during last commit and acknowledge the message but the same message may not be available in downstream system. In general we recommend leaving this false and handle process/reprocess of messages in downstream systems.
+    .option("skipDuplicates", false) // Set this value to true if connector needs to skip re-adding messages to Spark row. This scenario occurs when the tasks are executing more than expected time and message is not acknowledged before the start of next task. In such cases the message will be added again to Spark row.
+    .option("offsetIndicator", "MESSAGE_ID") // Set this value if your Solace Message has unique ID in message header. Supported Values are
+        1. MESSAGE_ID
+        2. CORRELATION_ID 
+        3. APPLICATION_MESSAGE_ID 
+        4.<CUSTOM_USE R_PROPERTY> CUSTOM_USER_PROPERTY refers to one of headers in user properties header
+    .option("includeHeaders", true) // Set this value to true if message headers need to be included in output
+    .load()
+    
+    val query = struct_stream.writeStream
+    .format("parquet")
+    .outputMode("append")
+    .queryName(streamName)
+    .option("checkpointLocation", s"/stream_checkpoints/solace_test/$streamName/")
+    .option("path", s"/solace_output/$streamName/")
+              
+    query.start().awaitTermination();
+} catch {
+    case e: Exception => {
+    print("----------->>>>>>>>In Spark Exception<<<<<<---------" + e)
+    // sparkconf.close()
+}
+}
