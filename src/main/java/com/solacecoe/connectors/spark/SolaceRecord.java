@@ -3,6 +3,7 @@ package com.solacecoe.connectors.spark;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.SDTMap;
+import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
@@ -29,13 +30,16 @@ public class SolaceRecord implements Serializable {
     private final Long sequenceNumber;
     private final long timeToLive;
 
+    private final String partitionKey;
+
     /**
      * Define a new Solace text record.
      */
-    public SolaceRecord(String destination, long expiration, String messageId,
+    public SolaceRecord(String partitionKey, String destination, long expiration, String messageId,
                             int priority, boolean redelivered, String replyTo, long receiveTimestamp,
                             long senderTimestamp, Long sequenceNumber, long timeToLive,
                             Map<String, Object> properties, byte[] text) {
+        this.partitionKey = partitionKey;
         this.destination = destination;
         this.expiration = expiration;
         this.messageId = messageId;
@@ -141,6 +145,11 @@ public class SolaceRecord implements Serializable {
         return timeToLive;
     }
 
+
+    public String getPartitionKey() {
+        return partitionKey;
+    }
+
     @Override
     public int hashCode() {
         return Objects.hash(destination, expiration, messageId, priority,
@@ -204,8 +213,13 @@ public class SolaceRecord implements Serializable {
             }
 
             String messageID = SolaceUtils.getMessageID(msg, this.solaceOffsetIndicator);
+            String partitionKey = "";
+            if(msg.getProperties() != null && msg.getProperties().containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)) {
+                partitionKey = msg.getProperties().getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
+            }
             // log.info("SolaceSparkConnector - Received Message ID String in Input partition - " + msg.getMessageId());
             return new SolaceRecord(
+                    partitionKey,
                     msg.getDestination().getName(),
                     msg.getExpiration(),
                     messageID,
