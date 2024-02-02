@@ -21,7 +21,7 @@ public class SolaceUtils {
 //                return Long.toString(message.getSequenceNumber());
             default:
                 if(solaceOffsetIndicator.equals("MESSAGE_ID")) {
-                    return message.getMessageId();
+                    return message.getReplicationGroupMessageId().toString();
                 }
 
                 if(message.getProperties() != null && message.getProperties().containsKey(solaceOffsetIndicator)) {

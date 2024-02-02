@@ -7,10 +7,13 @@ import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
 
     private static final Logger log = LoggerFactory.getLogger(SolaceDataSourceReaderFactory.class);
-    private boolean includeHeaders;
+    private final boolean includeHeaders;
 
     public SolaceDataSourceReaderFactory(boolean includeHeaders) {
         this.includeHeaders = includeHeaders;

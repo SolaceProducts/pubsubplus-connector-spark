@@ -5,19 +5,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-public class InitBroker implements Serializable {
-    private static Logger log = LoggerFactory.getLogger(InitBroker.class);
+public class SolaceBroker implements Serializable {
+    private static Logger log = LoggerFactory.getLogger(SolaceBroker.class);
     private JCSMPSession session;
-    private String host;
-    private String vpn;
-    private String username;
-    private String password;
-    private String queue;
+    private final String host;
+    private final String vpn;
+    private final String username;
+    private final String password;
+    private final String queue;
+    private final CopyOnWriteArrayList<EventListener> eventListeners;
+    private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
 
-    private FlowReceiver cons;
-
-    public InitBroker(String host, String vpn, String username, String password, String queue) {
+    public SolaceBroker(String host, String vpn, String username, String password, String queue) {
+        eventListeners = new CopyOnWriteArrayList<>();
+        flowReceivers = new CopyOnWriteArrayList<>();
         this.host = host;
         this.vpn = vpn;
         this.username = username;
@@ -37,8 +43,12 @@ public class InitBroker implements Serializable {
         }
     }
 
-    public void setReceiver(EventListener eventListener) {
+    public void addReceiver(EventListener eventListener) {
+        eventListeners.add(eventListener);
+        setReceiver(eventListener);
+    }
 
+    private void setReceiver(EventListener eventListener) {
         try {
             ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
             Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.queue);
@@ -53,10 +63,11 @@ public class InitBroker implements Serializable {
 
             Context context = JCSMPFactory.onlyInstance().createContext(null);
 
-            cons = this.session.createFlow(eventListener,
+            FlowReceiver cons = this.session.createFlow(eventListener,
                     flow_prop, endpoint_props);
 
             cons.start();
+            log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue " + this.queue);
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
@@ -65,15 +76,25 @@ public class InitBroker implements Serializable {
     }
 
     public void close() {
-        if(cons != null && !cons.isClosed()) {
-            cons.close();
-        }
+        flowReceivers.forEach(flowReceiver -> {
+            if(flowReceiver != null && !flowReceiver.isClosed()) {
+                String endpoint = flowReceiver.getEndpoint().getName();
+                flowReceiver.close();
+                log.info("SolaceSparkConnector - Closed flow receiver to endpoint " + endpoint);
+            }
+        });
+
 
         if(session != null && !session.isClosed()) {
             session.closeSession();
+            log.info("SolaceSparkConnector - Closed Solace session");
         }
     }
 
+    public ConcurrentLinkedQueue<SolaceMessage> getMessages(int index) {
+        log.info("Requesting messages from event listener " + index + ", total messages available :: " + this.eventListeners.get(index).getMessages().size());
+        return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
+    }
 
     @Override
     protected void finalize() throws Throwable {

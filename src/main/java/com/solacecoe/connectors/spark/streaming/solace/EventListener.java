@@ -1,6 +1,10 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
 import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.XMLMessageListener;
@@ -11,29 +15,20 @@ import org.slf4j.LoggerFactory;
 
 
 public class EventListener implements XMLMessageListener, Serializable {
-
     private static Logger log = LoggerFactory.getLogger(EventListener.class);
-    private AppSingleton appSingleton;
+    private final int id;
+    private final ConcurrentLinkedQueue<SolaceMessage> messages;
 
-    public void setAppSingleton(AppSingleton appSingleton) {
-        this.appSingleton = appSingleton;
+    public EventListener(int id) {
+        this.id = id;
+        this.messages = new ConcurrentLinkedQueue<>();
     }
+
     @Override
     public void onReceive(BytesXMLMessage msg) {
         try {
-
-//            System.out.println("Message received. ......");
-//            log.info("SolaceSparkConnector - Message received from Solace");
-//            SolaceRecord solaceRecord = SolaceRecord.getMapper().map(msg);
-            String messageID = SolaceUtils.getMessageID(msg, this.appSingleton.solaceOffsetIndicator);
-            this.appSingleton.messageMap.put(messageID, new SolaceMessage(msg));
-//            this.appSingleton.messages.add(solaceRecord);
-
-//            log.info("SolaceSparkConnector - Message added to internal map. Count :: " + this.appSingleton.messages.size());
-
-//            log.info(AppSingleton.getInstance().debits.toString());
-
-//            System.out.println("====+++++====");
+            this.messages.add(new SolaceMessage(msg));
+//            log.info("Current messages in consumer "+this.id+" is :: " + this.messages.size());
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);
             throw new RuntimeException(e);
@@ -47,6 +42,7 @@ public class EventListener implements XMLMessageListener, Serializable {
         throw new RuntimeException(e);
     }
 
-
-
+    public ConcurrentLinkedQueue<SolaceMessage> getMessages() {
+        return messages;
+    }
 }
