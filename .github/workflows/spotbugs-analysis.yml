@@ -1,0 +1,71 @@
+name: Code Analysis (SpotBugs)
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  dupe_check:
+    name: Check for Duplicate Workflow Run
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5.2.0
+        with:
+          concurrent_skipping: same_content_newer
+          do_not_skip: '["pull_request", "workflow_dispatch", "schedule"]'
+
+  run-analysis:
+    name: Run SpotBugs Static Code Analysis
+    needs:
+      - dupe_check
+    if: needs.dupe_check.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache local Maven repository
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-spotbugs-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-spotbugs-
+      - name: Setup JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: zulu
+          java-version: 17
+          settings-path: ${{ github.workspace }}/maven
+          overwrite-settings: false
+      - name: Run static code analysis
+        run: mvn clean compile --settings "${GITHUB_WORKSPACE}/maven/settings.xml" -Pgithub spotbugs:check 
+        env:
+          SOLACEDEV_GITHUB_USERNAME: ${{ secrets.SOLACEDEV_GITHUB_USERNAME }}
+          SOLACEDEV_GITHUB_TOKEN: ${{ secrets.SOLACEDEV_GITHUB_TOKEN }}
+      - name: Run static code analysis (Sarif report) # Can't generate both report formats in 1 run: https://github.com/spotbugs/spotbugs-maven-plugin/pull/339
+        if: ${{ !cancelled() }}
+        run: mvn compile spotbugs:check --settings maven/settings.xml -Dspotbugs.sarifOutput=true -Dspotbugs.failOnError=false
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Code Analysis Results (SpotBugs)
+          path: |
+            ${{ github.workspace }}/**/target/spotbugs.xml
+            ${{ github.workspace }}/**/target/spotbugsSarif.json
+            ${{ github.workspace }}/**/target/spotbugsXml.xml
+      - id: upload-sarif
+        name: Upload PMD SARIF report
+        if: ${{ !cancelled() }}
+        continue-on-error: true # Likely failed because repo doesn't have GitHub Enhanced Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: ${{ github.workspace }}/**/target/spotbugsSarif.json
+      - name: Publish SpotBugs report
+        if: ${{ !cancelled() && steps.upload-sarif.outcome == 'failure' }}
+        uses: jwgmeligmeyling/spotbugs-github-action@v1.2
+        with:
+          path: ${{ github.workspace }}/**/target/spotbugsXml.xml
