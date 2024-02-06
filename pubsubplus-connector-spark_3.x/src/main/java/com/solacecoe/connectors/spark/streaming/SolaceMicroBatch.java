@@ -20,9 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionControl {
     private static Logger log = LoggerFactory.getLogger(SolaceMicroBatch.class);
@@ -32,9 +31,8 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     private JsonObject offsetJson;
     private SolaceInputPartition[] inputPartitions;
     private final SolaceConnectionManager solaceConnectionManager;
-    private final CopyOnWriteArrayList<String> processedMessageIDs;
-    private final Map<String, SolaceMessage> messages;
-    private final Map<String, String> properties;
+//    private final CopyOnWriteArrayList<String> processedMessageIDs;
+    private final ConcurrentHashMap<String, SolaceMessage> messages;
     private final int batchSize;
     private final int partitions;
     private final boolean ackLastProcessedMessages;
@@ -43,7 +41,6 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     private final boolean includeHeaders;
 
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
-        this.properties = properties;
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
 
@@ -119,8 +116,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition " + i);
         }
 
-        this.processedMessageIDs = new CopyOnWriteArrayList<>();
-        this.messages = new HashMap<>();
+        this.messages = new ConcurrentHashMap<>();
         this.offsetJson = new JsonObject();
         log.info("SolaceSparkConnector - Initialization Completed");
     }
@@ -129,11 +125,11 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     public Offset latestOffset() {
         latestOffsetValue+=batchSize;
 //        log.info("SolaceSparkConnector - latestOffset :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
-        return new BasicOffset(latestOffsetValue, String.join(",", this.processedMessageIDs));
+        return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
     }
 
     private boolean shouldAddMessage(String messageID) {
-        if(skipMessageReprocessingIfTasksAreRunningLate && this.processedMessageIDs.contains(messageID)) {
+        if(skipMessageReprocessingIfTasksAreRunningLate && this.messages.contains(messageID)) {
             return false;
         }
 
@@ -173,28 +169,33 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                                         log.info("SolaceSparkConnector - Message found in offset. Acknowledging previously processed message with ID :: " + solaceRecord.getMessageId());
                                         bytesXMLMessage.ackMessage();
 
-                                        if (this.processedMessageIDs.contains(solaceRecord.getMessageId())) {
-                                            this.processedMessageIDs.remove(solaceRecord.getMessageId());
+                                        if (this.messages.contains(solaceRecord.getMessageId())) {
+                                            this.messages.remove(solaceRecord.getMessageId());
                                         }
                                     } else {
-                                        if(!this.processedMessageIDs.contains(solaceRecord.getMessageId())) {
-                                            log.info("SolaceSparkConnector - Message is not present in offset. Hence reprocessing it.");
-                                            this.processedMessageIDs.add(solaceRecord.getMessageId());
-                                            recordList.add(solaceRecord);
-                                        }
-                                    }
-                                } else {
-                                    if(!this.processedMessageIDs.contains(solaceRecord.getMessageId())) {
-                                        log.info("SolaceSparkConnector - Trying to check if messages are already processed but offset is not available. Hence reprocessing it.");
-                                        this.processedMessageIDs.add(solaceRecord.getMessageId());
+//                                        if(!this.messages.contains(solaceRecord.getMessageId())) {
+//                                            log.info("SolaceSparkConnector - Message is not present in offset. Hence reprocessing it.");
+//                                            this.messages.put(solaceRecord.getMessageId(), solaceMessage);
+//                                            recordList.add(solaceRecord);
+//                                        }
+                                        log.info("SolaceSparkConnector - Message is not present in offset. Hence reprocessing it.");
                                         recordList.add(solaceRecord);
                                     }
-                                }
-                            } else {
-                                if(!this.processedMessageIDs.contains(solaceRecord.getMessageId())) {
-                                    this.processedMessageIDs.add(solaceRecord.getMessageId());
+                                } else {
+//                                    if(!this.messages.contains(solaceRecord.getMessageId())) {
+//                                        log.info("SolaceSparkConnector - Trying to check if messages are already processed but offset is not available. Hence reprocessing it.");
+//                                        this.messages.put(solaceRecord.getMessageId(), solaceMessage);
+//                                        recordList.add(solaceRecord);
+//                                    }
+                                    log.info("SolaceSparkConnector - Trying to check if messages are already processed but offset is not available. Hence reprocessing it.");
                                     recordList.add(solaceRecord);
                                 }
+                            } else {
+//                                if(!this.processedMessageIDs.contains(solaceRecord.getMessageId())) {
+//                                    this.processedMessageIDs.add(solaceRecord.getMessageId());
+//                                    recordList.add(solaceRecord);
+//                                }
+                                recordList.add(solaceRecord);
                             }
 
                         }
@@ -232,12 +233,12 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     public Offset latestOffset(Offset startOffset, ReadLimit limit) {
         latestOffsetValue+=batchSize;
 //        log.info("SolaceSparkConnector - latestOffset with params :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
-        return new BasicOffset(latestOffsetValue, String.join(",", this.processedMessageIDs));
+        return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
     }
 
     @Override
     public Offset initialOffset() {
-        return new BasicOffset(latestOffsetValue, String.join(",", this.processedMessageIDs));
+        return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
     }
 
     @Override
@@ -247,7 +248,14 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             latestOffsetValue = gson.get("offset").getAsInt();
             offsetJson = gson;
         }
-        return new BasicOffset(latestOffsetValue, String.join(",", this.processedMessageIDs));
+
+//        if(gson != null && gson.has("messageIDs")) {
+//            String messageIDs = gson.get("messageIDs").getAsString();
+//            if(messageIDs.length() > 0) {
+//                this.processedMessageIDs.addAll(Arrays.asList(messageIDs.split(",")));
+//            }
+//        }
+        return new BasicOffset(latestOffsetValue, String.join(",",this.messages.keySet().stream().collect(Collectors.toList())));
     }
 
     @Override
@@ -263,9 +271,9 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                     this.messages.get(messageID).bytesXMLMessage.ackMessage();
                     log.info("SolaceSparkConnector - Acknowledged message with ID :: " + messageID);
                     this.messages.remove(messageID);
-                    if (this.processedMessageIDs.contains(messageID)) {
-                        this.processedMessageIDs.remove(messageID);
-                    }
+//                    if (this.processedMessageIDs.contains(messageID)) {
+//                        this.processedMessageIDs.remove(messageID);
+//                    }
                 }
             }
         }
