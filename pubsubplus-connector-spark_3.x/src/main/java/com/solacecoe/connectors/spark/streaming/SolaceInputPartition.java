@@ -2,26 +2,29 @@ package com.solacecoe.connectors.spark.streaming;
 
 
 import com.solacecoe.connectors.spark.SolaceRecord;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SolaceInputPartition implements InputPartition {
 
     private static Logger log = LoggerFactory.getLogger(SolaceInputPartition.class);
-    private int value = 0;
-    private String location;
+    private final String location;
+    private final int id;
+    private final CopyOnWriteArrayList<SolaceRecord> solaceRecords;
 
-    private List<SolaceRecord> solaceRecords;
-//    int end = 0;
-    public SolaceInputPartition(int start, String location, List<SolaceRecord> solaceRecords) {
+    public SolaceInputPartition(int id, String location, CopyOnWriteArrayList<SolaceRecord> solaceRecords) {
         log.info("SolaceSparkConnector - Initializing Solace Input partition");
-        this.value = start;
+        this.id = id;
         this.location = location;
         this.solaceRecords = solaceRecords;
-//        this.end = end;
     }
 
     @Override
@@ -30,7 +33,12 @@ public class SolaceInputPartition implements InputPartition {
         return new String[]{this.location};
     }
 
-    public List<SolaceRecord> getValues() {
+    public CopyOnWriteArrayList<SolaceRecord> getValues() {
         return this.solaceRecords;
     }
+
+    public int getId() {
+        return id;
+    }
+
 }

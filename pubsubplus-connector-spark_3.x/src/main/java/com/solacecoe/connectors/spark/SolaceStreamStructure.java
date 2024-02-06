@@ -55,6 +55,7 @@ public class SolaceStreamStructure implements SupportsRead, Table {
             StructField[] structFields = new StructField[]{
                     new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
                     new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
+                    new StructField("PartitionKey", DataTypes.StringType, true, Metadata.empty()),
                     new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
                     new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty()),
                         new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
@@ -65,6 +66,7 @@ public class SolaceStreamStructure implements SupportsRead, Table {
         StructField[] structFields = new StructField[]{
                 new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
                 new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
+                new StructField("PartitionKey", DataTypes.StringType, true, Metadata.empty()),
                 new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
                 new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty())
         };

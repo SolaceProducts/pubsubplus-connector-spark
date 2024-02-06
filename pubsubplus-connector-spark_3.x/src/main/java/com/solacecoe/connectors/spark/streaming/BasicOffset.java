@@ -3,9 +3,8 @@ package com.solacecoe.connectors.spark.streaming;
 import org.apache.spark.sql.connector.read.streaming.Offset;
 
 public class BasicOffset extends Offset {
-    int offset = 0;
-
-    String messageIDs = "NA";
+    private final int offset;
+    private String messageIDs = "NA";
     public BasicOffset(int offset, String messageIDs) {
         this.offset = offset;
         this.messageIDs = messageIDs;
@@ -20,7 +19,11 @@ public class BasicOffset extends Offset {
         return offsetString;
     }
 
-//    @Override
+    public String getMessageIDs() {
+        return messageIDs;
+    }
+
+    //    @Override
 //    public String toString() {
 //        return "BasicOffset[" + offset + "]";
 //    }
