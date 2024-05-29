@@ -27,22 +27,22 @@
         <dependency>
             <groupId>com.solacesystems</groupId>
             <artifactId>sol-jcsmp</artifactId>
-            <version>10.21.0</version>
+            <version>10.23.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-streaming_2.12</artifactId>
-            <version>3.1.2</version>
+            <artifactId>spark-streaming_2.13</artifactId>
+            <version>3.5.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-core_2.12</artifactId>
-            <version>3.1.2</version>
+            <artifactId>spark-core_2.13</artifactId>
+            <version>3.5.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-sql_2.12</artifactId>
-            <version>3.1.2</version>
+            <artifactId>spark-sql_2.13</artifactId>
+            <version>3.5.1</version>
         </dependency>
         <dependency>
             <groupId>log4j</groupId>
