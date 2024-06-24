@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.solacecoe.connectors</groupId>
         <artifactId>pubsubplus-connector-spark-parent</artifactId>
-        <version>1.0.0</version>
+        <version>${revision}${sha1}${changelist}</version>
     </parent>
 
     <groupId>com.solacecoe.connectors</groupId>
@@ -101,6 +101,15 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Code Quality Assurance -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-pmd-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>com.github.spotbugs</groupId>
+				<artifactId>spotbugs-maven-plugin</artifactId>
+			</plugin>
         </plugins>
     </build>
 
