@@ -1,0 +1,29 @@
+name: Build
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.gitignore'
+      - '.github/**'
+      - '**/*.md'
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  id-token: write
+  statuses: write
+  checks: write
+  contents: read
+
+jobs:
+  build_jar:
+    name: Build / Test / Analyze
+    uses: ./.github/workflows/build-java-binder.yaml
+    secrets:
+      WHITESOURCE_PROJECT_TOKEN: ${{ secrets.WHITESOURCE_PROJECT_TOKEN }}
+    with:
+      unit_integration_test_reports: ""
+      
