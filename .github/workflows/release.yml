@@ -1,0 +1,26 @@
+name: Release Github & Central
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Version to release (1.0.0, 1.0.1-RC)'
+        required: true
+      release_central:
+        description: 'Release to central'
+        type: choice
+        required: true
+        default: 'false'
+        options:
+          - true
+          - false
+      release_branch:
+        default: 'main'
+
+  release_binder:
+    uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@master
+    with:
+      main_branch: "${{ github.event.inputs.release_branch}}"
+      push_external: ${{ github.event.inputs.release_central == 'true'}}
+      release_version: "${{ github.event.inputs.release_version}}"
+    secrets:
+      COMMIT_KEY: ${{ secrets.COMMIT_KEY }}
