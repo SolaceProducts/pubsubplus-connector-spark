@@ -129,7 +129,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     }
 
     private boolean shouldAddMessage(String messageID) {
-        if(skipMessageReprocessingIfTasksAreRunningLate && this.messages.contains(messageID)) {
+        if(skipMessageReprocessingIfTasksAreRunningLate && this.messages.containsKey(messageID)) {
             return false;
         }
 
@@ -169,9 +169,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                                         log.info("SolaceSparkConnector - Message found in offset. Acknowledging previously processed message with ID :: " + solaceRecord.getMessageId());
                                         bytesXMLMessage.ackMessage();
 
-                                        if (this.messages.contains(solaceRecord.getMessageId())) {
-                                            this.messages.remove(solaceRecord.getMessageId());
-                                        }
+                                        this.messages.remove(solaceRecord.getMessageId());
                                     } else {
 //                                        if(!this.messages.contains(solaceRecord.getMessageId())) {
 //                                            log.info("SolaceSparkConnector - Message is not present in offset. Hence reprocessing it.");
