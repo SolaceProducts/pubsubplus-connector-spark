@@ -284,7 +284,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     @Override
     public void stop() {
         log.info("SolaceSparkConnector - Closing connection to Solace");
-        if(createFlowsOnSameSession && solaceConnectionManager != null) {
+        if(solaceConnectionManager != null) {
             solaceConnectionManager.close();
         }
     }
