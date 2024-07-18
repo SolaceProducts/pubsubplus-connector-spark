@@ -7,6 +7,7 @@ import com.solacecoe.connectors.spark.streaming.solace.AppSingleton;
 import com.solacecoe.connectors.spark.streaming.solace.EventListener;
 import com.solacecoe.connectors.spark.streaming.solace.InitBroker;
 import com.solacesystems.jcsmp.BytesXMLMessage;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.sources.v2.DataSourceOptions;
 import org.apache.spark.sql.sources.v2.reader.InputPartition;
@@ -19,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.*;
 
+@SuppressFBWarnings(value = "SE_BAD_FIELD", justification = "offsetJson isn't directly modifiable")
 public class SolaceMicroBatch implements MicroBatchReader, Serializable {
     private static Logger log = LoggerFactory.getLogger(SolaceMicroBatch.class);
     int latestOffsetValue = 0;
@@ -28,7 +30,7 @@ public class SolaceMicroBatch implements MicroBatchReader, Serializable {
     boolean skipMessageReprocessingIfTasksAreRunningLate = false;
     boolean includeHeaders = false;
     EventListener eventListener;
-    JsonObject offsetJson = new JsonObject();
+    private transient JsonObject offsetJson = new JsonObject();
     InitBroker initBroker;
     List<SolaceDataSourceReaderFactory> inputPartitions = new ArrayList<>();
     AppSingleton appSingleton;

@@ -61,6 +61,14 @@
         </developer>
     </developers>
 
+    <dependencies>
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>4.8.6</version>
+        </dependency>
+    </dependencies>
+
 	<licenses>
 		<license>
 			<name>License Agreement for Solace Software</name>
