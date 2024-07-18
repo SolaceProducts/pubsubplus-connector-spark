@@ -129,11 +129,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     }
 
     private boolean shouldAddMessage(String messageID) {
-        if(skipMessageReprocessingIfTasksAreRunningLate && this.messages.containsKey(messageID)) {
-            return false;
-        }
-
-        return true;
+        return !skipMessageReprocessingIfTasksAreRunningLate || !this.messages.containsKey(messageID);
     }
 
     private InputPartition[] splitDataOnPartitions() {

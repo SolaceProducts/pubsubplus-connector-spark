@@ -30,7 +30,7 @@ public class SolaceMicroBatch implements MicroBatchReader, Serializable {
     boolean skipMessageReprocessingIfTasksAreRunningLate = false;
     boolean includeHeaders = false;
     EventListener eventListener;
-    private JsonObject offsetJson = new JsonObject();
+    private transient JsonObject offsetJson = new JsonObject();
     InitBroker initBroker;
     List<SolaceDataSourceReaderFactory> inputPartitions = new ArrayList<>();
     AppSingleton appSingleton;
