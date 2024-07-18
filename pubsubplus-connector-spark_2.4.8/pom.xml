@@ -12,7 +12,7 @@
 
     <groupId>com.solacecoe.connectors</groupId>
     <artifactId>pubsubplus-connector-spark_2.4</artifactId>
-    <version>1.0.0</version>
+    <version>${revision}${sha1}${changelist}</version>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
