@@ -15,7 +15,7 @@ on:
           - false
       release_branch:
         default: 'main'
-
+jobs:
   release_binder:
     uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@master
     with:
