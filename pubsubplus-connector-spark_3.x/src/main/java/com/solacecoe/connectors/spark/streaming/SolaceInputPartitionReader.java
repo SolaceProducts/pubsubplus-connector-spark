@@ -9,8 +9,8 @@ import org.apache.spark.sql.catalyst.util.GenericArrayData;
 import org.apache.spark.sql.catalyst.util.MapData;
 import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
-    private static Logger log = LoggerFactory.getLogger(SolaceInputPartitionReader.class);
+    private static Logger log = LogManager.getLogger(SolaceInputPartitionReader.class);
     private int index = 0;
     private SolaceRecord solaceRecord = null;
     private final boolean includeHeaders;

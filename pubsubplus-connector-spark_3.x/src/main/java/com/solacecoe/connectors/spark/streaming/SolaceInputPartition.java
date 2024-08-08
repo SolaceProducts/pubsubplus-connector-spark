@@ -4,8 +4,8 @@ package com.solacecoe.connectors.spark.streaming;
 import com.solacecoe.connectors.spark.SolaceRecord;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 import org.apache.spark.sql.connector.read.InputPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,7 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SolaceInputPartition implements InputPartition {
 
-    private static Logger log = LoggerFactory.getLogger(SolaceInputPartition.class);
+    private static Logger log = LogManager.getLogger(SolaceInputPartition.class);
     private final String location;
     private final int id;
     private final CopyOnWriteArrayList<SolaceRecord> solaceRecords;

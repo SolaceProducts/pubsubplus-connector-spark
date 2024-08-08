@@ -4,15 +4,15 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
 
-    private static final Logger log = LoggerFactory.getLogger(SolaceDataSourceReaderFactory.class);
+    private static final Logger log = LogManager.getLogger(SolaceDataSourceReaderFactory.class);
     private final boolean includeHeaders;
 
     public SolaceDataSourceReaderFactory(boolean includeHeaders) {
