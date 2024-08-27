@@ -33,15 +33,13 @@ public class SolaceRecord implements Serializable {
 
     private final String partitionKey;
 
-    private transient SerializableFunction<Void, Void> ack;
-
     /**
      * Define a new Solace text record.
      */
     public SolaceRecord(String partitionKey, String destination, long expiration, String messageId,
                             int priority, boolean redelivered, String replyTo, long receiveTimestamp,
                             long senderTimestamp, Long sequenceNumber, long timeToLive,
-                            Map<String, Object> properties, byte[] text, SerializableFunction<Void, Void> ack) {
+                            Map<String, Object> properties, byte[] text) {
         this.partitionKey = partitionKey;
         this.destination = destination;
         this.expiration = expiration;
@@ -55,7 +53,6 @@ public class SolaceRecord implements Serializable {
         this.timeToLive = timeToLive;
         this.properties = properties;
         this.text = text;
-        this.ack = ack;
     }
 
     /**
@@ -152,10 +149,6 @@ public class SolaceRecord implements Serializable {
 
     public String getPartitionKey() {
         return partitionKey;
-    }
-
-    public SerializableFunction<Void, Void> getAck() {
-        return ack;
     }
 
     @Override

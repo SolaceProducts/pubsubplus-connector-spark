@@ -8,12 +8,11 @@ import com.solacesystems.jcsmp.XMLMessage;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 
 
 public class Mapper implements InboundMessageMapper<SolaceRecord>, Serializable {
     private static final long serialVersionUID = 42L;
-    private String solaceOffsetIndicator;
+    private final String solaceOffsetIndicator;
 
     public Mapper(String solaceOffsetIndicator) {
         this.solaceOffsetIndicator = solaceOffsetIndicator;
@@ -58,13 +57,7 @@ public class Mapper implements InboundMessageMapper<SolaceRecord>, Serializable 
                 msg.getSequenceNumber(),
                 msg.getTimeToLive(),
                 properties,
-                msgData, new SerializableFunction<Void, Void>() {
-            @Override
-            public Void apply(Void unused) {
-                msg.ackMessage();
-                return null;
-            }
-        });
+                msgData);
     }
 }
 
