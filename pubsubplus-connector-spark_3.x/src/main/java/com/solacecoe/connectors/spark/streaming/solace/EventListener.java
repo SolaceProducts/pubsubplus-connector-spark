@@ -1,10 +1,8 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
@@ -16,19 +14,35 @@ import org.apache.logging.log4j.Logger;
 
 
 public class EventListener implements XMLMessageListener, Serializable {
-    private static Logger log = LogManager.getLogger(EventListener.class);
-    private final int id;
+    private static final Logger log = LogManager.getLogger(EventListener.class);
     private final LinkedBlockingQueue<SolaceMessage> messages;
-
+    private List<String> messageIDsInLastOffset = new ArrayList<>();
+    private String offsetIndicator = "MESSAGE_ID";
     public EventListener(int id) {
-        this.id = id;
         this.messages = new LinkedBlockingQueue<>();
+        log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
+    }
+
+    public EventListener(int id, List<String> messageIDs, String offsetIndicator) {
+        this.messages = new LinkedBlockingQueue<>();
+        this.messageIDsInLastOffset = messageIDs;
+        this.offsetIndicator = offsetIndicator;
+        log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
     }
 
     @Override
     public void onReceive(BytesXMLMessage msg) {
         try {
-            this.messages.add(new SolaceMessage(msg));
+            if(!messageIDsInLastOffset.isEmpty()) {
+                String messageID = SolaceUtils.getMessageID(msg, this.offsetIndicator);
+                if(messageIDsInLastOffset.contains(messageID)) {
+                    log.info("SolaceSparkConnector- Acknowledging message with ID {} as it is present in last offset and user has set ackLastProcessedMessages to true in configuration", messageID);
+                    msg.ackMessage();
+                    log.info("SolaceSparkConnector- Acknowledged message with ID {} present in last offset", messageID);
+                }
+            } else {
+                this.messages.add(new SolaceMessage(msg));
+            }
 //            log.info("Current messages in consumer "+this.id+" is :: " + this.messages.size());
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);

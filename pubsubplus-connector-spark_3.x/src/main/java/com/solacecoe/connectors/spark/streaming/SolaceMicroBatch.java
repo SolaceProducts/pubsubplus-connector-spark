@@ -31,7 +31,6 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     private String solaceOffsetIndicator = "MESSAGE_ID";
     private JsonObject offsetJson;
     private SolaceInputPartition[] inputPartitions;
-    private final SolaceConnectionManager solaceConnectionManager;
 //    private final CopyOnWriteArrayList<String> processedMessageIDs;
     private volatile ConcurrentHashMap<String, SolaceMessage> messages = new ConcurrentHashMap<>();
     private final int batchSize;
@@ -102,14 +101,13 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             log.info("SolaceSparkConnector - offsetIndicator is set to {}", this.solaceOffsetIndicator);
         }
 
-        solaceConnectionManager = new SolaceConnectionManager();
         log.info("SolaceSparkConnector - Solace Connection Details Host : " + properties.get("host") + ", VPN : " + properties.get("vpn") + ", Username : " + properties.get("username"));
         SolaceBroker solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"));
-        solaceConnectionManager.addConnection(solaceBroker);
+        SolaceConnectionManager.addConnection(0, solaceBroker);
         for (int i = 0; i < partitions; i++) {
             if(!createFlowsOnSameSession && i > 0) {
                 solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"));
-                solaceConnectionManager.addConnection(solaceBroker);
+                SolaceConnectionManager.addConnection(i, solaceBroker);
             }
             EventListener eventListener = new EventListener((i + 1));
             // Initialize connection to Solace Broker
@@ -138,7 +136,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         for(int i=0; i < partitions.length; i++) {
             if(isCommitTriggered) {
                 int brokerIndex = this.createFlowsOnSameSession ? 0 : i;
-                SolaceBroker solaceBroker = solaceConnectionManager.getConnection(brokerIndex);
+                SolaceBroker solaceBroker = SolaceConnectionManager.getConnection(brokerIndex);
                 if(solaceBroker != null) {
                     int listenerIndex = this.createFlowsOnSameSession ? i : 0;
                     LinkedBlockingQueue<SolaceMessage> messages = solaceBroker.getMessages(listenerIndex);
@@ -280,9 +278,6 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     @Override
     public void stop() {
         log.info("SolaceSparkConnector - Closing connection to Solace");
-        if(solaceConnectionManager != null) {
-            solaceConnectionManager.close();
-        }
     }
 
 }

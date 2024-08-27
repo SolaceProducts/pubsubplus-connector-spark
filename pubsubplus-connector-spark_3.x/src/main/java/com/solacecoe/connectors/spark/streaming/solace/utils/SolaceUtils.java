@@ -8,12 +8,12 @@ public class SolaceUtils {
     public static String getMessageID(BytesXMLMessage message, String solaceOffsetIndicator) throws SDTException {
         switch (solaceOffsetIndicator) {
             case "CORRELATION_ID":
-                if(message.getCorrelationId() == null || message.getCorrelationId().length() == 0) {
+                if(message.getCorrelationId() == null || message.getCorrelationId().isEmpty()) {
                     throw new RuntimeException("SolaceSparkConnector - Configured Offset Indicator CORRELATION_ID is null or empty");
                 }
                 return message.getCorrelationId();
             case "APPLICATION_MESSAGE_ID":
-                if(message.getApplicationMessageId() == null || message.getApplicationMessageId().length() == 0) {
+                if(message.getApplicationMessageId() == null || message.getApplicationMessageId().isEmpty()) {
                     throw new RuntimeException("SolaceSparkConnector - Configured Offset Indicator APPLICATION_MESSAGE_ID is null or empty");
                 }
                 return message.getApplicationMessageId();
@@ -25,7 +25,7 @@ public class SolaceUtils {
                 }
 
                 if(message.getProperties() != null && message.getProperties().containsKey(solaceOffsetIndicator)) {
-                    if(message.getProperties().get(solaceOffsetIndicator) == null || message.getProperties().get(solaceOffsetIndicator).toString().length() == 0) {
+                    if(message.getProperties().get(solaceOffsetIndicator) == null || message.getProperties().get(solaceOffsetIndicator).toString().isEmpty()) {
                         throw new RuntimeException("SolaceSparkConnector - Configured Offset Indicator " + solaceOffsetIndicator + " is null or empty");
                     }
                     return message.getProperties().get(solaceOffsetIndicator).toString();

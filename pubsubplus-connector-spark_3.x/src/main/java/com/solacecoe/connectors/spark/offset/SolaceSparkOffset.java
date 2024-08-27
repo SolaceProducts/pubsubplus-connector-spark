@@ -23,7 +23,12 @@ public class SolaceSparkOffset extends Offset {
         return messageIDs;
     }
 
-    //    @Override
+    public int getOffset() {
+        return offset;
+    }
+
+
+//    @Override
 //    public String toString() {
 //        return "BasicOffset[" + offset + "]";
 //    }
