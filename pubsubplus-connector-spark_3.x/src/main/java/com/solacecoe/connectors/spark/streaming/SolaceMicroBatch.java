@@ -3,7 +3,7 @@ package com.solacecoe.connectors.spark.streaming;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.solacecoe.connectors.spark.SolaceRecord;
-import com.solacecoe.connectors.spark.offset.SolaceSparkOffset;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacecoe.connectors.spark.streaming.solace.EventListener;

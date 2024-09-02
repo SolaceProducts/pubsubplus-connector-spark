@@ -1,6 +1,5 @@
 package com.solacecoe.connectors.spark;
 
-import com.solacecoe.connectors.spark.offset.SolaceSparkOffsetManager;
 import com.solacecoe.connectors.spark.streaming.SolaceMicroBatchNew;
 import org.apache.spark.sql.connector.read.Batch;
 import org.apache.spark.sql.connector.read.Scan;

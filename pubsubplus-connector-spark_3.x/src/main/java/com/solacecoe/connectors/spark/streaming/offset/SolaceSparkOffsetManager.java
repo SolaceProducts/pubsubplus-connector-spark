@@ -1,4 +1,4 @@
-package com.solacecoe.connectors.spark.offset;
+package com.solacecoe.connectors.spark.streaming.offset;
 
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 

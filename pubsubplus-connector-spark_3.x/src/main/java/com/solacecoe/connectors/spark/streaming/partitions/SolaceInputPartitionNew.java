@@ -1,7 +1,5 @@
 package com.solacecoe.connectors.spark.streaming.partitions;
 
-import com.google.gson.JsonObject;
-import com.solacecoe.connectors.spark.offset.SolaceSparkOffsetManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.sql.connector.read.InputPartition;
@@ -13,9 +11,11 @@ public class SolaceInputPartitionNew implements InputPartition, Serializable {
     private final static Logger log = LogManager.getLogger(SolaceInputPartitionNew.class);
     private final String location;
     private final int id;
-    public SolaceInputPartitionNew(int id, String location) {
+    private final int offsetId;
+    public SolaceInputPartitionNew(int id, int offsetId, String location) {
         log.info("SolaceSparkConnector - Initializing Solace Input partition");
         this.id = id;
+        this.offsetId = offsetId;
         this.location = location;
     }
 
@@ -27,5 +27,9 @@ public class SolaceInputPartitionNew implements InputPartition, Serializable {
 
     public int getId() {
         return id;
+    }
+
+    public int getOffsetId() {
+        return offsetId;
     }
 }

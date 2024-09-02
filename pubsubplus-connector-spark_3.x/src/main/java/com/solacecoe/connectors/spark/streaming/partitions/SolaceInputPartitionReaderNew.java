@@ -1,7 +1,9 @@
 package com.solacecoe.connectors.spark.streaming.partitions;
 
 import com.solacecoe.connectors.spark.SolaceRecord;
-import com.solacecoe.connectors.spark.offset.SolaceSparkOffsetManager;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffsetManager;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.EventListener;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
@@ -51,9 +53,9 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
                 taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
                 Integer.toString(taskContext.stageId()),
                 Integer.toString(taskContext.partitionId()));
-        this.batchSize = Integer.parseInt(properties.getOrDefault("batchSize", "0"));
+        this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, "0"));
         this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault("receiveWaitTimeout", "10000"));
-        boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault("ackLastProcessedMessages", "false"));
+        boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, "false"));
         log.info("SolaceSparkConnector - Checking for connection {}", inputPartition.getId());
         if(SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
             solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
@@ -134,7 +136,7 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
                     return null;
                 } else {
                     if(SolaceSparkOffsetManager.containsMessageID(solaceMessage.bytesXMLMessage.getReplicationGroupMessageId().toString())) {
-                        log.info("SolaceSparkConnector - Message is present in previous partition. Skip to next message");
+                        log.info("SolaceSparkConnector - Message is added to previous partitions for processing. Moving to next message");
                     } else {
                         if(batchSize > 0) {
                             messages++;
@@ -143,6 +145,7 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
                     }
                 }
             } catch (InterruptedException e) {
+                log.error("SolaceSparkConnector - Interrupted while reading message from internal queue", e);
                 return null;
             }
         }
@@ -152,23 +155,34 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
 
     @Override
     public void close() {
-        log.info("SolaceSparkConnector - Input partition reader with ID {} is closed", this.solaceInputPartition.getId());
+        log.info("SolaceSparkConnector - Input partition reader with ID {} and task {} is closed", this.solaceInputPartition.getId(), this.uniqueId);
     }
 
     private void registerTaskListener() {
         this.taskContext.addTaskCompletionListener(context -> {
             log.info("SolaceSparkConnector - Task {} state is completed :: {}, failed :: {}, interrupted :: {}", uniqueId, context.isCompleted(), context.isFailed(), context.isInterrupted());
             if(context.isInterrupted()) {
-                log.info("SolaceSparkConnector - Closing connections to Solace as task is interrupted");
+                log.info("SolaceSparkConnector - Closing connections to Solace as task {} is interrupted", String.join(",", context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
+                        context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
+                        Integer.toString(context.stageId()),
+                        Integer.toString(context.partitionId())));
                 SolaceConnectionManager.close();
             } else {
                 if (context.isCompleted()) {
+                    log.info("SolaceSparkConnector - Task {} is completed", String.join(",", context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
+                            context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
+                            Integer.toString(context.stageId()),
+                            Integer.toString(context.partitionId())));
                     SolaceSparkOffsetManager.ackMessages(uniqueId);
                     solaceBroker.closeReceivers();
                     String processedMessageIDs = SolaceSparkOffsetManager.getProcessedMessagesIDs(uniqueId);
+                    SolaceSparkOffset solaceSparkOffset = new SolaceSparkOffset(this.solaceInputPartition.getOffsetId(), context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
+                            context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
+                            Integer.toString(context.stageId()),
+                            Integer.toString(context.partitionId()), processedMessageIDs);
                     if (processedMessageIDs != null) {
                         solaceBroker.initProducer();
-                        solaceBroker.publishMessage("solace/spark/connector/offset", processedMessageIDs);
+                        solaceBroker.publishMessage(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, solaceSparkOffset.json());
                         solaceBroker.closeProducer();
                         SolaceSparkOffsetManager.removeProcessedMessagesIDs(uniqueId);
                     }
@@ -178,8 +192,8 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
     }
 
     private void createNewConnection(int inputPartitionId, boolean ackLastProcessedMessages) {
-        log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get("host"), properties.get("vpn"), properties.get("username"));
-        solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"));
+        log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
+        solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE));
         SolaceConnectionManager.addConnection(inputPartitionId, solaceBroker);
         createReceiver(inputPartitionId, ackLastProcessedMessages);
     }

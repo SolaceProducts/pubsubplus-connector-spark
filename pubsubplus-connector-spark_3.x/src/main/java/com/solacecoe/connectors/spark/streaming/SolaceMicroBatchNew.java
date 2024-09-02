@@ -2,7 +2,8 @@ package com.solacecoe.connectors.spark.streaming;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.solacecoe.connectors.spark.offset.SolaceSparkOffset;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceDataSourceReaderFactoryNew;
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceInputPartitionNew;
 import com.solacecoe.connectors.spark.streaming.solace.LVQEventListener;
@@ -23,13 +24,14 @@ import java.util.Map;
 
 public class SolaceMicroBatchNew implements MicroBatchStream, SupportsAdmissionControl {
     private static final Logger log = LogManager.getLogger(SolaceMicroBatchNew.class);
-    private int latestOffsetValue = 0;
+    private int lastKnownOffsetId = 0;
     private final SolaceInputPartitionNew[] inputPartitions;
     private final int partitions;
     private final int batchSize;
     private final boolean includeHeaders;
     private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
+    private JsonObject lastKnownOffset = new JsonObject();
 
     public SolaceMicroBatchNew(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
         this.properties = properties;
@@ -37,42 +39,42 @@ public class SolaceMicroBatchNew implements MicroBatchStream, SupportsAdmissionC
         // Initialize classes required for Solace connectivity
 
         // User configuration validation
-        if(!properties.containsKey("host") || properties.get("host") == null || properties.get("host").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.HOST) || properties.get(SolaceSparkStreamingProperties.HOST) == null || properties.get(SolaceSparkStreamingProperties.HOST).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Host name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Host name in configuration options");
         }
-        if(!properties.containsKey("vpn") || properties.get("vpn") == null || properties.get("vpn").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.VPN) || properties.get(SolaceSparkStreamingProperties.VPN) == null || properties.get(SolaceSparkStreamingProperties.VPN).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace VPN name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace VPN name in configuration options");
         }
 
-        if(!properties.containsKey("username") || properties.get("username") == null || properties.get("username").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.USERNAME) || properties.get(SolaceSparkStreamingProperties.USERNAME) == null || properties.get(SolaceSparkStreamingProperties.USERNAME).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Username in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Username in configuration options");
         }
 
-        if(!properties.containsKey("password") || properties.get("password") == null || properties.get("password").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.PASSWORD) || properties.get(SolaceSparkStreamingProperties.PASSWORD) == null || properties.get(SolaceSparkStreamingProperties.PASSWORD).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Password in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Password in configuration options");
         }
 
-        if(!properties.containsKey("queue") || properties.get("queue") == null || properties.get("queue").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.QUEUE) || properties.get(SolaceSparkStreamingProperties.QUEUE) == null || properties.get(SolaceSparkStreamingProperties.QUEUE).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Queue name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
         }
 
-        this.batchSize = Integer.parseInt(properties.getOrDefault("batchSize", "0"));
-        includeHeaders = Boolean.parseBoolean(properties.getOrDefault("includeHeaders", "false"));
+        this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, "0"));
+        includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, "false"));
         log.info("SolaceSparkConnector - includeHeaders is set to {}", includeHeaders);
 
-        partitions = Integer.parseInt(properties.getOrDefault("partitions", "1"));
+        partitions = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.PARTITIONS, "1"));
         log.info("SolaceSparkConnector - Partitions is set to {}", partitions);
         inputPartitions = new SolaceInputPartitionNew[partitions];
 
         String solaceOffsetIndicator = properties.getOrDefault("offsetIndicator", "MESSAGE_ID");
         log.info("SolaceSparkConnector - offsetIndicator is set to {}", solaceOffsetIndicator);
 
-        this.solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"));
+        this.solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE));
         LVQEventListener lvqEventListener = new LVQEventListener();
         this.solaceBroker.addLVQReceiver(lvqEventListener);
         SolaceConnectionManager.addConnection(0, this.solaceBroker);
@@ -81,15 +83,23 @@ public class SolaceMicroBatchNew implements MicroBatchStream, SupportsAdmissionC
 
     @Override
     public Offset latestOffset() {
-        latestOffsetValue+=batchSize;
+        lastKnownOffsetId+=batchSize;
 //        log.info("SolaceSparkConnector - latestOffset :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
-        return new SolaceSparkOffset(latestOffsetValue, "");
+        SolaceSparkOffset solaceSparkOffset = this.solaceBroker.getLVQMessage();
+        if(solaceSparkOffset != null) {
+            return new SolaceSparkOffset(lastKnownOffsetId, solaceSparkOffset.getQueryId(),
+                    solaceSparkOffset.getBatchId(), solaceSparkOffset.getStageId(),
+                    solaceSparkOffset.getPartitionId(), solaceSparkOffset.getMessageIDs());
+        }
+//        log.info("SolaceSparkConnector - latestOffset with params :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
+        return getDefaultOffset();
+//        return new SolaceSparkOffset(lastKnownOffsetId, "");
     }
 
     private InputPartition[] getPartitions() {
         for(int i=0; i < this.partitions; i++) {
 //            /solaceSparkOffsetManager.messageIDs = offsetJson != null && offsetJson.has("messageIDs") ? Arrays.asList(offsetJson.get("messageIDs").getAsString().split(",")) : new ArrayList<>();
-            inputPartitions[i] = new SolaceInputPartitionNew(i, "");
+            inputPartitions[i] = new SolaceInputPartitionNew(i, lastKnownOffsetId, "");
         }
         return inputPartitions;
     }
@@ -107,37 +117,43 @@ public class SolaceMicroBatchNew implements MicroBatchStream, SupportsAdmissionC
 
     @Override
     public Offset latestOffset(Offset startOffset, ReadLimit limit) {
-        latestOffsetValue+=batchSize;
+        lastKnownOffsetId+=batchSize;
         SolaceSparkOffset solaceSparkOffset = this.solaceBroker.getLVQMessage();
         if(solaceSparkOffset != null) {
-            return new SolaceSparkOffset(latestOffsetValue, solaceSparkOffset.getMessageIDs());
+            return new SolaceSparkOffset(lastKnownOffsetId, solaceSparkOffset.getQueryId(),
+                    solaceSparkOffset.getBatchId(), solaceSparkOffset.getStageId(),
+                    solaceSparkOffset.getPartitionId(), solaceSparkOffset.getMessageIDs());
         }
 //        log.info("SolaceSparkConnector - latestOffset with params :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
-        return new SolaceSparkOffset(latestOffsetValue, "");
+        return getDefaultOffset();
     }
 
     @Override
     public Offset initialOffset() {
         SolaceSparkOffset solaceSparkOffset = this.solaceBroker.getLVQMessage();
         if(solaceSparkOffset != null) {
-            return new SolaceSparkOffset(solaceSparkOffset.getOffset(), solaceSparkOffset.getMessageIDs());
+            return new SolaceSparkOffset(lastKnownOffsetId, solaceSparkOffset.getQueryId(),
+                    solaceSparkOffset.getBatchId(), solaceSparkOffset.getStageId(),
+                    solaceSparkOffset.getPartitionId(), solaceSparkOffset.getMessageIDs());
         }
-        return new SolaceSparkOffset(latestOffsetValue, "");
+
+        return getDefaultOffset();
     }
 
     @Override
     public Offset deserializeOffset(String json) {
-        JsonObject gson = new Gson().fromJson(json, JsonObject.class);
-        if(gson != null && gson.has("offset")) {
-            latestOffsetValue = gson.get("offset").getAsInt();
+        lastKnownOffset = new Gson().fromJson(json, JsonObject.class);
+        if(lastKnownOffset != null && lastKnownOffset.has("offset")) {
+            lastKnownOffsetId = lastKnownOffset.get("offset").getAsInt();
         }
 
         SolaceSparkOffset solaceSparkOffset = this.solaceBroker.getLVQMessage();
         if(solaceSparkOffset != null) {
-            return new SolaceSparkOffset(latestOffsetValue, solaceSparkOffset.getMessageIDs());
+            return new SolaceSparkOffset(solaceSparkOffset.getOffset(), solaceSparkOffset.getQueryId(),
+                    solaceSparkOffset.getBatchId(), solaceSparkOffset.getStageId(),
+                    solaceSparkOffset.getPartitionId(), solaceSparkOffset.getMessageIDs());
         }
-
-        return new SolaceSparkOffset(latestOffsetValue, "");
+        return getDefaultOffset();
     }
 
     @Override
@@ -149,6 +165,32 @@ public class SolaceMicroBatchNew implements MicroBatchStream, SupportsAdmissionC
     public void stop() {
         log.info("SolaceSparkConnector - Closing Spark Connector");
         SolaceConnectionManager.close();
+    }
+
+    private SolaceSparkOffset getDefaultOffset() {
+        String queryId = "";
+        String batchId = "";
+        String stageId = "";
+        String partitionId = "";
+        String messageIds = "";
+        if(lastKnownOffset != null) {
+            if(lastKnownOffset.has("queryId")) {
+                queryId = lastKnownOffset.get("queryId").getAsString();
+            }
+            if(lastKnownOffset.has("batchId")) {
+                batchId = lastKnownOffset.get("batchId").getAsString();
+            }
+            if(lastKnownOffset.has("stageId")) {
+                stageId = lastKnownOffset.get("stageId").getAsString();
+            }
+            if(lastKnownOffset.has("partitionId")) {
+                partitionId = lastKnownOffset.get("partitionId").getAsString();
+            }
+            if(lastKnownOffset.has("messageIDs")) {
+                messageIds = lastKnownOffset.get("messageIDs").getAsString();
+            }
+        }
+        return new SolaceSparkOffset(lastKnownOffsetId, queryId, batchId, stageId, partitionId, messageIds);
     }
 
 }

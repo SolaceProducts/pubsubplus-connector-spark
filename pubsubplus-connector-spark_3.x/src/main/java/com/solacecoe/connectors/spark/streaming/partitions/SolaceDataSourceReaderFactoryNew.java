@@ -1,6 +1,5 @@
 package com.solacecoe.connectors.spark.streaming.partitions;
 
-import com.solacecoe.connectors.spark.offset.SolaceSparkOffsetManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.TaskContext;
@@ -10,7 +9,6 @@ import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
 import org.apache.spark.sql.execution.streaming.StreamExecution;
-import org.apache.spark.util.TaskCompletionListener;
 
 import java.util.Map;
 

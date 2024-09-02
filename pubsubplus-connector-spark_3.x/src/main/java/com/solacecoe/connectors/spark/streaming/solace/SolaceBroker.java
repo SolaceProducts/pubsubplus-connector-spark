@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
-import com.solacecoe.connectors.spark.offset.SolaceSparkOffset;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -78,7 +79,7 @@ public class SolaceBroker implements Serializable {
     private void setLVQReceiver(LVQEventListener eventListener) {
         try {
             ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
-            Queue listenQueue = JCSMPFactory.onlyInstance().createQueue("solace.spark.connector.state");
+            Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME);
             flow_prop.setEndpoint(listenQueue);
             flow_prop.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
 
@@ -88,7 +89,7 @@ public class SolaceBroker implements Serializable {
             endpoint_props.setQuota(0);
             this.session.provision(listenQueue, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             try {
-                this.session.addSubscription(listenQueue, JCSMPFactory.onlyInstance().createTopic("solace/spark/connector/offset"), JCSMPSession.WAIT_FOR_CONFIRM);
+                this.session.addSubscription(listenQueue, JCSMPFactory.onlyInstance().createTopic(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC), JCSMPSession.WAIT_FOR_CONFIRM);
             } catch (JCSMPException e) {
                 log.warn("SolaceSparkConnector - Subscription already exists on LVQ. Ignoring error");
             }

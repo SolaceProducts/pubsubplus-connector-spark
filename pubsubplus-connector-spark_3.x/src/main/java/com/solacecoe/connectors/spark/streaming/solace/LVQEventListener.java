@@ -1,6 +1,8 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
-import com.solacecoe.connectors.spark.offset.SolaceSparkOffset;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.XMLMessageListener;
@@ -24,7 +26,10 @@ public class LVQEventListener implements XMLMessageListener, Serializable {
             if (msg.getAttachmentContentLength() != 0) {
                 msgData = msg.getAttachmentByteBuffer().array();
             }
-            SolaceSparkOffset solaceSparkOffset = new SolaceSparkOffset(0, new String(msgData, StandardCharsets.UTF_8));
+            JsonObject lastKnownOffset = new Gson().fromJson(new String(msgData, StandardCharsets.UTF_8), JsonObject.class);
+            SolaceSparkOffset solaceSparkOffset = new SolaceSparkOffset(lastKnownOffset.get("offset").getAsInt(), lastKnownOffset.get("queryId").getAsString(),
+                    lastKnownOffset.get("batchId").getAsString(), lastKnownOffset.get("stageId").getAsString(),
+                    lastKnownOffset.get("partitionId").getAsString(), lastKnownOffset.get("messageIDs").getAsString());
             log.info("SolaceSparkConnector - Received SolaceSparkOffset from LVQ with messageIDs {}", new String(msgData, StandardCharsets.UTF_8));
             this.solaceSparkOffsets[0] = solaceSparkOffset;
         } catch (Exception e) {
