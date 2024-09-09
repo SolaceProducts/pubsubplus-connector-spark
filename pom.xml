@@ -14,7 +14,6 @@
 
     <modules>
         <module>pubsubplus-connector-spark_3.x</module>
-        <module>pubsubplus-connector-spark_2.4.8</module>
     </modules>
 
     <properties>
@@ -33,8 +32,8 @@
         Compiler Properties
         =========================
         -->
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
 		<!-- An extra resources directory to add filtered resources using @-delimiters -->
