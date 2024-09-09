@@ -210,7 +210,7 @@ public class SolaceRecord implements Serializable {
             if(msg instanceof TextMessage) {
                 TextMessage textMessage = ((TextMessage) msg);
                 if(textMessage.getText() != null) {
-                    msgData = textMessage.getText().getBytes();
+                    msgData = textMessage.getText().getBytes(StandardCharsets.UTF_8);
                 } else if(textMessage.getContentLength() != 0) {
                     msgData = textMessage.getBytes();
                 } else if (textMessage.getAttachmentContentLength() != 0) {
