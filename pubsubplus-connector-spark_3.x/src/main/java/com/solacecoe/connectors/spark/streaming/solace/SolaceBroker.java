@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -21,7 +22,7 @@ public class SolaceBroker implements Serializable {
     private final CopyOnWriteArrayList<EventListener> eventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
 
-    public SolaceBroker(String host, String vpn, String username, String password, String queue) {
+    public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
         this.host = host;
@@ -31,15 +32,46 @@ public class SolaceBroker implements Serializable {
         this.queue = queue;
 
         try {
-            final JCSMPProperties properties = new JCSMPProperties();
-            properties.setProperty(JCSMPProperties.HOST, this.host);            // host:port
-            properties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
-            properties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
-            properties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
-            session = JCSMPFactory.onlyInstance().createSession(properties);
+            JCSMPProperties jcsmpProperties = new JCSMPProperties();
+            // get api properties
+            Properties props = new Properties();
+            for(String key : properties.keySet()) {
+                if (key.startsWith("solace.apiProperties.")) {
+                    String value = properties.get(key);
+                    String solaceKey = key.substring("solace.apiProperties.".length());
+                    props.put("jcsmp." + solaceKey, value);
+                }
+            }
+            if(!props.isEmpty()) {
+                jcsmpProperties = JCSMPProperties.fromProperties(props);
+            }
+
+            jcsmpProperties.setProperty(JCSMPProperties.HOST, this.host);            // host:port
+            jcsmpProperties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
+            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
+            jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
+
+            // Channel Properties
+            JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
+                    .getProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
+            if(properties.containsKey("connectRetries")) {
+                cp.setConnectRetries(Integer.parseInt(properties.get("connectRetries")));
+            }
+            if(properties.containsKey("reconnectRetries")) {
+                cp.setReconnectRetries(Integer.parseInt(properties.get("reconnectRetries")));
+            }
+            if(properties.containsKey("connectRetriesPerHost")) {
+                cp.setConnectRetriesPerHost(Integer.parseInt(properties.get("connectRetriesPerHost")));
+            }
+            if(properties.containsKey("reconnectRetryWaitInMillis")) {
+                cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get("reconnectRetryWaitInMillis")));
+            }
+//            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES, cp);
+            session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception connecting to Solace ", e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -71,6 +103,7 @@ public class SolaceBroker implements Serializable {
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
+            throw new RuntimeException(e);
         }
         // log.info("Listening for messages: "+ this.queueName);
     }

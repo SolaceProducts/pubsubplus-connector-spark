@@ -9,7 +9,7 @@ on:
       jre_version:
         required: false
         type: string
-        default: 17
+        default: 8
       runner_label:
         required: false
         type: string

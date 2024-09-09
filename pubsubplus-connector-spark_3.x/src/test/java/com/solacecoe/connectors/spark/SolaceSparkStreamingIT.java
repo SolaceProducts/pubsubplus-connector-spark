@@ -25,6 +25,7 @@ import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import com.solace.semp.v2.config.client.model.MsgVpnQueue;
@@ -130,6 +131,62 @@ public class SolaceSparkStreamingIT {
                 if(count[0] == 100L) {
                     runProcess[0] = false;
                     try {
+                        streamingQuery.stop();
+//                        sparkSession.close();
+                        executorService.shutdown();
+                    } catch (TimeoutException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            } while (runProcess[0]);
+        });
+        streamingQuery.awaitTermination();
+
+//        assertEquals("Number of events consumed from Solace is not equal to number of records written to Spark", 100L, count[0]);
+    }
+
+    @Test
+    public void testSolaceSparkStreamingCheckPayload() throws TimeoutException, StreamingQueryException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+//        SparkSession sparkSession = SparkSession.builder()
+//                .appName("data_source_test")
+//                .master("local[*]")
+//                .getOrCreate();
+        DataStreamReader reader = sparkSession.readStream()
+                .option("host", solaceContainer.getOrigin(Service.SMF))
+                .option("vpn", solaceContainer.getVpn())
+                .option("username", solaceContainer.getUsername())
+                .option("password", solaceContainer.getPassword())
+                .option("queue", "Solace/Queue/0")
+                .option("batchSize", "1")
+                .option("checkpointLocation", path.toAbsolutePath().toString())
+                .format("solace");
+        final long[] count = {0};
+        final boolean[] runProcess = {true};
+        final Object lock = new Object();
+        Dataset<Row> dataset = reader.load();
+        AtomicReference<String> payload = new AtomicReference<>("");
+        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            synchronized (lock) {
+                count[0] = count[0] + dataset1.count();
+                if(dataset1.count() == 1) {
+                    payload.set(dataset1.select(dataset1.col("Payload").cast("string")).collectAsList().get(0).getString(0));
+                }
+            }
+        }).start();
+
+        ExecutorService executorService = Executors.newFixedThreadPool(1);
+        executorService.execute(() -> {
+            do {
+                if(count[0] == 100L) {
+                    runProcess[0] = false;
+                    try {
+                        Assertions.assertEquals("Hello Spark!", payload.get());
                         streamingQuery.stop();
 //                        sparkSession.close();
                         executorService.shutdown();
