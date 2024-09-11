@@ -108,6 +108,7 @@ jobs:
         run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
       - name: Unit/Integration Tests and Build
+        uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: 8
