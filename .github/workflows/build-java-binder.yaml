@@ -9,7 +9,7 @@ on:
       jre_version:
         required: false
         type: string
-        default: 8
+        default: 17
       runner_label:
         required: false
         type: string
@@ -108,6 +108,9 @@ jobs:
         run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
       - name: Unit/Integration Tests and Build
+        with:
+          distribution: zulu
+          java-version: 8
         run: >-
           mvn -B verify 
           jacoco:report 
