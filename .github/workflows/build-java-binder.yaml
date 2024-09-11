@@ -117,7 +117,6 @@ jobs:
         run: >-
           mvn failsafe:integration-test
           jacoco:report 
-          antrun:run@generate-license-disclosure-stub 
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
       - name: Reset JDK to ${{ inputs.jre_version }} (${{inputs.java_environment}})
@@ -127,13 +126,6 @@ jobs:
           java-version: ${{ inputs.jre_version }}
           overwrite-settings: false
           cache: 'maven'
-
-      - name: Build
-        run: >-
-          mvn -B -DskipTests verify 
-          jacoco:report 
-          antrun:run@generate-license-disclosure-stub 
-          --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
       
       - name: Sonar Scan
         run: >-
@@ -144,6 +136,12 @@ jobs:
           -Dsonar.projectName=${{ github.event.repository.name }}
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
+      - name: Build
+        run: >-
+          mvn -B -DskipTests verify 
+          antrun:run@generate-license-disclosure-stub 
+          --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
+      
       - name: Deploy Artifacts
         if:  env.GITHUB_PACKAGES_DEPLOY == 'true'
         env:
