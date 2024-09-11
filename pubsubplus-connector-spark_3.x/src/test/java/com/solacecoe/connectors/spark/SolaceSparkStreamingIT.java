@@ -27,13 +27,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertEquals;
 import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class SolaceSparkStreamingIT {
-    private final Logger logger = LoggerFactory.getLogger(SolaceSparkStreamingIT.class);
     private SempV2Api sempV2Api = null;
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
@@ -166,6 +164,7 @@ public class SolaceSparkStreamingIT {
                 .option("reconnectRetries", 1)
                 .option("connectRetriesPerHost", 1)
                 .option("reconnectRetryWaitInMillis", 100)
+                .option("solace.apiProperties.sub_ack_window_threshold", 75)
                 .option("queue", "Solace/Queue/0")
                 .option("batchSize", "1")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
