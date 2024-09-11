@@ -116,6 +116,7 @@ jobs:
       - name: Run Unit/Integration Tests
         run: >-
           mvn surefire:test
+          --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
       - name: Reset JDK to ${{ inputs.jre_version }} (${{inputs.java_environment}})
         uses: actions/setup-java@v4
