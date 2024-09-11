@@ -107,13 +107,27 @@ jobs:
       - name: Static Code Analysis
         run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
-      - name: Unit/Integration Tests and Build
+      - name: Unit/Integration Tests Java Setup
         uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: 8
+
+      - name: Run Unit/Integration Tests
         run: >-
-          mvn -B verify 
+          mvn surefire:test
+
+      - name: Reset JDK to ${{ inputs.jre_version }} (${{inputs.java_environment}})
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java_environment }}
+          java-version: ${{ inputs.jre_version }}
+          overwrite-settings: false
+          cache: 'maven'
+
+      - name: Build
+        run: >-
+          mvn -B -DskipTests verify 
           jacoco:report 
           antrun:run@generate-license-disclosure-stub 
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
