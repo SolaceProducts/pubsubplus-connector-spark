@@ -115,7 +115,7 @@ jobs:
 
       - name: Run Unit/Integration Tests
         run: >-
-          mvn surefire:test
+          mvn failsafe:integration-test
           jacoco:report 
           antrun:run@generate-license-disclosure-stub 
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
