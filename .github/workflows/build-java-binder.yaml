@@ -107,7 +107,7 @@ jobs:
       - name: Static Code Analysis
         run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
-      - name: Unit/Integration Tests Java Setup
+      - name: Unit/Integration Tests JDK 8 (zulu)
         uses: actions/setup-java@v4
         with:
           distribution: zulu
@@ -116,6 +116,8 @@ jobs:
       - name: Run Unit/Integration Tests
         run: >-
           mvn surefire:test
+          jacoco:report 
+          antrun:run@generate-license-disclosure-stub 
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
       - name: Reset JDK to ${{ inputs.jre_version }} (${{inputs.java_environment}})
