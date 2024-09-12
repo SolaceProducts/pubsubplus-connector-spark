@@ -115,7 +115,7 @@ jobs:
 
       - name: Run Unit/Integration Tests
         run: >-
-          mvn failsafe:integration-test
+          mvn clean verify
           jacoco:report 
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
