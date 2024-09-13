@@ -14,7 +14,6 @@
 
     <modules>
         <module>pubsubplus-connector-spark_3.x</module>
-        <module>pubsubplus-connector-spark_2.4.8</module>
     </modules>
 
     <properties>

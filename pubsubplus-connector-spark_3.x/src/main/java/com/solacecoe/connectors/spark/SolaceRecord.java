@@ -3,10 +3,12 @@ package com.solacecoe.connectors.spark;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.SDTMap;
+import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -205,11 +207,22 @@ public class SolaceRecord implements Serializable {
                 }
             }
             byte[] msgData = new byte[0];
-            if (msg.getContentLength() != 0) {
-                msgData = msg.getBytes();
-            }
-            if (msg.getAttachmentContentLength() != 0) {
-                msgData = msg.getAttachmentByteBuffer().array();
+            if(msg instanceof TextMessage) {
+                TextMessage textMessage = ((TextMessage) msg);
+                if(textMessage.getText() != null) {
+                    msgData = textMessage.getText().getBytes(StandardCharsets.UTF_8);
+                } else if(textMessage.getContentLength() != 0) {
+                    msgData = textMessage.getBytes();
+                } else if (textMessage.getAttachmentContentLength() != 0) {
+                    msgData = textMessage.getAttachmentByteBuffer().array();
+                }
+            } else {
+                if (msg.getContentLength() != 0) {
+                    msgData = msg.getBytes();
+                }
+                if (msg.getAttachmentContentLength() != 0) {
+                    msgData = msg.getAttachmentByteBuffer().array();
+                }
             }
 
             String messageID = SolaceUtils.getMessageID(msg, this.solaceOffsetIndicator);
