@@ -1,0 +1,129 @@
+= Solace Spark Connector Configuration Options
+:doctype: book
+
+[cols="2m,1m,1m,1m,2", options="header"]
+|===
+| Config Option
+| Type
+| Valid Values
+| Default Value
+| Description
+
+| host
+| string
+| any
+|
+| Fully Qualified Solace Hostname with protocol and port number.
+
+| vpn
+| string
+| any
+|
+| Solace VPN name.
+
+| username
+| String
+| any
+|
+| Solace Client Username.
+
+| password
+| string
+| any
+|
+| Solace Client Username password.
+
+| connectRetries
+| int
+| (-1) or greater
+| 0
+| The number of times to attempt and retry a connection during initial connection setup. Zero means no automatic connection retries (that is, try once and give up). -1 means "retry forever".
+
+| reconnectRetries
+| int
+| (-1) or greater
+| 3
+| The number of times to attempt to reconnect. Zero means no automatic reconnection retries (that is, try once and give up). -1 means "retry forever".
+
+| connectRetriesPerHost
+| int
+| (-1) or greater
+| 0
+| When using a host list for the HOST property, this property defines how many times to try to connect or reconnect to a single host before moving to the next host in the list. NOTE: This property works in conjunction with the connect and reconnect retries settings; it does not replace them. Valid values are >= -1. 0 means make a single connection attempt (that is, 0 retries). -1 means attempt an infinite number of reconnect retries (that is, the API only tries to connect or reconnect to first host listed.)
+
+| reconnectRetryWaitInMillis
+| int
+| 0 - 60000
+| 3000
+| How much time in (MS) to wait between each attempt to connect or reconnect to a host. If a connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
+
+| solace.apiProperties.<Property>
+| any
+| any
+|
+a| Any additional Solace Java API properties can be set through configuring solace.apiProperties.<Property> where <Property> is the name of the property as defined in the https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.JCSMPProperties[Solace Java API documentation for com.solacesystems.jcsmp.JCSMPProperties], for example:
+[source,yaml]
+----
+solace.apiProperties.reapply_subscriptions=false
+solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
+----
+
+| queue
+| string
+| any
+|
+| Solace Queue name.
+
+| batchSize
+| int
+| any
+| 1
+| Set number of messages to be processed in batch. The connector can stream data in batches to Spark based on configured size.
+
+| ackLastProcessedMessages
+| boolean
+| true or false
+| false
+| Set this value to true if connector needs to identify and acknowledge processed messages in last run during restarts. The connector purely depends on checkpoint generated during Spark commit. We recommended enabling this configuration only when your downstream system has processed data in previous run.
+
+| skipDuplicates
+| boolean
+| true or false
+| false
+| Set this value to true if connector needs check for duplicates before adding to Spark row. This scenario occurs when a task is running late and new task is started. The new task may have duplicate message as messages from earlier are not acknowledged by the time it is start.
+
+| offsetIndicator
+| string
+| any
+| MESSAGE_ID, CORRELATION_ID, APPLICATION_MESSAGE_ID, <CUSTOM_USER_PROPERTY>
+a| Set this value if your Solace Message has unique ID in message header. Supported Values are
+
+ * MESSAGE_ID
+ * CORRELATION_ID
+ * APPLICATION_MESSAGE_ID
+ * <CUSTOM_USER_PROPERTY> - refers to one of headers in user properties
+Header.
+
+Note: Default value uses replication group message ID property as offset indicator. ReplicationGroupMessageId is a unique message id across a broker cluster.
+
+| includeHeaders
+| boolean
+| true or false
+| false
+| Set this value to true if message headers need to be included in output.
+
+| partitions
+| int
+| any
+| 1
+| Sets the number of consumers for configured queue. Equal number of partitions are created to process data received from consumers.
+
+| createFlowsOnSameSession
+| boolean
+| true or false
+| false
+| If enabled consumer flows are enabled on same session. The number of consumer flows is equal to number of partitions configured. This is helpful when users want to optimize on number of connections created from Spark. By default, the connector creates a new connection for each consumer.
+
+
+
+|===

@@ -34,12 +34,12 @@
     <url>https://github.com/SolaceDev/spark-connector-v2.git</url>
   </scm>
   <properties>
-    <maven.compiler.source>8</maven.compiler.source>
+    <maven.compiler.source>17</maven.compiler.source>
     <generated-filtered-resource.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/spark-connector-v2/target/generated-filtered-resources</generated-filtered-resource.directory>
     <revision>2.0.1</revision>
     <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
     <sha1></sha1>
-    <maven.compiler.target>8</maven.compiler.target>
+    <maven.compiler.target>17</maven.compiler.target>
     <changelist>-SNAPSHOT</changelist>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -48,6 +48,12 @@
       <groupId>com.github.spotbugs</groupId>
       <artifactId>spotbugs-annotations</artifactId>
       <version>4.8.6</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.solace.connector.core.resource</groupId>
+      <artifactId>pubsubplus-connector-asciidoctor-resource-bundle</artifactId>
+      <version>2.6.0</version>
       <scope>compile</scope>
     </dependency>
   </dependencies>
