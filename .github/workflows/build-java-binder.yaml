@@ -231,7 +231,7 @@ jobs:
           mvn dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=${GITHUB_WORKSPACE}/target/lib --file pom.xml --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
       - name: WhiteSource - Running Scan
-        uses: SolaceDev/maas-build-actions/.github/actions/whitesource-scan@master
+        uses: SolaceDev/maas-build-actions/.github/actions/whitesource-scan@DATAGO-84941
         if: env.WHITESOURCE_SCAN=='true'
         with:
           whitesource_api_key: ${{ steps.secrets.outputs.WHITESOURCE_API_KEY }}
