@@ -6,7 +6,6 @@ on:
       - DATAGO-84941
     paths-ignore:
       - '.gitignore'
-      - '.github/**'
       - '**/*.md'
   pull_request:
     types: [opened, synchronize, reopened]
