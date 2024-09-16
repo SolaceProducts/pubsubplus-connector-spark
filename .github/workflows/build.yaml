@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - DATAGO-84941
     paths-ignore:
       - '.gitignore'
       - '.github/**'
@@ -26,4 +27,5 @@ jobs:
       WHITESOURCE_PROJECT_TOKEN: ${{ secrets.WHITESOURCE_PROJECT_TOKEN }}
     with:
       unit_integration_test_reports: "**/target/failsafe-reports/**/TEST*.xml"
+      main_branch: "DATAGO-84941"
       
