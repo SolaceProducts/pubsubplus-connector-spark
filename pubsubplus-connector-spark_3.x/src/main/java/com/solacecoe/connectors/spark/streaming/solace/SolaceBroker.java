@@ -7,11 +7,9 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.*;
 
-public class SolaceBroker implements Serializable {
+public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
     private static Logger log = LoggerFactory.getLogger(SolaceBroker.class);
     private JCSMPSession session;
     private final String host;
@@ -19,6 +17,8 @@ public class SolaceBroker implements Serializable {
     private final String username;
     private final String password;
     private final String queue;
+    private int refreshTimeout;
+    private OAuthClient oAuthClient;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
 
@@ -47,9 +47,17 @@ public class SolaceBroker implements Serializable {
             }
 
             jcsmpProperties.setProperty(JCSMPProperties.HOST, this.host);            // host:port
-            jcsmpProperties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
             jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
-            jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
+            if(properties.containsKey("solace.apiProperties."+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get("solace.apiProperties."+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
+                refreshTimeout = Integer.parseInt(properties.getOrDefault("oauth.client.token.fetch.timeout", "10"));
+                oAuthClient = new OAuthClient(properties.get("oauth.client.auth-server-url"), properties.get("oauth.client.client-id"),
+                        properties.get("oauth.client.credentials.client-secret"));
+                jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
+                scheduleOAuthRefresh(Integer.parseInt(properties.getOrDefault("oauth.client.token.refresh.interval", "60")));
+            } else {
+                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
+                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
+            }
 
             // Channel Properties
             JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
@@ -132,5 +140,35 @@ public class SolaceBroker implements Serializable {
     @Override
     protected void finalize() throws Throwable {
         session.closeSession();
+    }
+
+    @Override
+    public boolean preReconnect() throws JCSMPException {
+        if(session != null && oAuthClient != null) {
+            session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
+        }
+
+        return true;
+    }
+
+    @Override
+    public void postReconnect() throws JCSMPException {
+
+    }
+
+    private void scheduleOAuthRefresh(int refreshInterval) {
+        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        scheduledExecutorService.schedule(new Runnable() {
+            @Override
+            public void run() {
+                if(session != null && oAuthClient != null) {
+                    try {
+                        session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
+                    } catch (JCSMPException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        }, refreshInterval, TimeUnit.SECONDS);
     }
 }
