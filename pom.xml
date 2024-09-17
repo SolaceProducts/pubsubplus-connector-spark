@@ -22,9 +22,9 @@
         Project Versioning Properties
         ===================================
         -->
-        <revision>2.0.1</revision>
+        <revision>2.0.2</revision>
         <sha1/> <!-- Doesn't actually need to be a sha1, this is just another version modifier variable -->
-        <changelist></changelist>
+        <changelist>-SNAPSHOT</changelist>
         <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
 
 		<!--
