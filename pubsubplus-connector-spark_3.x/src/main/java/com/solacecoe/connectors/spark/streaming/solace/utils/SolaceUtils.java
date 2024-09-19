@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.solace.utils;
 
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.SDTException;
 
@@ -20,7 +21,7 @@ public class SolaceUtils {
 //            case "SEQUENCE_NUMBER":
 //                return Long.toString(message.getSequenceNumber());
             default:
-                if(solaceOffsetIndicator.equals("MESSAGE_ID")) {
+                if(solaceOffsetIndicator.equals(SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)) {
                     return message.getReplicationGroupMessageId().toString();
                 }
 

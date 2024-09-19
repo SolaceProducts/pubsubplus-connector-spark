@@ -17,21 +17,24 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class SolaceBroker implements Serializable {
     private static final Logger log = LogManager.getLogger(SolaceBroker.class);
-    private JCSMPSession session;
     private final String queue;
-    private String uniqueName = "";
+    private final String lvqName;
+    private final String lvqTopic;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
     private final CopyOnWriteArrayList<LVQEventListener> lvqEventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
+    private JCSMPSession session;
+    private String uniqueName = "";
     private XMLMessageProducer producer;
 
 
     public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
-        eventListeners = new CopyOnWriteArrayList<>();
-        lvqEventListeners = new CopyOnWriteArrayList<>();
-        flowReceivers = new CopyOnWriteArrayList<>();
+        this.eventListeners = new CopyOnWriteArrayList<>();
+        this.lvqEventListeners = new CopyOnWriteArrayList<>();
+        this.flowReceivers = new CopyOnWriteArrayList<>();
         this.queue = queue;
-
+        this.lvqName = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME);
+        this.lvqTopic = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC);
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             // get api properties
@@ -47,12 +50,12 @@ public class SolaceBroker implements Serializable {
                 jcsmpProperties = JCSMPProperties.fromProperties(props);
             }
 
-            jcsmpProperties.setProperty(JCSMPProperties.HOST, this.host);            // host:port
-            jcsmpProperties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
-            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
-            jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
+            jcsmpProperties.setProperty(JCSMPProperties.HOST, host);            // host:port
+            jcsmpProperties.setProperty(JCSMPProperties.USERNAME, username); // client-username
+            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, vpn);    // message-vpn
+            jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, password); // client-password
             this.uniqueName = JCSMPFactory.onlyInstance().createUniqueName("solace/spark/connector");
-            properties.setProperty(JCSMPProperties.CLIENT_NAME, uniqueName);
+            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_NAME, uniqueName);
             
             // Channel Properties
             JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
@@ -115,7 +118,7 @@ public class SolaceBroker implements Serializable {
     private void setLVQReceiver(LVQEventListener eventListener) {
         try {
             ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
-            Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME);
+            Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.lvqName);
             flow_prop.setEndpoint(listenQueue);
             flow_prop.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
 
@@ -125,7 +128,7 @@ public class SolaceBroker implements Serializable {
             endpoint_props.setQuota(0);
             this.session.provision(listenQueue, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             try {
-                this.session.addSubscription(listenQueue, JCSMPFactory.onlyInstance().createTopic(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC), JCSMPSession.WAIT_FOR_CONFIRM);
+                this.session.addSubscription(listenQueue, JCSMPFactory.onlyInstance().createTopic(this.lvqTopic), JCSMPSession.WAIT_FOR_CONFIRM);
             } catch (JCSMPException e) {
                 log.warn("SolaceSparkConnector - Subscription already exists on LVQ. Ignoring error");
             }
@@ -147,12 +150,13 @@ public class SolaceBroker implements Serializable {
             this.producer = this.session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
                 @Override
                 public void responseReceivedEx(Object o) {
-
+                    log.info("SolaceSparkConnector - Message published successfully to Solace");
                 }
 
                 @Override
                 public void handleErrorEx(Object o, JCSMPException e, long l) {
-
+                    log.error("SolaceSparkConnector - Exception when publishing message to Solace", e);
+                    throw new RuntimeException(e);
                 }
             });
         } catch (JCSMPException e) {

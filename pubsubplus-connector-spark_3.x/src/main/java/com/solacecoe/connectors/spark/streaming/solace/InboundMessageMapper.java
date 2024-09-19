@@ -1,4 +1,4 @@
-package com.solacecoe.connectors.spark;
+package com.solacecoe.connectors.spark.streaming.solace;
 
 import com.solacesystems.jcsmp.BytesXMLMessage;
 

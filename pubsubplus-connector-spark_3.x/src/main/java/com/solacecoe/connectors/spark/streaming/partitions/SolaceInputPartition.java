@@ -6,13 +6,13 @@ import org.apache.spark.sql.connector.read.InputPartition;
 
 import java.io.Serializable;
 
-public class SolaceInputPartitionNew implements InputPartition, Serializable {
+public class SolaceInputPartition implements InputPartition, Serializable {
 
-    private final static Logger log = LogManager.getLogger(SolaceInputPartitionNew.class);
+    private final static Logger log = LogManager.getLogger(SolaceInputPartition.class);
     private final String location;
     private final int id;
     private final int offsetId;
-    public SolaceInputPartitionNew(int id, int offsetId, String location) {
+    public SolaceInputPartition(int id, int offsetId, String location) {
         log.info("SolaceSparkConnector - Initializing Solace Input partition");
         this.id = id;
         this.offsetId = offsetId;

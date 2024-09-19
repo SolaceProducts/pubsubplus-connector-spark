@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.partitions;
 
-import com.solacecoe.connectors.spark.SolaceRecord;
+import com.google.gson.JsonObject;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceRecord;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffsetManager;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
@@ -8,6 +9,8 @@ import com.solacecoe.connectors.spark.streaming.solace.EventListener;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
+import com.solacesystems.jcsmp.SDTException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.TaskContext;
@@ -25,15 +28,18 @@ import org.apache.spark.unsafe.types.UTF8String;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
-public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRow>, Serializable {
-    private final static Logger log = LogManager.getLogger(SolaceInputPartitionReaderNew.class);
+public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
+    private final static Logger log = LogManager.getLogger(SolaceInputPartitionReader.class);
     private final boolean includeHeaders;
-    private final SolaceInputPartitionNew solaceInputPartition;
+    private final SolaceInputPartition solaceInputPartition;
     private final Map<String, String> properties;
     private SolaceMessage solaceMessage;
     private SolaceBroker solaceBroker;
@@ -42,20 +48,22 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
     private final String uniqueId;
     private final long receiveWaitTimeout;
     private final TaskContext taskContext;
+    private final JsonObject lastKnownOffset;
 
-    public SolaceInputPartitionReaderNew(SolaceInputPartitionNew inputPartition, boolean includeHeaders, Map<String, String> properties, TaskContext taskContext) {
+    public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, JsonObject lastKnownOffset, Map<String, String> properties, TaskContext taskContext) {
         log.info("SolaceSparkConnector - Initializing Solace Input Partition reader with id {}", inputPartition.getId());
-        this.includeHeaders = includeHeaders;
         this.solaceInputPartition = inputPartition;
+        this.includeHeaders = includeHeaders;
+        this.lastKnownOffset = lastKnownOffset;
         this.properties = properties;
         this.taskContext = taskContext;
         this.uniqueId = String.join(",", taskContext.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
                 taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
                 Integer.toString(taskContext.stageId()),
                 Integer.toString(taskContext.partitionId()));
-        this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, "0"));
-        this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault("receiveWaitTimeout", "10000"));
-        boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, "false"));
+        this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
+        this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT, SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT));
+        boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
         log.info("SolaceSparkConnector - Checking for connection {}", inputPartition.getId());
         if(SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
             solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
@@ -88,7 +96,7 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
     @Override
     public InternalRow get() {
         try {
-            SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault("offsetIndicator", "MESSAGE_ID")).map(solaceMessage.bytesXMLMessage);
+            SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)).map(solaceMessage.bytesXMLMessage);
             log.info("SolaceSparkConnector - Current message " + solaceRecord.getMessageId());
             long timestamp = solaceRecord.getSenderTimestamp();
             if (solaceRecord.getSenderTimestamp() == 0) {
@@ -135,17 +143,20 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
                 if (solaceMessage == null) {
                     return null;
                 } else {
-                    if(SolaceSparkOffsetManager.containsMessageID(solaceMessage.bytesXMLMessage.getReplicationGroupMessageId().toString())) {
+                    if(batchSize > 0) {
+                        messages++;
+                    }
+                    if(SolaceSparkOffsetManager.containsMessageID(SolaceUtils.getMessageID(solaceMessage.bytesXMLMessage, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)))) {
                         log.info("SolaceSparkConnector - Message is added to previous partitions for processing. Moving to next message");
                     } else {
-                        if(batchSize > 0) {
-                            messages++;
-                        }
                         return solaceMessage;
                     }
                 }
             } catch (InterruptedException e) {
                 log.error("SolaceSparkConnector - Interrupted while reading message from internal queue", e);
+                return null;
+            } catch (SDTException e) {
+                log.error("SolaceSparkConnector - Interrupted while reading message id from message", e);
                 return null;
             }
         }
@@ -155,26 +166,22 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
 
     @Override
     public void close() {
-        log.info("SolaceSparkConnector - Input partition reader with ID {} and task {} is closed", this.solaceInputPartition.getId(), this.uniqueId);
+        log.info("SolaceSparkConnector - Input partition reader with ID {} with task {} is closed", this.solaceInputPartition.getId(), this.uniqueId);
     }
 
     private void registerTaskListener() {
         this.taskContext.addTaskCompletionListener(context -> {
             log.info("SolaceSparkConnector - Task {} state is completed :: {}, failed :: {}, interrupted :: {}", uniqueId, context.isCompleted(), context.isFailed(), context.isInterrupted());
-            if(context.isInterrupted()) {
-                log.info("SolaceSparkConnector - Closing connections to Solace as task {} is interrupted", String.join(",", context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
+            if(context.isInterrupted() || context.isFailed()) {
+                log.info("SolaceSparkConnector - Closing connections to Solace as task {} is interrupted or failed", String.join(",", context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
                         context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
                         Integer.toString(context.stageId()),
                         Integer.toString(context.partitionId())));
                 SolaceConnectionManager.close();
             } else {
                 if (context.isCompleted()) {
-                    log.info("SolaceSparkConnector - Task {} is completed", String.join(",", context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
-                            context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
-                            Integer.toString(context.stageId()),
-                            Integer.toString(context.partitionId())));
+                    log.info("SolaceSparkConnector - Total time taken by executor is {}ms for Task {}", context.taskMetrics().executorRunTime(),uniqueId);
                     SolaceSparkOffsetManager.ackMessages(uniqueId);
-                    solaceBroker.closeReceivers();
                     String processedMessageIDs = SolaceSparkOffsetManager.getProcessedMessagesIDs(uniqueId);
                     SolaceSparkOffset solaceSparkOffset = new SolaceSparkOffset(this.solaceInputPartition.getOffsetId(), context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
                             context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
@@ -182,10 +189,11 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
                             Integer.toString(context.partitionId()), processedMessageIDs);
                     if (processedMessageIDs != null) {
                         solaceBroker.initProducer();
-                        solaceBroker.publishMessage(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, solaceSparkOffset.json());
+                        solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), solaceSparkOffset.json());
                         solaceBroker.closeProducer();
                         SolaceSparkOffsetManager.removeProcessedMessagesIDs(uniqueId);
                     }
+                    solaceBroker.closeReceivers();
                 }
             }
         });
@@ -193,7 +201,7 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
 
     private void createNewConnection(int inputPartitionId, boolean ackLastProcessedMessages) {
         log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
-        solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE));
+        solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
         SolaceConnectionManager.addConnection(inputPartitionId, solaceBroker);
         createReceiver(inputPartitionId, ackLastProcessedMessages);
     }
@@ -202,7 +210,9 @@ public class SolaceInputPartitionReaderNew implements PartitionReader<InternalRo
         EventListener eventListener = new EventListener(inputPartitionId);
         if(ackLastProcessedMessages) {
             log.info("SolaceSparkConnector - last processed messages for list {}", SolaceSparkOffsetManager.getMessageIDs(uniqueId));
-            eventListener = new EventListener(inputPartitionId, SolaceSparkOffsetManager.getMessageIDs(uniqueId), this.properties.getOrDefault("offsetIndicator", "MESSAGE_ID"));
+            String lastKnownMessageIDs = this.lastKnownOffset.has("messageIDs") ? this.lastKnownOffset.get("messageIDs").getAsString() : "";
+            List<String> messageIDs = Arrays.stream(lastKnownMessageIDs.split(",")).collect(Collectors.toList());
+            eventListener = new EventListener(inputPartitionId, messageIDs, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
         }
         // Initialize connection to Solace Broker
         solaceBroker.addReceiver(eventListener);

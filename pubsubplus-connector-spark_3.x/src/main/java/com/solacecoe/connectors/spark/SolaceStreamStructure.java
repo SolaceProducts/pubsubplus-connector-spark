@@ -38,7 +38,7 @@ public class SolaceStreamStructure implements SupportsRead, Table {
 
     @Override
     public StructType schema() {
-        boolean includeHeaders = Boolean.parseBoolean(this.properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, "false"));
+        boolean includeHeaders = Boolean.parseBoolean(this.properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         return getSchema(includeHeaders);
     }
 

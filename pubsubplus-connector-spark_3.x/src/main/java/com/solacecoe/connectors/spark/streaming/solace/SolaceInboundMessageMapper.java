@@ -1,20 +1,22 @@
-package com.solacecoe.connectors.spark;
+package com.solacecoe.connectors.spark.streaming.solace;
 
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.SDTMap;
+import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessage;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
 
-public class Mapper implements InboundMessageMapper<SolaceRecord>, Serializable {
+public class SolaceInboundMessageMapper implements InboundMessageMapper<SolaceRecord>, Serializable {
     private static final long serialVersionUID = 42L;
     private final String solaceOffsetIndicator;
 
-    public Mapper(String solaceOffsetIndicator) {
+    public SolaceInboundMessageMapper(String solaceOffsetIndicator) {
         this.solaceOffsetIndicator = solaceOffsetIndicator;
     }
 
@@ -28,12 +30,24 @@ public class Mapper implements InboundMessageMapper<SolaceRecord>, Serializable 
                 properties.put(key, map.get(key));
             }
         }
+
         byte[] msgData = new byte[0];
-        if (msg.getContentLength() != 0) {
-            msgData = msg.getBytes();
-        }
-        if (msg.getAttachmentContentLength() != 0) {
-            msgData = msg.getAttachmentByteBuffer().array();
+        if(msg instanceof TextMessage) {
+            TextMessage textMessage = ((TextMessage) msg);
+            if(textMessage.getText() != null) {
+                msgData = textMessage.getText().getBytes(StandardCharsets.UTF_8);
+            } else if(textMessage.getContentLength() != 0) {
+                msgData = textMessage.getBytes();
+            } else if (textMessage.getAttachmentContentLength() != 0) {
+                msgData = textMessage.getAttachmentByteBuffer().array();
+            }
+        } else {
+            if (msg.getContentLength() != 0) {
+                msgData = msg.getBytes();
+            }
+            if (msg.getAttachmentContentLength() != 0) {
+                msgData = msg.getAttachmentByteBuffer().array();
+            }
         }
 
         String messageID = SolaceUtils.getMessageID(msg, this.solaceOffsetIndicator);

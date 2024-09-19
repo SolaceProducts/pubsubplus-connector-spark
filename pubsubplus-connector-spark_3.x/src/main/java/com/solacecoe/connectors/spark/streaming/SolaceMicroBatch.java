@@ -2,13 +2,13 @@ package com.solacecoe.connectors.spark.streaming;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.solacecoe.connectors.spark.SolaceRecord;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.partitions.SolaceDataSourceReaderFactory;
+import com.solacecoe.connectors.spark.streaming.partitions.SolaceInputPartition;
+import com.solacecoe.connectors.spark.streaming.solace.LVQEventListener;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
-import com.solacecoe.connectors.spark.streaming.solace.EventListener;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
-import com.solacesystems.jcsmp.BytesXMLMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.sql.connector.read.InputPartition;
@@ -20,264 +20,177 @@ import org.apache.spark.sql.connector.read.streaming.SupportsAdmissionControl;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionControl {
-    private static Logger log = LogManager.getLogger(SolaceMicroBatch.class);
-    private int latestOffsetValue = 0;
-    private boolean isCommitTriggered = false;
-    private String solaceOffsetIndicator = "MESSAGE_ID";
-    private JsonObject offsetJson;
-    private SolaceInputPartition[] inputPartitions;
-//    private final CopyOnWriteArrayList<String> processedMessageIDs;
-    private volatile ConcurrentHashMap<String, SolaceMessage> messages = new ConcurrentHashMap<>();
-    private final int batchSize;
+    private static final Logger log = LogManager.getLogger(SolaceMicroBatch.class);
+    private int lastKnownOffsetId = 0;
+    private final SolaceInputPartition[] inputPartitions;
     private final int partitions;
-    private final boolean ackLastProcessedMessages;
-    private final boolean skipMessageReprocessingIfTasksAreRunningLate;
-    private final boolean createFlowsOnSameSession;
+    private final int batchSize;
     private final boolean includeHeaders;
+    private final Map<String, String> properties;
+    private final SolaceBroker solaceBroker;
+    private JsonObject lastKnownOffset = new JsonObject();
 
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
+        this.properties = properties;
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
 
         // User configuration validation
-        if(!properties.containsKey("host") || properties.get("host") == null || properties.get("host").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.HOST) || properties.get(SolaceSparkStreamingProperties.HOST) == null || properties.get(SolaceSparkStreamingProperties.HOST).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Host name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Host name in configuration options");
         }
-        if(!properties.containsKey("vpn") || properties.get("vpn") == null || properties.get("vpn").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.VPN) || properties.get(SolaceSparkStreamingProperties.VPN) == null || properties.get(SolaceSparkStreamingProperties.VPN).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace VPN name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace VPN name in configuration options");
         }
 
-        if(!properties.containsKey("username") || properties.get("username") == null || properties.get("username").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.USERNAME) || properties.get(SolaceSparkStreamingProperties.USERNAME) == null || properties.get(SolaceSparkStreamingProperties.USERNAME).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Username in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Username in configuration options");
         }
 
-        if(!properties.containsKey("password") || properties.get("password") == null || properties.get("password").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.PASSWORD) || properties.get(SolaceSparkStreamingProperties.PASSWORD) == null || properties.get(SolaceSparkStreamingProperties.PASSWORD).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Password in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Password in configuration options");
         }
 
-        if(!properties.containsKey("queue") || properties.get("queue") == null || properties.get("queue").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.QUEUE) || properties.get(SolaceSparkStreamingProperties.QUEUE) == null || properties.get(SolaceSparkStreamingProperties.QUEUE).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Queue name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
         }
 
-        if(!properties.containsKey("batchSize") || properties.get("batchSize") == null || properties.get("batchSize").isEmpty()) {
-            log.error("SolaceSparkConnector - Please provide Batch size in configuration options");
-            throw new RuntimeException("SolaceSparkConnector - Please provide Batch Size in configuration options");
-        }
-
-        if(Integer.parseInt(properties.get("batchSize")) <= 0) {
-            log.error("SolaceSparkConnector - Please set Batch size to minimum of 1");
-            throw new RuntimeException("SolaceSparkConnector - Please set Batch size to minimum of 1");
-        }
-
-        ackLastProcessedMessages = properties.containsKey("ackLastProcessedMessages") && Boolean.parseBoolean(properties.get("ackLastProcessedMessages"));
-        skipMessageReprocessingIfTasksAreRunningLate = properties.containsKey("skipDuplicates") && Boolean.parseBoolean(properties.get("skipDuplicates"));
-        log.info("SolaceSparkConnector - Ack Last processed messages is set to {}", ackLastProcessedMessages);
-
-        includeHeaders = properties.containsKey("includeHeaders") && Boolean.parseBoolean(properties.get("includeHeaders"));
+        this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
+        includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         log.info("SolaceSparkConnector - includeHeaders is set to {}", includeHeaders);
 
-        createFlowsOnSameSession = properties.containsKey("createFlowsOnSameSession") && Boolean.parseBoolean(properties.get("createFlowsOnSameSession"));
-        log.info("SolaceSparkConnector - createFlowsOnSameSession is set to {}", createFlowsOnSameSession);
-
-        batchSize = Integer.parseInt(properties.get("batchSize")) > 0 ? Integer.parseInt(properties.get("batchSize")) : 1;
-        log.info("SolaceSparkConnector - Batch Size is set to {}", batchSize);
-
-        partitions = properties.containsKey("partitions") ? Integer.parseInt(properties.get("partitions")) : 1;
+        partitions = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.PARTITIONS, SolaceSparkStreamingProperties.PARTITIONS_DEFAULT));
         log.info("SolaceSparkConnector - Partitions is set to {}", partitions);
         inputPartitions = new SolaceInputPartition[partitions];
 
-        if (properties.get("offsetIndicator") != null && !properties.get("offsetIndicator").isEmpty()) {
-            this.solaceOffsetIndicator = properties.get("offsetIndicator");
-            log.info("SolaceSparkConnector - offsetIndicator is set to {}", this.solaceOffsetIndicator);
-        }
+        String solaceOffsetIndicator = properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT);
+        log.info("SolaceSparkConnector - offsetIndicator is set to {}", solaceOffsetIndicator);
 
-        log.info("SolaceSparkConnector - Solace Connection Details Host : " + properties.get("host") + ", VPN : " + properties.get("vpn") + ", Username : " + properties.get("username"));
-        SolaceBroker solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"), properties);
-        solaceConnectionManager.addConnection(solaceBroker);
-        for (int i = 0; i < partitions; i++) {
-            if(!createFlowsOnSameSession && i > 0) {
-                solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"), properties);
-                solaceConnectionManager.addConnection(solaceBroker);
-            }
-            EventListener eventListener = new EventListener((i + 1));
-            // Initialize connection to Solace Broker
-            solaceBroker.addReceiver(eventListener);
-            log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition {}", i);
-        }
-
-        this.offsetJson = new JsonObject();
+        this.solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
+        LVQEventListener lvqEventListener = new LVQEventListener();
+        this.solaceBroker.addLVQReceiver(lvqEventListener);
+        SolaceConnectionManager.addConnection(0, this.solaceBroker);
         log.info("SolaceSparkConnector - Initialization Completed");
     }
 
     @Override
     public Offset latestOffset() {
-        latestOffsetValue+=batchSize;
+        lastKnownOffsetId+=batchSize;
 //        log.info("SolaceSparkConnector - latestOffset :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
-        return new SolaceSparkOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
+        SolaceSparkOffset solaceSparkOffset = this.solaceBroker.getLVQMessage();
+        if(solaceSparkOffset != null) {
+            return new SolaceSparkOffset(lastKnownOffsetId, solaceSparkOffset.getQueryId(),
+                    solaceSparkOffset.getBatchId(), solaceSparkOffset.getStageId(),
+                    solaceSparkOffset.getPartitionId(), solaceSparkOffset.getMessageIDs());
+        }
+//        log.info("SolaceSparkConnector - latestOffset with params :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
+        return getDefaultOffset();
+//        return new SolaceSparkOffset(lastKnownOffsetId, "");
     }
 
-    private boolean shouldAddMessage(String messageID) {
-        return !skipMessageReprocessingIfTasksAreRunningLate || !this.messages.containsKey(messageID);
-    }
-
-    private InputPartition[] splitDataOnPartitions() {
-        SolaceInputPartition[] partitions = new SolaceInputPartition[this.partitions];
-        CopyOnWriteArrayList<SolaceRecord> recordList = new CopyOnWriteArrayList<>();
-        for(int i=0; i < partitions.length; i++) {
-            if(isCommitTriggered) {
-                int brokerIndex = this.createFlowsOnSameSession ? 0 : i;
-                SolaceBroker solaceBroker = SolaceConnectionManager.getConnection(brokerIndex);
-                if(solaceBroker != null) {
-                    int listenerIndex = this.createFlowsOnSameSession ? i : 0;
-                    LinkedBlockingQueue<SolaceMessage> messages = solaceBroker.getMessages(listenerIndex);
-                    log.info("SolaceSparkConnector - Creating new records list. Messages received from Solace " + messages.size());
-                    recordList = new CopyOnWriteArrayList<>();
-                    for (int j = 0; j < batchSize && j < messages.size(); j++) {
-                        SolaceMessage solaceMessage = messages.poll();
-                        assert solaceMessage != null;
-                        BytesXMLMessage bytesXMLMessage = solaceMessage.bytesXMLMessage;
-                        SolaceRecord solaceRecord = null;
-                        try {
-                            solaceRecord = SolaceRecord.getMapper(this.solaceOffsetIndicator).map(bytesXMLMessage);
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                        if (solaceRecord != null && shouldAddMessage(solaceRecord.getMessageId())) {
-                            this.messages.put(solaceRecord.getMessageId(), solaceMessage);
-                            if (ackLastProcessedMessages) {
-                                log.info("SolaceSparkConnector - Ack last processed messages is enabled. Checking if message is already processed based on available offsets.");
-                                // based on last successful offset, extract the message ID and see if same message is received, if so ack the message
-                                if (offsetJson != null && offsetJson.has("messageIDs")) {
-                                    List<String> messageIDsInLastOffset = Arrays.asList(offsetJson.get("messageIDs").getAsString().split(","));
-                                    log.info("SolaceSparkConnector - Total messages in offset :: " + messageIDsInLastOffset.size());
-                                    if (messageIDsInLastOffset.contains(solaceRecord.getMessageId())) {
-                                        log.info("SolaceSparkConnector - Message found in offset. Acknowledging previously processed message with ID :: " + solaceRecord.getMessageId());
-                                        bytesXMLMessage.ackMessage();
-
-                                        this.messages.remove(solaceRecord.getMessageId());
-                                    } else {
-//                                        if(!this.messages.contains(solaceRecord.getMessageId())) {
-//                                            log.info("SolaceSparkConnector - Message is not present in offset. Hence reprocessing it.");
-//                                            this.messages.put(solaceRecord.getMessageId(), solaceMessage);
-//                                            recordList.add(solaceRecord);
-//                                        }
-                                        log.info("SolaceSparkConnector - Message is not present in offset. Hence reprocessing it.");
-                                        recordList.add(solaceRecord);
-                                    }
-                                } else {
-//                                    if(!this.messages.contains(solaceRecord.getMessageId())) {
-//                                        log.info("SolaceSparkConnector - Trying to check if messages are already processed but offset is not available. Hence reprocessing it.");
-//                                        this.messages.put(solaceRecord.getMessageId(), solaceMessage);
-//                                        recordList.add(solaceRecord);
-//                                    }
-                                    log.info("SolaceSparkConnector - Trying to check if messages are already processed but offset is not available. Hence reprocessing it.");
-                                    recordList.add(solaceRecord);
-                                }
-                            } else {
-//                                if(!this.processedMessageIDs.contains(solaceRecord.getMessageId())) {
-//                                    this.processedMessageIDs.add(solaceRecord.getMessageId());
-//                                    recordList.add(solaceRecord);
-//                                }
-                                recordList.add(solaceRecord);
-                            }
-
-                        }
-                    }
-                }
-            } else if(inputPartitions != null && inputPartitions.length > 0 && inputPartitions[i] != null) {
-                recordList = inputPartitions[i].getValues();
-            }
-
-            log.info("SolaceSparkConnector - Plan input partitions with records :: " + recordList.size());
-            partitions[i] = new SolaceInputPartition(i,"", recordList);
+    private InputPartition[] getPartitions() {
+        for(int i=0; i < this.partitions; i++) {
+//            /solaceSparkOffsetManager.messageIDs = offsetJson != null && offsetJson.has("messageIDs") ? Arrays.asList(offsetJson.get("messageIDs").getAsString().split(",")) : new ArrayList<>();
+            inputPartitions[i] = new SolaceInputPartition(i, lastKnownOffsetId, "");
         }
-
-        if(isCommitTriggered) {
-            isCommitTriggered = false;
-        }
-
-        inputPartitions = partitions;
-
-        return partitions;
+        return inputPartitions;
     }
 
     @Override
     public InputPartition[] planInputPartitions(Offset start, Offset end) {
-        return splitDataOnPartitions();
+        return getPartitions();
     }
 
     @Override
     public PartitionReaderFactory createReaderFactory() {
         log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: " + this.includeHeaders);
-        return new SolaceDataSourceReaderFactory(this.includeHeaders);
+        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.lastKnownOffset, this.properties);
     }
 
     @Override
     public Offset latestOffset(Offset startOffset, ReadLimit limit) {
-        latestOffsetValue+=batchSize;
+        lastKnownOffsetId+=batchSize;
+        SolaceSparkOffset solaceSparkOffset = this.solaceBroker.getLVQMessage();
+        if(solaceSparkOffset != null) {
+            return new SolaceSparkOffset(lastKnownOffsetId, solaceSparkOffset.getQueryId(),
+                    solaceSparkOffset.getBatchId(), solaceSparkOffset.getStageId(),
+                    solaceSparkOffset.getPartitionId(), solaceSparkOffset.getMessageIDs());
+        }
 //        log.info("SolaceSparkConnector - latestOffset with params :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
-        return new SolaceSparkOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
+        return getDefaultOffset();
     }
 
     @Override
     public Offset initialOffset() {
-        return new SolaceSparkOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
+        SolaceSparkOffset solaceSparkOffset = this.solaceBroker.getLVQMessage();
+        if(solaceSparkOffset != null) {
+            return new SolaceSparkOffset(lastKnownOffsetId, solaceSparkOffset.getQueryId(),
+                    solaceSparkOffset.getBatchId(), solaceSparkOffset.getStageId(),
+                    solaceSparkOffset.getPartitionId(), solaceSparkOffset.getMessageIDs());
+        }
+
+        return getDefaultOffset();
     }
 
     @Override
     public Offset deserializeOffset(String json) {
-        JsonObject gson = new Gson().fromJson(json, JsonObject.class);
-        if(gson != null && gson.has("offset")) {
-            latestOffsetValue = gson.get("offset").getAsInt();
-            offsetJson = gson;
+        lastKnownOffset = new Gson().fromJson(json, JsonObject.class);
+        if(lastKnownOffset != null && lastKnownOffset.has("offset")) {
+            lastKnownOffsetId = lastKnownOffset.get("offset").getAsInt();
         }
 
-//        if(gson != null && gson.has("messageIDs")) {
-//            String messageIDs = gson.get("messageIDs").getAsString();
-//            if(messageIDs.length() > 0) {
-//                this.processedMessageIDs.addAll(Arrays.asList(messageIDs.split(",")));
-//            }
-//        }
-        return new SolaceSparkOffset(latestOffsetValue, String.join(",",this.messages.keySet().stream().collect(Collectors.toList())));
+        SolaceSparkOffset solaceSparkOffset = this.solaceBroker.getLVQMessage();
+        if(solaceSparkOffset != null) {
+            return new SolaceSparkOffset(solaceSparkOffset.getOffset(), solaceSparkOffset.getQueryId(),
+                    solaceSparkOffset.getBatchId(), solaceSparkOffset.getStageId(),
+                    solaceSparkOffset.getPartitionId(), solaceSparkOffset.getMessageIDs());
+        }
+        return getDefaultOffset();
     }
 
     @Override
     public void commit(Offset end) {
         log.info("SolaceSparkConnector - Commit triggered");
-        SolaceSparkOffset solaceSparkOffset = (SolaceSparkOffset) end;
-//        log.info("SolaceSparkConnector - Processed message ID's by Spark " + basicOffset.json());
-
-        if (solaceSparkOffset != null && solaceSparkOffset.getMessageIDs() != null && !solaceSparkOffset.getMessageIDs().isEmpty()) {
-            String[] messageIDs = solaceSparkOffset.getMessageIDs().split(",");
-            for (String messageID : messageIDs) {
-                if (this.messages.containsKey(messageID)) {
-                    this.messages.get(messageID).bytesXMLMessage.ackMessage();
-                    log.info("SolaceSparkConnector - Acknowledged message with ID :: {}", messageID);
-                    this.messages.remove(messageID);
-//                    if (this.processedMessageIDs.contains(messageID)) {
-//                        this.processedMessageIDs.remove(messageID);
-//                    }
-                }
-            }
-        }
-
-
-        isCommitTriggered = true;
     }
 
     @Override
     public void stop() {
-        log.info("SolaceSparkConnector - Closing connection to Solace");
+        log.info("SolaceSparkConnector - Closing Spark Connector");
+        SolaceConnectionManager.close();
+    }
+
+    private SolaceSparkOffset getDefaultOffset() {
+        String queryId = "";
+        String batchId = "";
+        String stageId = "";
+        String partitionId = "";
+        String messageIds = "";
+        if(lastKnownOffset != null) {
+            if(lastKnownOffset.has("queryId")) {
+                queryId = lastKnownOffset.get("queryId").getAsString();
+            }
+            if(lastKnownOffset.has("batchId")) {
+                batchId = lastKnownOffset.get("batchId").getAsString();
+            }
+            if(lastKnownOffset.has("stageId")) {
+                stageId = lastKnownOffset.get("stageId").getAsString();
+            }
+            if(lastKnownOffset.has("partitionId")) {
+                partitionId = lastKnownOffset.get("partitionId").getAsString();
+            }
+            if(lastKnownOffset.has("messageIDs")) {
+                messageIds = lastKnownOffset.get("messageIDs").getAsString();
+            }
+        }
+        return new SolaceSparkOffset(lastKnownOffsetId, queryId, batchId, stageId, partitionId, messageIds);
     }
 
 }
