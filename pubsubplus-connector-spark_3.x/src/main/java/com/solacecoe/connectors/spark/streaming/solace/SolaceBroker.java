@@ -8,6 +8,10 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -22,24 +26,55 @@ public class SolaceBroker implements Serializable {
     private XMLMessageProducer producer;
 
 
-    public SolaceBroker(String host, String vpn, String username, String password, String queue) {
+    public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         lvqEventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
         this.queue = queue;
 
         try {
-            final JCSMPProperties properties = new JCSMPProperties();
-            properties.setProperty(JCSMPProperties.HOST, host);            // host:port
-            properties.setProperty(JCSMPProperties.USERNAME, username); // client-username
-            properties.setProperty(JCSMPProperties.VPN_NAME, vpn);    // message-vpn
-            properties.setProperty(JCSMPProperties.PASSWORD, password); // client-password
+            JCSMPProperties jcsmpProperties = new JCSMPProperties();
+            // get api properties
+            Properties props = new Properties();
+            for(String key : properties.keySet()) {
+                if (key.startsWith("solace.apiProperties.")) {
+                    String value = properties.get(key);
+                    String solaceKey = key.substring("solace.apiProperties.".length());
+                    props.put("jcsmp." + solaceKey, value);
+                }
+            }
+            if(!props.isEmpty()) {
+                jcsmpProperties = JCSMPProperties.fromProperties(props);
+            }
+
+            jcsmpProperties.setProperty(JCSMPProperties.HOST, this.host);            // host:port
+            jcsmpProperties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
+            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
+            jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
             this.uniqueName = JCSMPFactory.onlyInstance().createUniqueName("solace/spark/connector");
             properties.setProperty(JCSMPProperties.CLIENT_NAME, uniqueName);
-            session = JCSMPFactory.onlyInstance().createSession(properties);
+            
+            // Channel Properties
+            JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
+                    .getProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
+            if(properties.containsKey("connectRetries")) {
+                cp.setConnectRetries(Integer.parseInt(properties.get("connectRetries")));
+            }
+            if(properties.containsKey("reconnectRetries")) {
+                cp.setReconnectRetries(Integer.parseInt(properties.get("reconnectRetries")));
+            }
+            if(properties.containsKey("connectRetriesPerHost")) {
+                cp.setConnectRetriesPerHost(Integer.parseInt(properties.get("connectRetriesPerHost")));
+            }
+            if(properties.containsKey("reconnectRetryWaitInMillis")) {
+                cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get("reconnectRetryWaitInMillis")));
+            }
+//            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES, cp);
+            session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception connecting to Solace ", e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -67,6 +102,7 @@ public class SolaceBroker implements Serializable {
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
+            throw new RuntimeException(e);
         }
         // log.info("Listening for messages: "+ this.queueName);
     }

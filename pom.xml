@@ -14,7 +14,6 @@
 
     <modules>
         <module>pubsubplus-connector-spark_3.x</module>
-        <module>pubsubplus-connector-spark_2.4.8</module>
     </modules>
 
     <properties>
@@ -23,7 +22,7 @@
         Project Versioning Properties
         ===================================
         -->
-        <revision>2.0.1</revision>
+        <revision>2.0.3</revision>
         <sha1/> <!-- Doesn't actually need to be a sha1, this is just another version modifier variable -->
         <changelist>-SNAPSHOT</changelist>
         <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
