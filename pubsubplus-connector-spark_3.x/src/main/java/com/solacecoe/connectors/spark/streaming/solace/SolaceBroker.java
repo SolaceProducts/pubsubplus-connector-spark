@@ -10,8 +10,6 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -40,9 +38,9 @@ public class SolaceBroker implements Serializable {
             // get api properties
             Properties props = new Properties();
             for(String key : properties.keySet()) {
-                if (key.startsWith("solace.apiProperties.")) {
+                if (key.startsWith(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX)) {
                     String value = properties.get(key);
-                    String solaceKey = key.substring("solace.apiProperties.".length());
+                    String solaceKey = key.substring(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX.length());
                     props.put("jcsmp." + solaceKey, value);
                 }
             }
@@ -60,17 +58,17 @@ public class SolaceBroker implements Serializable {
             // Channel Properties
             JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
                     .getProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
-            if(properties.containsKey("connectRetries")) {
-                cp.setConnectRetries(Integer.parseInt(properties.get("connectRetries")));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)) {
+                cp.setConnectRetries(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)));
             }
-            if(properties.containsKey("reconnectRetries")) {
-                cp.setReconnectRetries(Integer.parseInt(properties.get("reconnectRetries")));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES)) {
+                cp.setReconnectRetries(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES)));
             }
-            if(properties.containsKey("connectRetriesPerHost")) {
-                cp.setConnectRetriesPerHost(Integer.parseInt(properties.get("connectRetriesPerHost")));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)) {
+                cp.setConnectRetriesPerHost(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)));
             }
-            if(properties.containsKey("reconnectRetryWaitInMillis")) {
-                cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get("reconnectRetryWaitInMillis")));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)) {
+                cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)));
             }
 //            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES, cp);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);

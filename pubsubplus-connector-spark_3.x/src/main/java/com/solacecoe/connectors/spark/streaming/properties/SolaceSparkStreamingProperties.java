@@ -22,4 +22,9 @@ public class SolaceSparkStreamingProperties {
     public static String SOLACE_SPARK_CONNECTOR_LVQ_TOPIC = "lvq.topic";
     public static String SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME = "solace.spark.connector.state";
     public static String SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC = "solace/spark/connector/offset";
+    public static String SOLACE_CONNECT_RETRIES = "connectRetries";
+    public static String SOLACE_RECONNECT_RETRIES = "reconnectRetries";
+    public static String SOLACE_CONNECT_RETRIES_PER_HOST = "connectRetriesPerHost";
+    public static String SOLACE_RECONNECT_RETRIES_WAIT_TIME = "reconnectRetryWaitInMillis";
+    public static String SOLACE_API_PROPERTIES_PREFIX = "solace.apiProperties.";
 }
