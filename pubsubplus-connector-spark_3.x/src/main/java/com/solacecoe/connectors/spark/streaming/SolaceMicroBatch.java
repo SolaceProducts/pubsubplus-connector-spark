@@ -77,7 +77,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         this.solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
         LVQEventListener lvqEventListener = new LVQEventListener();
         this.solaceBroker.addLVQReceiver(lvqEventListener);
-        SolaceConnectionManager.addConnection(0, this.solaceBroker);
+        SolaceConnectionManager.addConnection("lvq-"+0, this.solaceBroker);
         log.info("SolaceSparkConnector - Initialization Completed");
     }
 
@@ -99,7 +99,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     private InputPartition[] getPartitions() {
         for(int i=0; i < this.partitions; i++) {
 //            /solaceSparkOffsetManager.messageIDs = offsetJson != null && offsetJson.has("messageIDs") ? Arrays.asList(offsetJson.get("messageIDs").getAsString().split(",")) : new ArrayList<>();
-            inputPartitions[i] = new SolaceInputPartition(i, lastKnownOffsetId, "");
+            inputPartitions[i] = new SolaceInputPartition("partition-"+i, lastKnownOffsetId, "");
         }
         return inputPartitions;
     }
@@ -112,7 +112,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     @Override
     public PartitionReaderFactory createReaderFactory() {
         log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: " + this.includeHeaders);
-        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.lastKnownOffset, this.properties);
+        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.lastKnownOffset.toString(), this.properties);
     }
 
     @Override

@@ -18,8 +18,8 @@ public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
     private static final Logger log = LogManager.getLogger(SolaceDataSourceReaderFactory.class);
     private final boolean includeHeaders;
     private final Map<String, String> properties;
-    private final JsonObject lastKnownOffset;
-    public SolaceDataSourceReaderFactory(boolean includeHeaders, JsonObject lastKnownOffset, Map<String, String> properties) {
+    private final String lastKnownOffset;
+    public SolaceDataSourceReaderFactory(boolean includeHeaders, String lastKnownOffset, Map<String, String> properties) {
         this.includeHeaders = includeHeaders;
         this.properties = properties;
         this.lastKnownOffset = lastKnownOffset;

@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffsetManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.util.ShutdownHookManager;
@@ -9,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class SolaceConnectionManager {
     private static final Logger logger = LogManager.getLogger(SolaceConnectionManager.class);
-    private static final ConcurrentHashMap<Integer, SolaceBroker> brokerConnections = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, SolaceBroker> brokerConnections = new ConcurrentHashMap<>();
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(SolaceConnectionManager::close));
@@ -19,12 +20,12 @@ public class SolaceConnectionManager {
         });
     }
 
-    public static void addConnection(int index, SolaceBroker solaceBroker) {
-        brokerConnections.put(index, solaceBroker);
+    public static void addConnection(String id, SolaceBroker solaceBroker) {
+        brokerConnections.put(id, solaceBroker);
     }
 
-    public static SolaceBroker getConnection(int index) {
-        return brokerConnections.getOrDefault(index, null);
+    public static SolaceBroker getConnection(String id) {
+        return brokerConnections.getOrDefault(id, null);
     }
 
     public static void close() {
@@ -34,5 +35,6 @@ public class SolaceConnectionManager {
             broker.close();
         });
         brokerConnections.clear();
+        SolaceSparkOffsetManager.reset();
     }
 }

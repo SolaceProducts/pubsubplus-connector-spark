@@ -73,6 +73,7 @@ public class SolaceBroker implements Serializable {
 //            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES, cp);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
+            initProducer();
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception connecting to Solace ", e);
             throw new RuntimeException(e);
@@ -99,7 +100,7 @@ public class SolaceBroker implements Serializable {
 
             cons.start();
             flowReceivers.add(cons);
-            log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {}", this.queue);
+            log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {} from partition id {}", this.queue, eventListener.getId());
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
@@ -199,6 +200,7 @@ public class SolaceBroker implements Serializable {
 
     public void close() {
         closeReceivers();
+        closeProducer();
         log.info("Closing Solace Session");
         if(session != null && !session.isClosed()) {
             session.closeSession();

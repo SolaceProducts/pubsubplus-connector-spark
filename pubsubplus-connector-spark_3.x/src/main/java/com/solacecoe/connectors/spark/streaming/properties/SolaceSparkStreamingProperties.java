@@ -27,4 +27,6 @@ public class SolaceSparkStreamingProperties {
     public static String SOLACE_CONNECT_RETRIES_PER_HOST = "connectRetriesPerHost";
     public static String SOLACE_RECONNECT_RETRIES_WAIT_TIME = "reconnectRetryWaitInMillis";
     public static String SOLACE_API_PROPERTIES_PREFIX = "solace.apiProperties.";
+    public static String CLOSE_RECEIVERS_ON_PARTITION_CLOSE = "closeReceiversOnPartitionClose";
+    public static String CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT = "false";
 }

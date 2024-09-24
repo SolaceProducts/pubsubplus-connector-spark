@@ -10,9 +10,9 @@ public class SolaceInputPartition implements InputPartition, Serializable {
 
     private final static Logger log = LogManager.getLogger(SolaceInputPartition.class);
     private final String location;
-    private final int id;
+    private final String id;
     private final int offsetId;
-    public SolaceInputPartition(int id, int offsetId, String location) {
+    public SolaceInputPartition(String id, int offsetId, String location) {
         log.info("SolaceSparkConnector - Initializing Solace Input partition");
         this.id = id;
         this.offsetId = offsetId;
@@ -25,7 +25,7 @@ public class SolaceInputPartition implements InputPartition, Serializable {
         return new String[]{this.location};
     }
 
-    public int getId() {
+    public String getId() {
         return id;
     }
 

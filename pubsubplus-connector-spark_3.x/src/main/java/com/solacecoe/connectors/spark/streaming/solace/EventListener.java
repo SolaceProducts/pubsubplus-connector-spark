@@ -17,14 +17,17 @@ import org.apache.logging.log4j.Logger;
 public class EventListener implements XMLMessageListener, Serializable {
     private static final Logger log = LogManager.getLogger(EventListener.class);
     private final LinkedBlockingQueue<SolaceMessage> messages;
+    private final String id;
     private List<String> lastKnownMessageIDs = new ArrayList<>();
     private String offsetIndicator = SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT;
-    public EventListener(int id) {
+    public EventListener(String id) {
+        this.id = id;
         this.messages = new LinkedBlockingQueue<>();
         log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
     }
 
-    public EventListener(int id, List<String> messageIDs, String offsetIndicator) {
+    public EventListener(String id, List<String> messageIDs, String offsetIndicator) {
+        this.id = id;
         this.messages = new LinkedBlockingQueue<>();
         this.lastKnownMessageIDs = messageIDs;
         this.offsetIndicator = offsetIndicator;
@@ -60,5 +63,9 @@ public class EventListener implements XMLMessageListener, Serializable {
 
     public LinkedBlockingQueue<SolaceMessage> getMessages() {
         return messages;
+    }
+
+    public String getId() {
+        return id;
     }
 }

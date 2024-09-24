@@ -1,6 +1,8 @@
 package com.solacecoe.connectors.spark.streaming.offset;
 
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -8,8 +10,9 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class SolaceSparkOffsetManager implements Serializable {
-    private static final ConcurrentHashMap<String, List<SolaceMessage>> messages = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, List<String>> messageIDs = new ConcurrentHashMap<>();
+    private static final Logger logger = LogManager.getLogger(SolaceSparkOffsetManager.class);
+    private static ConcurrentHashMap<String, List<SolaceMessage>> messages = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, List<String>> messageIDs = new ConcurrentHashMap<>();
 
     public static String getProcessedMessagesIDs(String uniqueId) {
         if(messageIDs.containsKey(uniqueId)) {
@@ -59,6 +62,12 @@ public final class SolaceSparkOffsetManager implements Serializable {
 
     public static boolean containsMessageID(String messageId) {
         return messageIDs.values().stream().anyMatch(list -> list.contains(messageId));
+    }
+
+    public static void reset() {
+        messages = new ConcurrentHashMap<>();
+        messageIDs = new ConcurrentHashMap<>();
+        logger.info("SolaceSparkConnector - Cleared all messages from Offset Manager");
     }
 
 //    public static ConcurrentHashMap<String, String> getMessages() {
