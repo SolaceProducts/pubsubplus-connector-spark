@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +22,7 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
     private OAuthClient oAuthClient;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
-
+    private ScheduledExecutorService scheduledExecutorService;
     public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
@@ -36,9 +37,9 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
             // get api properties
             Properties props = new Properties();
             for(String key : properties.keySet()) {
-                if (key.startsWith("solace.apiProperties.")) {
+                if (key.startsWith(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX)) {
                     String value = properties.get(key);
-                    String solaceKey = key.substring("solace.apiProperties.".length());
+                    String solaceKey = key.substring(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX.length());
                     props.put("jcsmp." + solaceKey, value);
                 }
             }
@@ -48,12 +49,12 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
 
             jcsmpProperties.setProperty(JCSMPProperties.HOST, this.host);            // host:port
             jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
-            if(properties.containsKey("solace.apiProperties."+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get("solace.apiProperties."+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
-                refreshTimeout = Integer.parseInt(properties.getOrDefault("oauth.client.token.fetch.timeout", "10"));
-                oAuthClient = new OAuthClient(properties.get("oauth.client.auth-server-url"), properties.get("oauth.client.client-id"),
-                        properties.get("oauth.client.credentials.client-secret"));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
+                refreshTimeout = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT));
+                oAuthClient = new OAuthClient(properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL), properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID),
+                        properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET));
                 jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
-                scheduleOAuthRefresh(Integer.parseInt(properties.getOrDefault("oauth.client.token.refresh.interval", "60")));
+                scheduleOAuthRefresh(Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT)));
             } else {
                 jcsmpProperties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
                 jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
@@ -62,17 +63,17 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
             // Channel Properties
             JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
                     .getProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
-            if(properties.containsKey("connectRetries")) {
-                cp.setConnectRetries(Integer.parseInt(properties.get("connectRetries")));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)) {
+                cp.setConnectRetries(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)));
             }
-            if(properties.containsKey("reconnectRetries")) {
-                cp.setReconnectRetries(Integer.parseInt(properties.get("reconnectRetries")));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES)) {
+                cp.setReconnectRetries(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES)));
             }
-            if(properties.containsKey("connectRetriesPerHost")) {
-                cp.setConnectRetriesPerHost(Integer.parseInt(properties.get("connectRetriesPerHost")));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)) {
+                cp.setConnectRetriesPerHost(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)));
             }
-            if(properties.containsKey("reconnectRetryWaitInMillis")) {
-                cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get("reconnectRetryWaitInMillis")));
+            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)) {
+                cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)));
             }
 //            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES, cp);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
@@ -130,6 +131,11 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
             session.closeSession();
             log.info("SolaceSparkConnector - Closed Solace session");
         }
+
+        if(scheduledExecutorService != null) {
+            scheduledExecutorService.shutdownNow();
+            log.info("SolaceSparkConnector - OAuth token refresh thread is now shutdown");
+        }
     }
 
     public ConcurrentLinkedQueue<SolaceMessage> getMessages(int index) {
@@ -157,16 +163,13 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
     }
 
     private void scheduleOAuthRefresh(int refreshInterval) {
-        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
-        scheduledExecutorService.schedule(new Runnable() {
-            @Override
-            public void run() {
-                if(session != null && oAuthClient != null) {
-                    try {
-                        session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
-                    } catch (JCSMPException e) {
-                        throw new RuntimeException(e);
-                    }
+        scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        scheduledExecutorService.schedule(() -> {
+            if(session != null && oAuthClient != null) {
+                try {
+                    session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
+                } catch (JCSMPException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }, refreshInterval, TimeUnit.SECONDS);

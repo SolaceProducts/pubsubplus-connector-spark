@@ -3,11 +3,13 @@ package com.solacecoe.connectors.spark.streaming;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.solacecoe.connectors.spark.SolaceRecord;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacecoe.connectors.spark.streaming.solace.EventListener;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream;
@@ -45,69 +47,85 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         // Initialize classes required for Solace connectivity
 
         // User configuration validation
-        if(!properties.containsKey("host") || properties.get("host") == null || properties.get("host").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.HOST) || properties.get(SolaceSparkStreamingProperties.HOST) == null || properties.get(SolaceSparkStreamingProperties.HOST).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Host name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Host name in configuration options");
         }
-        if(!properties.containsKey("vpn") || properties.get("vpn") == null || properties.get("vpn").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.VPN) || properties.get(SolaceSparkStreamingProperties.VPN) == null || properties.get(SolaceSparkStreamingProperties.VPN).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace VPN name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace VPN name in configuration options");
         }
 
-        if(!properties.containsKey("username") || properties.get("username") == null || properties.get("username").isEmpty()) {
-            log.error("SolaceSparkConnector - Please provide Solace Username in configuration options");
-            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Username in configuration options");
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+ JCSMPProperties.AUTHENTICATION_SCHEME) &&
+                properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+ JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
+            if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL).isEmpty()) {
+                log.error("SolaceSparkConnector - Please provide OAuth Client Authentication Server URL");
+                throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client Authentication Server URL");
+            }
+
+            if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID).isEmpty()) {
+                log.error("SolaceSparkConnector - Please provide OAuth Client ID");
+                throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client ID");
+            }
+
+            if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET).isEmpty()) {
+                log.error("SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
+                throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
+            }
+        } else {
+            if (!properties.containsKey(SolaceSparkStreamingProperties.USERNAME) || properties.get(SolaceSparkStreamingProperties.USERNAME) == null || properties.get(SolaceSparkStreamingProperties.USERNAME).isEmpty()) {
+                log.error("SolaceSparkConnector - Please provide Solace Username in configuration options");
+                throw new RuntimeException("SolaceSparkConnector - Please provide Solace Username in configuration options");
+            }
+
+            if (!properties.containsKey(SolaceSparkStreamingProperties.PASSWORD) || properties.get(SolaceSparkStreamingProperties.PASSWORD) == null || properties.get(SolaceSparkStreamingProperties.PASSWORD).isEmpty()) {
+                log.error("SolaceSparkConnector - Please provide Solace Password in configuration options");
+                throw new RuntimeException("SolaceSparkConnector - Please provide Solace Password in configuration options");
+            }
         }
 
-        if(!properties.containsKey("password") || properties.get("password") == null || properties.get("password").isEmpty()) {
-            log.error("SolaceSparkConnector - Please provide Solace Password in configuration options");
-            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Password in configuration options");
-        }
-
-        if(!properties.containsKey("queue") || properties.get("queue") == null || properties.get("queue").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.QUEUE) || properties.get(SolaceSparkStreamingProperties.QUEUE) == null || properties.get(SolaceSparkStreamingProperties.QUEUE).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Solace Queue name in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
         }
 
-        if(!properties.containsKey("batchSize") || properties.get("batchSize") == null || properties.get("batchSize").isEmpty()) {
+        if(!properties.containsKey(SolaceSparkStreamingProperties.BATCH_SIZE) || properties.get(SolaceSparkStreamingProperties.BATCH_SIZE) == null || properties.get(SolaceSparkStreamingProperties.BATCH_SIZE).isEmpty()) {
             log.error("SolaceSparkConnector - Please provide Batch size in configuration options");
             throw new RuntimeException("SolaceSparkConnector - Please provide Batch Size in configuration options");
         }
 
-        if(Integer.parseInt(properties.get("batchSize")) <= 0) {
+        if(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.BATCH_SIZE)) <= 0) {
             log.error("SolaceSparkConnector - Please set Batch size to minimum of 1");
             throw new RuntimeException("SolaceSparkConnector - Please set Batch size to minimum of 1");
         }
 
-        ackLastProcessedMessages = properties.containsKey("ackLastProcessedMessages") ? Boolean.valueOf(properties.get("ackLastProcessedMessages")) : false;
-        skipMessageReprocessingIfTasksAreRunningLate = properties.containsKey("skipDuplicates") ? Boolean.valueOf(properties.get("skipDuplicates")) : false;
+        ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
+        skipMessageReprocessingIfTasksAreRunningLate = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.SKIP_DUPLICATES, SolaceSparkStreamingProperties.SKIP_DUPLICATES_DEFAULT));
         log.info("SolaceSparkConnector - Ack Last processed messages is set to " + ackLastProcessedMessages);
 
-        includeHeaders = properties.containsKey("includeHeaders") ? Boolean.valueOf(properties.get("includeHeaders")) : false;
+        includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         log.info("SolaceSparkConnector - includeHeaders is set to " + includeHeaders);
 
         createFlowsOnSameSession = properties.containsKey("createFlowsOnSameSession") ? Boolean.valueOf(properties.get("createFlowsOnSameSession")) : false;
         log.info("SolaceSparkConnector - createFlowsOnSameSession is set to " + createFlowsOnSameSession);
 
-        batchSize = Integer.parseInt(properties.get("batchSize")) > 0 ? Integer.parseInt(properties.get("batchSize")) : 1;
+        batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
         log.info("SolaceSparkConnector - Batch Size is set to " + batchSize);
 
-        partitions = properties.containsKey("partitions") ? Integer.parseInt(properties.get("partitions")) : 1;
+        partitions = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.PARTITIONS, SolaceSparkStreamingProperties.PARTITIONS_DEFAULT));
         log.info("SolaceSparkConnector - Partitions is set to " + partitions);
         inputPartitions = new SolaceInputPartition[partitions];
 
-        if (properties.get("offsetIndicator") != null && properties.get("offsetIndicator").length() > 0) {
-            this.solaceOffsetIndicator = properties.get("offsetIndicator");
-            log.info("SolaceSparkConnector - offsetIndicator is set to " + this.solaceOffsetIndicator);
-        }
+        this.solaceOffsetIndicator = properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT);
+        log.info("SolaceSparkConnector - offsetIndicator is set to " + this.solaceOffsetIndicator);
 
         solaceConnectionManager = new SolaceConnectionManager();
-        log.info("SolaceSparkConnector - Solace Connection Details Host : " + properties.get("host") + ", VPN : " + properties.get("vpn") + ", Username : " + properties.get("username"));
-        SolaceBroker solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"), properties);
+        log.info("SolaceSparkConnector - Solace Connection Details Host : " + properties.get(SolaceSparkStreamingProperties.HOST) + ", VPN : " + properties.get(SolaceSparkStreamingProperties.VPN) + ", Username : " + properties.get(SolaceSparkStreamingProperties.USERNAME));
+        SolaceBroker solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
         solaceConnectionManager.addConnection(solaceBroker);
         for (int i = 0; i < partitions; i++) {
             if(!createFlowsOnSameSession && i > 0) {
-                solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("queue"), properties);
+                solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
                 solaceConnectionManager.addConnection(solaceBroker);
             }
             EventListener eventListener = new EventListener((i + 1));

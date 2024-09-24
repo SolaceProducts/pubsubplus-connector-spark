@@ -5,6 +5,7 @@ import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
 import com.solace.semp.v2.monitor.client.model.MsgVpnQueueTxFlowsResponse;
 import com.solacecoe.connectors.spark.base.SempV2Api;
 import com.solacecoe.connectors.spark.base.SolaceSession;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.api.java.function.VoidFunction2;
 import org.apache.spark.sql.Dataset;
@@ -104,12 +105,12 @@ public class SolaceSparkStreamingIT {
 //                .master("local[*]")
 //                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
-                .option("host", solaceContainer.getOrigin(Service.SMF))
-                .option("vpn", solaceContainer.getVpn())
-                .option("username", solaceContainer.getUsername())
-                .option("password", solaceContainer.getPassword())
-                .option("queue", "Solace/Queue/0")
-                .option("batchSize", "10")
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -156,17 +157,17 @@ public class SolaceSparkStreamingIT {
 //                .master("local[*]")
 //                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
-                .option("host", solaceContainer.getOrigin(Service.SMF))
-                .option("vpn", solaceContainer.getVpn())
-                .option("username", solaceContainer.getUsername())
-                .option("password", solaceContainer.getPassword())
-                .option("connectRetries", 1)
-                .option("reconnectRetries", 1)
-                .option("connectRetriesPerHost", 1)
-                .option("reconnectRetryWaitInMillis", 100)
-                .option("solace.apiProperties.sub_ack_window_threshold", 75)
-                .option("queue", "Solace/Queue/0")
-                .option("batchSize", "1")
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -217,14 +218,14 @@ public class SolaceSparkStreamingIT {
 //                .master("local[*]")
 //                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
-                .option("host", solaceContainer.getOrigin(Service.SMF))
-                .option("vpn", solaceContainer.getVpn())
-                .option("username", solaceContainer.getUsername())
-                .option("password", solaceContainer.getPassword())
-                .option("queue", "Solace/Queue/0")
-                .option("batchSize", "10")
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
-                .option("partitions", 2)
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, 2)
                 .option("createFlowsOnSameSession", true)
                 .format("solace");
 
@@ -279,14 +280,14 @@ public class SolaceSparkStreamingIT {
 //                .master("local[*]")
 //                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
-                .option("host", solaceContainer.getOrigin(Service.SMF))
-                .option("vpn", solaceContainer.getVpn())
-                .option("username", solaceContainer.getUsername())
-                .option("password", solaceContainer.getPassword())
-                .option("queue", "Solace/Queue/0")
-                .option("batchSize", "10")
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
-                .option("partitions", 2)
+                .option(SolaceSparkStreamingProperties.PARTITIONS, 2)
                 .format("solace");
         final long[] count = {0};
         final boolean[] runProcess = {true};
