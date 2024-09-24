@@ -53,4 +53,6 @@ Steps to deploy the connector
     val streamName = "solace-spark-connector-sample-test" // this should be equal to stream name variable provided as above
     val df = spark.read.format("parquet").load(s"/solace_spark_connector_parquet_output/$streamName/") // this should be same as value of "path" property configured in write stream as above
     display(df)
+    // Ex: Parse payload as string
+    df.select($"payload".cast("STRING"))
 ----
