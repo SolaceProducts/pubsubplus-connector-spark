@@ -1,0 +1,7 @@
+= Support
+:doctype: book
+
+
+Support is offered best effort via our https://solace.community/[Solace Developer Community].
+
+Premium support options are available, please https://solace.com/contact-us[Contact Solace].

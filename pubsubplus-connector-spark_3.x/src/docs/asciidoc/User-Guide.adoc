@@ -1,0 +1,92 @@
+= {connector-name}: User Guide
+:doctype: book
+:toc: preamble
+:toclevels: 3
+:icons: font
+:imagesdir: {docdir}/../images
+:version: {revnumber}
+// Import common attributes
+// include::{docdir}/../snippets/attributes/common.adoc[]
+// Custom attributes
+:overview: <product-overview>
+
+// Github-Specific Settings
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+[preface]
+== Preface
+
+{overview}
+
+== Getting Started
+
+This guide assumes you are familiar with Spark set up and Spark Structured Streaming concepts. In the following sections we will show how to set up Solace Spark Connector to stream data from Solace to Spark.
+
+=== Prerequisites
+
+* https://solace.com/products/event-broker/[Solace PubSub+ Event Broker]
+* Apache Spark 3.5.1, Scala 2.12
+
+=== Quick Start common steps
+
+include::{docdir}/../sections/general/quick-start/quick-start.adoc[leveloffset=+2]
+
+NOTE: Above sample code used parquet as example data source. You can configure your required data source to write data.
+
+=== Databricks Considerations
+
+In case if you are using Shared compute cluster, make sure your cluster has https://docs.databricks.com/en/data-governance/unity-catalog/manage-privileges/allowlist.html[appropriate permissions] to install connector from maven central and access the jars. Please contact your Databricks administrator for required permissions.
+
+=== Checkpointing & Acknowledgement
+
+This connector relies on Spark Checkpointing mechanism to resume from last successful message. Connector acknowledges & writes processed message id's to spark checkpoint whenever Spark sends commit signal to connector. Commit signal is an indication by Spark that data has been processed successfully.
+
+=== Checkpoint Handling
+
+In some cases, there might be checkpoint failures as spark may fail to write to checkpoint during instance crash or unavailability or other reasons. Though the connector will handle duplicates in most cases, we recommend to keep your downstream systems idempotent.
+
+=== Solace Spark Streaming Schema Structure
+
+Solace Spark Connector transforms the incoming message to Spark row with below schema definition.
+
+[cols="2m,2m", options="header"]
+|===
+| Column Name
+| Column Type
+
+| Id
+| String
+
+| Payload
+| Binary
+
+| PartitionKey
+| String
+
+| Topic
+| String
+
+| TimeStamp
+| Timestamp
+
+| Headers
+| Map<string, binary>
+|===
+
+== Configuration
+
+include::{docdir}/../sections/general/configuration/spark-config.adoc[leveloffset=+2]
+
+NOTE: This connector is tested on Databricks environment with Cluster Version 14.3 LTS (includes Apache Spark 3.5.0, Scala 2.12)
+
+== License
+
+This project is licensed under the Solace Community License, Version 1.0. - See the `LICENSE` file for details.
+
+include::{docdir}/../sections/general/support.adoc[leveloffset=+2]
