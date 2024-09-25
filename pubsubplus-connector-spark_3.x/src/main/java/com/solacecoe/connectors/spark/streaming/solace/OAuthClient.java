@@ -56,7 +56,7 @@ public class OAuthClient {
         if(clientCertificatePath != null) {
             readClientCertificate(timeout, clientCertificatePath, trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate);
         } else {
-            initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate);
+            initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate, null);
         }
     }
 
@@ -64,9 +64,13 @@ public class OAuthClient {
         try {
             File clientCert = new File(clientCertificatePath);
             FileOutputStream fileOutputStream = new FileOutputStream(trustStoreFilePath);
-            createKeyStore(Files.readAllBytes(clientCert.toPath())).store(fileOutputStream, trustStoreFilePassword.toCharArray());
-
-            initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate);
+            KeyStore keyStore = createKeyStore(Files.readAllBytes(clientCert.toPath()));
+            if(keyStore == null) {
+                log.error("SolaceSparkConnector - Unable to create keystore from file {}", clientCertificatePath);
+                throw new RuntimeException("Unable to create keystore from file " + clientCertificatePath);
+            }
+            keyStore.store(fileOutputStream, trustStoreFilePassword.toCharArray());
+            initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate, keyStore);
         } catch (IOException | CertificateException | KeyStoreException | NoSuchAlgorithmException e) {
             log.error("SolaceSparkConnector - Failed to read client certificate", e);
             throw new RuntimeException(e);
@@ -88,7 +92,7 @@ public class OAuthClient {
         }
     }
 
-    private void initHttpRequest(int timeout, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, boolean validateSSLCertificate) {
+    private void initHttpRequest(int timeout, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, boolean validateSSLCertificate, KeyStore keyStore) {
         // Make the token request
         TokenRequest request = new TokenRequest(tokenEndpoint, clientAuth, clientGrant, scope);
         try {
@@ -99,13 +103,15 @@ public class OAuthClient {
                 File trustStoreFile = new File(trustStoreFilePath);
                 char[] trustStorePassword = trustStoreFilePassword != null ? new char[trustStoreFilePassword.length()] : null; // assuming no trust store password
 
-                // Load the trust store, the default type is "pkcs12", the alternative is "jks"
-                KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
-                trustStore.load(new FileInputStream(trustStoreFile), trustStorePassword);
+                if(keyStore == null) {
+                    // Load the trust store, the default type is "pkcs12", the alternative is "jks"
+                    keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+                    keyStore.load(new FileInputStream(trustStoreFile), trustStorePassword);
+                }
 
                 sslSocketFactory = TLSUtils.createSSLSocketFactory(
-                        trustStore,
-                        TLSVersion.valueOf(tlsVersion));
+                        keyStore,
+                        getTLSVersion(tlsVersion));
                 httpRequest.setSSLSocketFactory(sslSocketFactory);
             } else {
                 SSLContext sslContext = SSLContext.getInstance(tlsVersion);
@@ -133,6 +139,23 @@ public class OAuthClient {
                  UnrecoverableKeyException e) {
             log.error("SolaceSparkConnector - Exception occurred when building access token request", e);
             throw new RuntimeException(e);
+        }
+    }
+
+    private TLSVersion getTLSVersion(String tlsVersion) {
+        switch (tlsVersion) {
+            case "TLS":
+                return TLSVersion.TLS;
+            case "TLSv1":
+                return TLSVersion.TLS_1;
+            case "TLSv1.1":
+                return TLSVersion.TLS_1_1;
+            case "TLSv1.2":
+                return TLSVersion.TLS_1_2;
+            case "TLSv1.3":
+                return TLSVersion.TLS_1_3;
+            default:
+                throw new RuntimeException("SolaceSparkConnector - Invalid TLS version " + tlsVersion);
         }
     }
 
