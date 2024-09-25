@@ -11,14 +11,9 @@ import java.util.Properties;
 import java.util.concurrent.*;
 
 public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
-    private static Logger log = LoggerFactory.getLogger(SolaceBroker.class);
-    private JCSMPSession session;
-    private final String host;
-    private final String vpn;
-    private final String username;
-    private final String password;
+    private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
+    private final JCSMPSession session;
     private final String queue;
-    private int refreshTimeout;
     private OAuthClient oAuthClient;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
@@ -26,10 +21,6 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
     public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
-        this.host = host;
-        this.vpn = vpn;
-        this.username = username;
-        this.password = password;
         this.queue = queue;
 
         try {
@@ -47,17 +38,24 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
                 jcsmpProperties = JCSMPProperties.fromProperties(props);
             }
 
-            jcsmpProperties.setProperty(JCSMPProperties.HOST, this.host);            // host:port
-            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
+            jcsmpProperties.setProperty(JCSMPProperties.HOST, host);            // host:port
+            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, vpn);    // message-vpn
             if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
-                refreshTimeout = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT));
+                int fetchTimeout = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT));
+                boolean validateSSLCertificate = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, "false"));
+                String trustStoreFilePath = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_FILE, null);
+                String trustStoreFilePassword = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD, null);
+                String tlsVersion = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TLS_VERSION, SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TLS_VERSION_DEFAULT);
+
                 oAuthClient = new OAuthClient(properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL), properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID),
                         properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET));
-                jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
+                oAuthClient.buildRequest(fetchTimeout, properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE, null), trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate);
+
+                jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken().getValue());
                 scheduleOAuthRefresh(Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT)));
             } else {
-                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
-                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
+                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, username); // client-username
+                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, password); // client-password
             }
 
             // Channel Properties
@@ -151,7 +149,7 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
     @Override
     public boolean preReconnect() throws JCSMPException {
         if(session != null && oAuthClient != null) {
-            session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
+            session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken().getValue());
         }
 
         return true;
@@ -164,14 +162,14 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
 
     private void scheduleOAuthRefresh(int refreshInterval) {
         scheduledExecutorService = Executors.newScheduledThreadPool(1);
-        scheduledExecutorService.schedule(() -> {
+        scheduledExecutorService.scheduleAtFixedRate(() -> {
             if(session != null && oAuthClient != null) {
                 try {
-                    session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken(refreshTimeout).getValue());
+                    session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken().getValue());
                 } catch (JCSMPException e) {
                     throw new RuntimeException(e);
                 }
             }
-        }, refreshInterval, TimeUnit.SECONDS);
+        }, 0, refreshInterval, TimeUnit.SECONDS);
     }
 }

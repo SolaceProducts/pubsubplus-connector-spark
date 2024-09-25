@@ -23,11 +23,17 @@ public class SolaceSparkStreamingProperties {
     public static String SOLACE_CONNECT_RETRIES_PER_HOST = "connectRetriesPerHost";
     public static String SOLACE_RECONNECT_RETRIES_WAIT_TIME = "reconnectRetryWaitInMillis";
     public static String SOLACE_API_PROPERTIES_PREFIX = "solace.apiProperties.";
-    public static String OAUTH_CLIENT_AUTHSERVER_URL = "oauth.client.auth-server-url";
-    public static String OAUTH_CLIENT_CLIENT_ID = "oauth.client.client-id";
-    public static String OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET = "oauth.client.credentials.client-secret";
-    public static String OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL = "oauth.client.token.refresh.interval";
+    public static String OAUTH_CLIENT_AUTHSERVER_URL = "solace.oauth.client.auth-server-url";
+    public static String OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE = "solace.oauth.client.auth-server.client-certificate.file";
+    public static String OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_FILE = "solace.oauth.client.auth-server.truststore.file";
+    public static String OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD = "solace.oauth.client.auth-server.truststore.password";
+    public static String OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE = "solace.oauth.client.auth-server.ssl.validate-certificate";
+    public static String OAUTH_CLIENT_AUTHSERVER_TLS_VERSION = "solace.oauth.client.auth-server.tls.version";
+    public static String OAUTH_CLIENT_AUTHSERVER_TLS_VERSION_DEFAULT = "TLSv1.2";
+    public static String OAUTH_CLIENT_CLIENT_ID = "solace.oauth.client.client-id";
+    public static String OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET = "solace.oauth.client.credentials.client-secret";
+    public static String OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL = "solace.oauth.client.token.refresh.interval";
     public static String OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT = "60";
-    public static String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT = "oauth.client.token.fetch.timeout";
+    public static String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT = "solace.oauth.client.token.fetch.timeout";
     public static String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT = "10";
 }

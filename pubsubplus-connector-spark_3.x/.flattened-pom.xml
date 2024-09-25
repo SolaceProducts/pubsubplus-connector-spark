@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.solacecoe.connectors</groupId>
   <artifactId>pubsubplus-connector-spark</artifactId>
-  <version>2.0.2</version>
+  <version>2.0.3-SNAPSHOT</version>
   <name>pubsubplus-connector-spark</name>
   <description>Solace PubSub+ Connector for Spark streams data from Solace PubSub+ broker to Spark Data Sources.</description>
   <url>https://solace.com/pubsubplus-connector-spark</url>
@@ -37,10 +37,10 @@
     <sha1></sha1>
     <maven.compiler.target>8</maven.compiler.target>
     <maven.compiler.source>8</maven.compiler.source>
-    <changelist></changelist>
+    <changelist>-SNAPSHOT</changelist>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <generated-filtered-resource.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/generated-filtered-resources</generated-filtered-resource.directory>
-    <revision>2.0.2</revision>
+    <generated-filtered-resource.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/spark-connector-v2/pubsubplus-connector-spark_3.x/target/generated-filtered-resources</generated-filtered-resource.directory>
+    <revision>2.0.3</revision>
     <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
   </properties>
   <dependencyManagement>
@@ -87,6 +87,12 @@
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
       <version>2.23.1</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.nimbusds</groupId>
+      <artifactId>oauth2-oidc-sdk</artifactId>
+      <version>11.19.1</version>
       <scope>compile</scope>
     </dependency>
   </dependencies>
