@@ -27,6 +27,8 @@ public class SolaceSparkStreamingProperties {
     public static String OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE = "solace.oauth.client.auth-server.client-certificate.file";
     public static String OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_FILE = "solace.oauth.client.auth-server.truststore.file";
     public static String OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD = "solace.oauth.client.auth-server.truststore.password";
+    public static String OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_TYPE = "solace.oauth.client.auth-server.truststore.type";
+    public static String OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_TYPE_DEFAULT = "JKS";
     public static String OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE = "solace.oauth.client.auth-server.ssl.validate-certificate";
     public static String OAUTH_CLIENT_AUTHSERVER_TLS_VERSION = "solace.oauth.client.auth-server.tls.version";
     public static String OAUTH_CLIENT_AUTHSERVER_TLS_VERSION_DEFAULT = "TLSv1.2";

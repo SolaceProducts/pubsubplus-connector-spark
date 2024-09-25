@@ -55,7 +55,7 @@ In some cases, there might be checkpoint failures as spark may fail to write to 
 
 Solace Spark Connector supports Basic and OAuth authentication to Solace. Client Credentials flow is supported when connecting using OAuth.
 
-Using below options to enable OAuth authentication. For property description please refer to <<Configuration>> section.
+Use below options to enable OAuth authentication. For property description please refer to <<Configuration>> section.
 
 [source,scala]
 ----
@@ -68,7 +68,7 @@ Using below options to enable OAuth authentication. For property description ple
     .option("solace.oauth.client.auth-server.client-certificate.file", "")
     .option("solace.oauth.client.auth-server.truststore.file", "")
     .option("solace.oauth.client.auth-server.truststore.password", "")
-    .option("solace.oauth.client.auth-server.ssl.validateCertificate", true)
+    .option("solace.oauth.client.auth-server.ssl.validate-certificate", false)
     .option("solace.oauth.client.token.refresh.interval", 110)
 ----
 

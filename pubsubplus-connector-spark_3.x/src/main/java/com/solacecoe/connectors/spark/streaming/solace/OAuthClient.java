@@ -52,15 +52,15 @@ public class OAuthClient {
         }
     }
 
-    public void buildRequest(int timeout, String clientCertificatePath, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, boolean validateSSLCertificate) {
+    public void buildRequest(int timeout, String clientCertificatePath, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, String trustStoreType, boolean validateSSLCertificate) {
         if(clientCertificatePath != null) {
-            readClientCertificate(timeout, clientCertificatePath, trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate);
+            readClientCertificate(timeout, clientCertificatePath, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate);
         } else {
-            initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate, null);
+            initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate, null);
         }
     }
 
-    private void readClientCertificate(int timeout, String clientCertificatePath, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, boolean validateSSLCertificate) {
+    private void readClientCertificate(int timeout, String clientCertificatePath, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, String trustStoreType, boolean validateSSLCertificate) {
         try {
             File clientCert = new File(clientCertificatePath);
             FileOutputStream fileOutputStream = new FileOutputStream(trustStoreFilePath);
@@ -70,7 +70,7 @@ public class OAuthClient {
                 throw new RuntimeException("Unable to create keystore from file " + clientCertificatePath);
             }
             keyStore.store(fileOutputStream, trustStoreFilePassword.toCharArray());
-            initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, validateSSLCertificate, keyStore);
+            initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate, keyStore);
         } catch (IOException | CertificateException | KeyStoreException | NoSuchAlgorithmException e) {
             log.error("SolaceSparkConnector - Failed to read client certificate", e);
             throw new RuntimeException(e);
@@ -92,7 +92,7 @@ public class OAuthClient {
         }
     }
 
-    private void initHttpRequest(int timeout, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, boolean validateSSLCertificate, KeyStore keyStore) {
+    private void initHttpRequest(int timeout, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, String truststoreType, boolean validateSSLCertificate, KeyStore keyStore) {
         // Make the token request
         TokenRequest request = new TokenRequest(tokenEndpoint, clientAuth, clientGrant, scope);
         try {
@@ -105,7 +105,7 @@ public class OAuthClient {
 
                 if(keyStore == null) {
                     // Load the trust store, the default type is "pkcs12", the alternative is "jks"
-                    keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+                    keyStore = KeyStore.getInstance(truststoreType);
                     keyStore.load(new FileInputStream(trustStoreFile), trustStorePassword);
                 }
 
