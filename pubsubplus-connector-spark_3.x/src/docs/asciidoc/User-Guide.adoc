@@ -51,6 +51,27 @@ This connector relies on Spark Checkpointing mechanism to resume from last succe
 
 In some cases, there might be checkpoint failures as spark may fail to write to checkpoint during instance crash or unavailability or other reasons. Though the connector will handle duplicates in most cases, we recommend to keep your downstream systems idempotent.
 
+=== User Authentication
+
+Solace Spark Connector supports Basic and OAuth authentication to Solace. Client Credentials flow is supported when connecting using OAuth.
+
+Using below options to enable OAuth authentication. For property description please refer to <<Configuration>> section.
+
+[source,scala]
+----
+    spark.readStream.format("solace").option("host", "")
+    .option("vpn", "default")
+    .option("solace.apiProperties.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_OAUTH2")
+    .option("solace.oauth.client.auth-server-url", "")
+    .option("solace.oauth.client.client-id", "")
+    .option("solace.oauth.client.credentials.client-secret", "")
+    .option("solace.oauth.client.auth-server.client-certificate.file", "")
+    .option("solace.oauth.client.auth-server.truststore.file", "")
+    .option("solace.oauth.client.auth-server.truststore.password", "")
+    .option("solace.oauth.client.auth-server.ssl.validateCertificate", true)
+    .option("solace.oauth.client.token.refresh.interval", 110)
+----
+
 === Solace Spark Streaming Schema Structure
 
 Solace Spark Connector transforms the incoming message to Spark row with below schema definition.

@@ -1,23 +1,59 @@
 :doctype: book
+:toc: preamble
+:toclevels: 3
+:icons: font
+
 
 This quick start shows how to deploy connector in Databricks Cluster.
 
-Solace Spark Connector is available in maven central with below coordinates.
-
-[source,xml,subs="+attributes"]
-----
-<dependency>
-    <groupId>com.solacecoe.connectors</groupId>
-    <artifactId>pubsubplus-connector-spark</artifactId>
-    <version>{version}</version>
-</dependency>
-----
+// Solace Spark Connector is available in maven central with below coordinates.
+//
+// [source,xml,subs="+attributes"]
+// ----
+// <dependency>
+//     <groupId>com.solacecoe.connectors</groupId>
+//     <artifactId>pubsubplus-connector-spark</artifactId>
+//     <version>{version}</version>
+// </dependency>
+// ----
 
 Steps to deploy the connector
 
 . Create a Databricks Cluster with Spark Version 3.5.1 and Scala 2.12
-. Once the cluster is started choose libraries and select maven as connector source. Enter above maven coordinates to download connector from maven central.
-. Create new scala notebook and copy the code snippets below.
+. Once the cluster is started choose libraries and install the solace spark connector jar. Install below dependencies from maven central which are required by the connector
++
+[source,xml]
+----
+    <dependency>
+        <groupId>com.nimbusds</groupId>
+        <artifactId>oauth2-oidc-sdk</artifactId>
+        <version>11.19.1</version>
+    </dependency>
+----
++
+[source,xml]
+----
+    <dependency>
+        <groupId>com.solacesystems</groupId>
+        <artifactId>sol-jcsmp</artifactId>
+        <version>10.24.1</version>
+    </dependency>
+----
+
++
+[source,xml]
+----
+    <dependency>
+        <groupId>log4j</groupId>
+        <artifactId>log4j</artifactId>
+        <version>1.2.17</version>
+    </dependency>
+----
++
+NOTE: Before installing latest version of connector make sure earlier versions of solace spark connector are completely deleted from cluster. This is to ensure there are no version conflicts to start the connector.
+
+. Create new scala notebook and copy below code snippets.
+
 . First, let's create a consumer to Solace to read messages and write to parquet file. Update configuration options as per your environment.
 +
 [source,scala]
@@ -45,6 +81,8 @@ Steps to deploy the connector
     .option("checkpointLocation", s"/spark_checkpoints/solace_spark_connector_checkpoint/$streamName/")
     .option("path", s"/solace_spark_connector_parquet_output/$streamName/")
     .start()
+
+    query.awaitTermination()
 ----
 . Finally, let's read data from the parquet file from the location configured above
 +

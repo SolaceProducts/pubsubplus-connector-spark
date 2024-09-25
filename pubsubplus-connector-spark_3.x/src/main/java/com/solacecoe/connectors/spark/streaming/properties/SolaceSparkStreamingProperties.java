@@ -35,5 +35,5 @@ public class SolaceSparkStreamingProperties {
     public static String OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL = "solace.oauth.client.token.refresh.interval";
     public static String OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT = "60";
     public static String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT = "solace.oauth.client.token.fetch.timeout";
-    public static String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT = "10";
+    public static String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT = "100";
 }

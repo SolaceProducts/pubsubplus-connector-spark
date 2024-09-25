@@ -68,6 +68,74 @@ solace.apiProperties.reapply_subscriptions=false
 solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 ----
 
+| solace.oauth.client.auth-server-url
+| string
+| any
+| empty
+| Full representation of token endpoint to fetch access token.
+
+| solace.oauth.client.client-id
+| string
+| any
+| empty
+| OAuth Client ID
+
+| solace.oauth.client.credentials.client-secret
+| string
+| any
+| empty
+| OAuth Client Secret
+
+| solace.oauth.client.auth-server.client-certificate.file
+| string
+| any
+| empty
+| Absolute path to client certificate file for TLS connections. Make sure file path is accessible by the connector.
+
+| solace.oauth.client.auth-server.truststore.file
+| string
+| any
+| empty
+| Absolute path to trust store file for TLS connections. This property works in two ways
+
+1. If JKS file is available in cluster configure absolute path so that connector will load the JKS file.
+
+2. If solace.oauth.client.auth-server.client-certificate.file is configured simply provide a path(should include file name as well) to create a JKS file by the connector.
+
+| solace.oauth.client.auth-server.truststore.password
+| string
+| any
+| empty
+| Password for JKS file. This property works in two ways
+
+1. If JKS file is available in cluster provide the password to JKS file.
+
+2. If solace.oauth.client.auth-server.client-certificate.file is configured simply provide a password which will be used to protect the JKS file create in above property.
+
+| solace.oauth.client.auth-server.ssl.validate-certificate
+| boolean
+| any
+| false
+| Boolean value to enable or disable ssl certificate validation. Set this true in production environment.
+
+| solace.oauth.client.auth-server.tls.version
+| string
+| SSL, TLS, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3
+| TLSv1.2
+| Indicate the type of SSL connection.
+
+| solace.oauth.client.token.refresh.interval
+| integer
+| positive integer value
+| 60
+| Interval(Seconds) to fetch access token by the connector to avoid disconnection on token expiry. This value should be less than your token expiry time.
+
+| solace.oauth.client.token.fetch.timeout
+| integer
+| positive integer value
+| 100
+| Connection timeout(Milliseconds) for access token request.
+
 | queue
 | string
 | any
@@ -123,7 +191,5 @@ Note: Default value uses replication group message ID property as offset indicat
 | true or false
 | false
 | If enabled consumer flows are enabled on same session. The number of consumer flows is equal to number of partitions configured. This is helpful when users want to optimize on number of connections created from Spark. By default, the connector creates a new connection for each consumer.
-
-
 
 |===
