@@ -1,0 +1,58 @@
+:doctype: book
+
+This quick start shows how to deploy connector in Databricks Cluster.
+
+Solace Spark Connector is available in maven central with below coordinates.
+
+[source,xml,subs="+attributes"]
+----
+<dependency>
+    <groupId>com.solacecoe.connectors</groupId>
+    <artifactId>pubsubplus-connector-spark</artifactId>
+    <version>{version}</version>
+</dependency>
+----
+
+Steps to deploy the connector
+
+. Create a Databricks Cluster with Spark Version 3.5.1 and Scala 2.12
+. Once the cluster is started choose libraries and select maven as connector source. Enter above maven coordinates to download connector from maven central.
+. Create new scala notebook and copy the code snippets below.
+. First, let's create a consumer to Solace to read messages and write to parquet file. Update configuration options as per your environment.
++
+[source,scala]
+----
+    val spark = SparkSession.builder.appName("SolaceSparkStreaming").getOrCreate()
+    val streamName = "solace-spark-connector-sample-test"
+    val df = spark.readStream.format("solace")
+        .option("host", "tcp://localhost:55555")
+        .option("vpn", "default")
+        .option("username", "default")
+        .option("password", "default")
+        .option("queue", "<queue-name>")
+        .option("connectRetries", 2)
+        .option("reconnectRetries", 2)
+        .option("batchSize", 100)
+        .option("includeHeaders", true)
+        .option("partitions", 1)
+        .load()
+
+    // write to parquet file
+    val query = df.writeStream
+    .format("parquet")
+    .outputMode("append")
+    .queryName(streamName)
+    .option("checkpointLocation", s"/spark_checkpoints/solace_spark_connector_checkpoint/$streamName/")
+    .option("path", s"/solace_spark_connector_parquet_output/$streamName/")
+    .start()
+----
+. Finally, let's read data from the parquet file from the location configured above
++
+[source,scala]
+----
+    val streamName = "solace-spark-connector-sample-test" // this should be equal to stream name variable provided as above
+    val df = spark.read.format("parquet").load(s"/solace_spark_connector_parquet_output/$streamName/") // this should be same as value of "path" property configured in write stream as above
+    display(df)
+    // Ex: Parse payload as string
+    df.select($"payload".cast("STRING"))
+----
