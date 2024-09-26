@@ -1,0 +1,26 @@
+= {connector-name}
+:icons: font
+:imagesdir: {docdir}/../../images
+// :connector-framework-docs-dir: {docdir}/../../../../target/shared-remote-resources/connector-framework-docs-resources
+// Import common attributes
+// include::{docdir}/../../snippets/attributes/common.adoc[]
+
+// Github-Specific Settings
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+include::{docdir}/../../sections/general/readme-content.adoc[leveloffset=+1]
+
+== Java dependencies in the `/libs` folder
+
+[preface]
+== Preface
+
+// include::{connector-framework-docs-dir}/sections/general/etc/libs-directory/intro.adoc[leveloffset=+1]
+//
+// include::{connector-framework-docs-dir}/sections/general/etc/libs-directory/micrometer.adoc[leveloffset=+1]
