@@ -1,11 +1,13 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.*;
@@ -14,15 +16,22 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
     private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
     private final JCSMPSession session;
     private final String queue;
+    private final String lvqName;
+    private final String lvqTopic;
     private OAuthClient oAuthClient;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
+    private final CopyOnWriteArrayList<LVQEventListener> lvqEventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
     private ScheduledExecutorService scheduledExecutorService;
+    private XMLMessageProducer producer;
+
     public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
+        lvqEventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
         this.queue = queue;
-
+        this.lvqName = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME);
+        this.lvqTopic = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC);
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             // get api properties
@@ -77,6 +86,7 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
 //            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES, cp);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
+            initProducer();
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception connecting to Solace ", e);
             throw new RuntimeException(e);
@@ -116,16 +126,100 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
         // log.info("Listening for messages: "+ this.queueName);
     }
 
-    public void close() {
+    public void addLVQReceiver(LVQEventListener lvqEventListener) {
+        lvqEventListeners.add(lvqEventListener);
+        setLVQReceiver(lvqEventListener);
+    }
+
+    private void setLVQReceiver(LVQEventListener eventListener) {
+        try {
+            ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
+            Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.lvqName);
+            flow_prop.setEndpoint(listenQueue);
+            flow_prop.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
+
+            EndpointProperties endpoint_props = new EndpointProperties();
+            endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            endpoint_props.setPermission(EndpointProperties.PERMISSION_CONSUME);
+            endpoint_props.setQuota(0);
+            this.session.provision(listenQueue, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            try {
+                this.session.addSubscription(listenQueue, JCSMPFactory.onlyInstance().createTopic(this.lvqTopic), JCSMPSession.WAIT_FOR_CONFIRM);
+            } catch (JCSMPException e) {
+                log.warn("SolaceSparkConnector - Subscription already exists on LVQ. Ignoring error");
+            }
+            FlowReceiver cons = this.session.createFlow(eventListener,
+                    flow_prop, endpoint_props);
+
+            cons.start();
+            flowReceivers.add(cons);
+            log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {}", this.queue);
+        } catch (Exception e) {
+            log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
+            close();
+        }
+        // log.info("Listening for messages: "+ this.queueName);
+    }
+
+    public void initProducer() {
+        try {
+            this.producer = this.session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+                    log.info("SolaceSparkConnector - Message published successfully to Solace");
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+                    log.error("SolaceSparkConnector - Exception when publishing message to Solace", e);
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error creating publisher to Solace", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void publishMessage(String topic, Object msg) {
+        BytesXMLMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
+        xmlMessage.writeBytes(msg.toString().getBytes(StandardCharsets.UTF_8));
+        xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            this.producer.send(xmlMessage, destination);
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void closeProducer() {
+        if(this.producer != null && !this.producer.isClosed()) {
+            this.producer.close();
+            log.info("SolaceSparkConnector - Solace Producer closed");
+        }
+    }
+
+    public void closeReceivers() {
+        log.info("SolaceSparkConnector - Closing {} flow receivers", flowReceivers.size());
         flowReceivers.forEach(flowReceiver -> {
             if(flowReceiver != null && !flowReceiver.isClosed()) {
                 String endpoint = flowReceiver.getEndpoint().getName();
                 flowReceiver.close();
-                log.info("SolaceSparkConnector - Closed flow receiver to endpoint " + endpoint);
+                log.info("SolaceSparkConnector - Closed flow receiver to endpoint {}", endpoint);
             }
         });
 
+        flowReceivers.clear();
+        eventListeners.clear();
+        lvqEventListeners.clear();
+    }
 
+    public void close() {
+        closeReceivers();
+        closeProducer();
+        log.info("SolaceSparkConnector - Closing Solace Session");
         if(session != null && !session.isClosed()) {
             session.closeSession();
             log.info("SolaceSparkConnector - Closed Solace session");
@@ -138,8 +232,18 @@ public class SolaceBroker implements Serializable, JCSMPReconnectEventHandler {
     }
 
     public ConcurrentLinkedQueue<SolaceMessage> getMessages(int index) {
-        log.info("Requesting messages from event listener " + index + ", total messages available :: " + this.eventListeners.get(index).getMessages().size());
+        log.info("Requesting messages from event listener {}, total messages available :: {}", index, this.eventListeners.get(index).getMessages().size());
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
+    }
+
+    public SolaceSparkOffset getLVQMessage() {
+        if(!lvqEventListeners.isEmpty() && this.lvqEventListeners.get(0).getSolaceSparkOffsets().length > 0) {
+            log.info("Requesting messages from lvq listener, total messages available :: {}", this.lvqEventListeners.get(0).getSolaceSparkOffsets().length);
+            return this.lvqEventListeners.get(0).getSolaceSparkOffsets()[0];
+        }
+
+        return null;
+
     }
 
     @Override

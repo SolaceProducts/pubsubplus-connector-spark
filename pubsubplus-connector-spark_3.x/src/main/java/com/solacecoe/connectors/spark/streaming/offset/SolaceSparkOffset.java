@@ -1,11 +1,11 @@
-package com.solacecoe.connectors.spark.streaming;
+package com.solacecoe.connectors.spark.streaming.offset;
 
 import org.apache.spark.sql.connector.read.streaming.Offset;
 
-public class BasicOffset extends Offset {
+public class SolaceSparkOffset extends Offset {
     private final int offset;
     private String messageIDs = "NA";
-    public BasicOffset(int offset, String messageIDs) {
+    public SolaceSparkOffset(int offset, String messageIDs) {
         this.offset = offset;
         this.messageIDs = messageIDs;
     }
@@ -21,6 +21,10 @@ public class BasicOffset extends Offset {
 
     public String getMessageIDs() {
         return messageIDs;
+    }
+
+    public int getOffset() {
+        return offset;
     }
 
     //    @Override

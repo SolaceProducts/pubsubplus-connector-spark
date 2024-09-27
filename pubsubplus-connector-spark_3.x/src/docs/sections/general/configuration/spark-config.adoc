@@ -142,11 +142,17 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 |
 | Solace Queue name.
 
-| batchSize
+| [[batchSize]]batchSize
 | int
 | any
 | 1
 | Set number of messages to be processed in batch. The connector can stream data in batches to Spark based on configured size.
+
+| checkpoint.type
+| string
+| spark-checkpoint or lvq
+| lvq
+| Alter this property if connector state need to be stored only in spark checkpoint.
 
 | ackLastProcessedMessages
 | boolean
@@ -154,11 +160,35 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | false
 | Set this value to true if connector needs to identify and acknowledge processed messages in last run during restarts. The connector purely depends on checkpoint generated during Spark commit. We recommended enabling this configuration only when your downstream system has processed data in previous run.
 
+|[[lastSuccessfulMessageId]]lastSuccessfulMessageId
+| string
+| any
+|
+| Set this property for alternative checkpoint configuration. Please refer to <<Connector Recovery from Failures>>. This value is considered only during restarts.
+
+| [[lastSuccessfulMessageIdThreshold]]lastSuccessfulMessageIdThreshold
+| int
+| any positive integer
+| <<batchSize, batchSize>>
+| Set this property when batchSize is changed during connector restart. It is recommended to set the value to old batchSize when connector has failed. This value is considered only during restarts.
+
+| solace.lvq.name
+| string
+| any
+| solace.spark.connector.state
+| Preserves processed message id's in Solace LVQ. If set to default make sure user has required permissions to create LVQ on solace. Please refer to <<Checkpoint Strategies>>.
+
+| solace.lvq.topic
+| string
+| any
+| solace/spark/connector/offset
+| Solace topic on which processed message id's are published. This topic should be subscribed by LVQ.
+
 | skipDuplicates
 | boolean
 | true or false
 | false
-| Set this value to true if connector needs check for duplicates before adding to Spark row. This scenario occurs when a task is running late and new task is started. The new task may have duplicate message as messages from earlier are not acknowledged by the time it is start.
+| Set this value to true if connector needs check for duplicates before adding to Spark row. This scenario occurs when a task is running late and new task is started. The new task may have duplicate message as messages from earlier task are not acknowledged by the time it is started.
 
 | offsetIndicator
 | string

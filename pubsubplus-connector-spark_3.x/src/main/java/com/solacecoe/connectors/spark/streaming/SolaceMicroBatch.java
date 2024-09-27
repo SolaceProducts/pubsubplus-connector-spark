@@ -3,11 +3,10 @@ package com.solacecoe.connectors.spark.streaming;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.solacecoe.connectors.spark.SolaceRecord;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
+import com.solacecoe.connectors.spark.streaming.solace.*;
 import com.solacecoe.connectors.spark.streaming.solace.EventListener;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import org.apache.spark.sql.connector.read.InputPartition;
@@ -41,7 +40,10 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     private final boolean skipMessageReprocessingIfTasksAreRunningLate;
     private final boolean createFlowsOnSameSession;
     private final boolean includeHeaders;
-
+    private SolaceBroker lvqConnection;
+    private boolean initialOffset = false;
+    private String lvqTopic;
+    private final String checkpointType;
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
@@ -128,10 +130,21 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
                 solaceConnectionManager.addConnection(solaceBroker);
             }
-            EventListener eventListener = new EventListener((i + 1));
+            EventListener eventListener = new EventListener((i + 1), properties.getOrDefault(SolaceSparkStreamingProperties.LAST_SUCCESSFUL_MESSAGE_ID, null),
+                    Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.LAST_SUCCESSFUL_MESSAGE_ID_THRESHOLD, Integer.toString(batchSize))), solaceOffsetIndicator);
             // Initialize connection to Solace Broker
             solaceBroker.addReceiver(eventListener);
+
             log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition " + i);
+        }
+
+        checkpointType = properties.getOrDefault(SolaceSparkStreamingProperties.CHECKPOINT_TYPE, SolaceSparkStreamingProperties.CHECKPOINT_TYPE_DEFAULT);
+        if(checkpointType.equals("lvq")) {
+            lvqTopic = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC);
+            lvqConnection = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
+            LVQEventListener lvqEventListener = new LVQEventListener();
+            lvqConnection.addLVQReceiver(lvqEventListener);
+            solaceConnectionManager.addLVQConnection(lvqConnection);
         }
 
         this.messages = new ConcurrentHashMap<>();
@@ -143,7 +156,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     public Offset latestOffset() {
         latestOffsetValue+=batchSize;
 //        log.info("SolaceSparkConnector - latestOffset :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
-        return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
+        return new SolaceSparkOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
     }
 
     private boolean shouldAddMessage(String messageID) {
@@ -160,7 +173,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 if(solaceBroker != null) {
                     int listenerIndex = this.createFlowsOnSameSession ? i : 0;
                     ConcurrentLinkedQueue<SolaceMessage> messages = solaceBroker.getMessages(listenerIndex);
-                    log.info("SolaceSparkConnector - Creating new records list. Messages received from Solace " + messages.size());
+                    log.info("SolaceSparkConnector - Creating new records list. Messages received from Solace {}", messages.size());
                     recordList = new CopyOnWriteArrayList<>();
                     for (int j = 0; j < batchSize && j < messages.size(); j++) {
                         SolaceMessage solaceMessage = messages.poll();
@@ -178,9 +191,9 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                                 // based on last successful offset, extract the message ID and see if same message is received, if so ack the message
                                 if (offsetJson != null && offsetJson.has("messageIDs")) {
                                     List<String> messageIDsInLastOffset = Arrays.asList(offsetJson.get("messageIDs").getAsString().split(","));
-                                    log.info("SolaceSparkConnector - Total messages in offset :: " + messageIDsInLastOffset.size());
+                                    log.info("SolaceSparkConnector - Total messages in offset :: {}", messageIDsInLastOffset.size());
                                     if (messageIDsInLastOffset.contains(solaceRecord.getMessageId())) {
-                                        log.info("SolaceSparkConnector - Message found in offset. Acknowledging previously processed message with ID :: " + solaceRecord.getMessageId());
+                                        log.info("SolaceSparkConnector - Message found in offset. Acknowledging previously processed message with ID :: {}", solaceRecord.getMessageId());
                                         bytesXMLMessage.ackMessage();
 
                                         this.messages.remove(solaceRecord.getMessageId());
@@ -245,12 +258,20 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     public Offset latestOffset(Offset startOffset, ReadLimit limit) {
         latestOffsetValue+=batchSize;
 //        log.info("SolaceSparkConnector - latestOffset with params :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
-        return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
+        return new SolaceSparkOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
     }
 
     @Override
     public Offset initialOffset() {
-        return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
+        this.initialOffset = true;
+        if(checkpointType.equals("lvq") && this.lvqConnection != null) {
+            SolaceSparkOffset solaceSparkOffset = this.lvqConnection.getLVQMessage();
+            if (solaceSparkOffset != null) {
+                latestOffsetValue = solaceSparkOffset.getOffset();
+                return new SolaceSparkOffset(solaceSparkOffset.getOffset(), solaceSparkOffset.getMessageIDs());
+            }
+        }
+        return new SolaceSparkOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
     }
 
     @Override
@@ -261,36 +282,43 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             offsetJson = gson;
         }
 
-//        if(gson != null && gson.has("messageIDs")) {
-//            String messageIDs = gson.get("messageIDs").getAsString();
-//            if(messageIDs.length() > 0) {
-//                this.processedMessageIDs.addAll(Arrays.asList(messageIDs.split(",")));
-//            }
-//        }
-        return new BasicOffset(latestOffsetValue, String.join(",",this.messages.keySet().stream().collect(Collectors.toList())));
+        if(!initialOffset && checkpointType.equals("lvq") && this.lvqConnection != null) {
+            SolaceSparkOffset solaceSparkOffset = this.lvqConnection.getLVQMessage();
+            if (solaceSparkOffset != null) {
+                latestOffsetValue = solaceSparkOffset.getOffset();
+                offsetJson = new Gson().fromJson(solaceSparkOffset.json(), JsonObject.class);
+                return new SolaceSparkOffset(solaceSparkOffset.getOffset(), solaceSparkOffset.getMessageIDs());
+            }
+        }
+
+        return new SolaceSparkOffset(latestOffsetValue, String.join(",", new ArrayList<>(this.messages.keySet())));
     }
 
     @Override
     public void commit(Offset end) {
         log.info("SolaceSparkConnector - Commit triggered");
-        BasicOffset basicOffset = (BasicOffset) end;
+        SolaceSparkOffset solaceSparkOffset = (SolaceSparkOffset) end;
 //        log.info("SolaceSparkConnector - Processed message ID's by Spark " + basicOffset.json());
 
-        if(basicOffset != null && basicOffset.getMessageIDs() != null && basicOffset.getMessageIDs().length() > 0) {
-            String[] messageIDs = basicOffset.getMessageIDs().split(",");
+        if(solaceSparkOffset != null && solaceSparkOffset.getMessageIDs() != null && !solaceSparkOffset.getMessageIDs().isEmpty()) {
+            String[] messageIDs = solaceSparkOffset.getMessageIDs().split(",");
             for(String messageID: messageIDs) {
                 if (this.messages.containsKey(messageID)) {
                     this.messages.get(messageID).bytesXMLMessage.ackMessage();
-                    log.info("SolaceSparkConnector - Acknowledged message with ID :: " + messageID);
+                    log.info("SolaceSparkConnector - Acknowledged message with ID :: {}", messageID);
                     this.messages.remove(messageID);
 //                    if (this.processedMessageIDs.contains(messageID)) {
 //                        this.processedMessageIDs.remove(messageID);
 //                    }
                 }
             }
+            if(messageIDs.length > 0 && checkpointType.equals("lvq") && this.lvqConnection != null) {
+                this.lvqConnection.publishMessage(this.lvqTopic, solaceSparkOffset.json());
+            }
         }
 
         isCommitTriggered = true;
+        log.info("SolaceSparkConnector - Commit is true");
     }
 
     @Override

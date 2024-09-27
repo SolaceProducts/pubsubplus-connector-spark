@@ -9,13 +9,19 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class SolaceConnectionManager implements Serializable {
     private static Logger log = LoggerFactory.getLogger(SolaceConnectionManager.class);
     private final CopyOnWriteArrayList<SolaceBroker> brokerConnections;
+    private final CopyOnWriteArrayList<SolaceBroker> lvqConnections;
 
     public SolaceConnectionManager() {
         brokerConnections = new CopyOnWriteArrayList<>();
+        lvqConnections = new CopyOnWriteArrayList<>();
     }
 
     public void addConnection(SolaceBroker solaceBroker) {
         this.brokerConnections.add(solaceBroker);
+    }
+
+    public void addLVQConnection(SolaceBroker solaceBroker) {
+        this.lvqConnections.add(solaceBroker);
     }
 
     public SolaceBroker getConnection(int index) {
@@ -27,6 +33,7 @@ public class SolaceConnectionManager implements Serializable {
     }
 
     public void close() {
-        brokerConnections.stream().forEach(brokerConnections -> brokerConnections.close());
+        brokerConnections.forEach(SolaceBroker::close);
+        lvqConnections.forEach(SolaceBroker::close);
     }
 }

@@ -45,11 +45,29 @@ In case if you are using Shared compute cluster, make sure your cluster has http
 
 === Checkpointing & Acknowledgement
 
-This connector relies on Spark Checkpointing mechanism to resume from last successful message. Connector acknowledges & writes processed message id's to spark checkpoint whenever Spark sends commit signal to connector. Commit signal is an indication by Spark that data has been processed successfully.
+Solace Spark connector relies on Spark Checkpointing mechanism to resume from last successful message. Connector acknowledges & writes processed message id's to spark checkpoint whenever Spark sends commit signal to connector. Commit signal is an indication by Spark that data has been processed successfully.
 
 === Checkpoint Handling
 
 In some cases, there might be checkpoint failures as spark may fail to write to checkpoint during instance crash or unavailability or other reasons. Though the connector will handle duplicates in most cases, we recommend to keep your downstream systems idempotent.
+
+=== Checkpoint Strategies
+
+Solace Spark connector support storing connector state in Solace Last Value Queue along with Spark Checkpoint. This is enabled by default to support fault tolerance scenarios like environment recovery, disaster recovery or spark checkpoint failures. The connector first checks the state in LVQ and in case of any failures in LVQ look up it moves to Spark Checkpointing.
+
+NOTE: Solace Last Value Queue will only store successfully processed message ids.
+
+NOTE: Duplicates cannot be eliminated completely as checkpointing might fail for both Spark and LVQ when there are unavoidable instances.
+
+=== Connector Recovery from Failures
+
+Solace Spark connector can recover from failures using the state present in checkpoint location. Please refer to <<Checkpoint Strategies>>.
+
+As part of recovery strategy, connector provides the ability for the user to override the default checkpoint strategy by configuring <<lastSuccessfulMessageId, lastSuccessfulMessageId>> property with the successfully processed unique identifier in output data stream.
+
+During recovery, the connector will match the incoming message id with configured id and handle duplicate messages.
+
+The connector applies a <<lastSuccessfulMessageIdThreshold, lastSuccessfulMessageIdThreshold>> value to identify the configured id to handle duplicates. The default threshold value is equal to <<batchSize, batchSize>> property. In case if lastSuccessfulMessageId is not available in the given threshold value the connector will continue to process all messages.
 
 === User Authentication
 
