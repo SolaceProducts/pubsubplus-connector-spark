@@ -22,8 +22,6 @@ jobs:
   build_jar:
     name: Build / Test / Analyze
     uses: ./.github/workflows/build-java-binder.yaml
-    secrets:
-      WHITESOURCE_PROJECT_TOKEN: ${{ secrets.WHITESOURCE_PROJECT_TOKEN }}
     with:
       unit_integration_test_reports: "**/target/failsafe-reports/**/TEST*.xml"
       
