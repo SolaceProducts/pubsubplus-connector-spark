@@ -22,5 +22,6 @@ jobs:
       main_branch: "${{ github.event.inputs.release_branch}}"
       push_external: ${{ github.event.inputs.release_central == 'true'}}
       release_version: "${{ github.event.inputs.release_version}}"
+      whitesource_product_name: 'techCoE-micro-integrations'
     secrets:
       COMMIT_KEY: ${{ secrets.COMMIT_KEY }}
