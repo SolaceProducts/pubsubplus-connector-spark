@@ -63,6 +63,17 @@ jobs:
           java-version: 17
           cache: 'maven'
 
+      - name: Release Version - Prepare
+        run: >-
+          mvn -B -U validate
+          versions:set-property
+          -Dproperty=revision
+          -DnewVersion="${{ inputs.release_version }}" &&
+          mvn validate
+          versions:set-property
+          -Dproperty=changelist
+          -DnewVersion=""
+
       - name: Set Build Params
         run: |
           export SKIP_FLAGS_NON_UNIT_TESTS="-Dcheckstyle.skip -Dpmd.skip -Dcpd.skip -Dfindbugs.skip -Dspotbugs.skip"
