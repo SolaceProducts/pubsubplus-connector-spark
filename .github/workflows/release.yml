@@ -28,11 +28,24 @@ jobs:
 
   push_to_products_solace:
     runs-on: ubuntu-22.04
+    needs: release_binder
     permissions:
       contents: write
       packages: write
       id-token: write
     steps:
+      - name: Set Build Params
+        run: |
+          export SKIP_FLAGS_NON_UNIT_TESTS="-Dcheckstyle.skip -Dpmd.skip -Dcpd.skip -Dfindbugs.skip -Dspotbugs.skip"
+          echo "SKIP_FLAGS_NON_UNIT_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS" >> $GITHUB_ENV
+          echo "SKIP_FLAGS_ALL_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS -DskipTests=true" >> $GITHUB_ENV
+
+      - name: Package Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          mvn package -B -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
+
       - name: Copy JAR and User Guide to release_artifacts
         run: |
           mkdir -p $GITHUB_WORKSPACE/release_artifacts
