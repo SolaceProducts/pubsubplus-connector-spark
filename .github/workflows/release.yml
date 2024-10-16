@@ -75,11 +75,17 @@ jobs:
         run: >-
           mvn package -B -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
 
+      - name: Get Artifact ID
+        run: |
+          cd pubsubplus-connector-spark_3.x
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout --settings "../maven/settings.xml")
+          echo "ARTIFACT_ID=$ARTIFACT_ID" >> $GITHUB_ENV
+
       - name: Copy JAR and User Guide to release_artifacts
         run: |
           mkdir -p $GITHUB_WORKSPACE/release_artifacts
-          cp ${{ github.event.repository.name }}_3.x/target/${{ github.event.repository.name }}-${{ github.event.inputs.release_version }}.jar $GITHUB_WORKSPACE/release_artifacts/
-          cp ${{ github.event.repository.name }}_3.x/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ github.event.repository.name }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
+          cp pubsubplus-connector-spark_3.x/target/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}.jar $GITHUB_WORKSPACE/release_artifacts/
+          cp pubsubplus-connector-spark_3.x/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
 
       - name: Push Artifacts to products.solace.com
         uses: SolaceDev/maas-build-actions/.github/actions/transfer-files-products-solace@spark-connector-products
@@ -88,7 +94,7 @@ jobs:
           version: ${{ github.event.inputs.release_version }}
           project_name: "Spark"
           release_type: "GA"
-          artifact_id: ${{ github.event.repository.name }}
+          artifact_id: ${{ env.ARTIFACT_ID }}
           release_notes_product: "spark"
           symlink_name: "SPARK"
           server: "filedrop-sandbox.solace.com"
