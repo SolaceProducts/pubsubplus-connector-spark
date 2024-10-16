@@ -112,7 +112,7 @@ jobs:
       - name: Push Artifacts to products.solace.com
         uses: SolaceDev/maas-build-actions/.github/actions/transfer-files-products-solace@spark-connector-products
         with:
-          artifact_directory: "release_artifacts"
+          artifact_directory: "${{ github.workspace }}/release_artifacts"
           version: ${{ github.event.inputs.release_version }}
           project_name: "Spark"
           release_type: "GA"
