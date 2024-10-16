@@ -42,6 +42,15 @@ jobs:
           fetch-depth: 0
           ssh-key: ${{ secrets.COMMIT_KEY }}
 
+      - name: Checkout SolaceDev/maas-build-actions
+        uses: actions/checkout@v4
+        with:
+          repository: SolaceDev/maas-build-actions
+          ref: refs/heads/master
+          token: ${{ steps.secrets.outputs.PACKAGES_ADMIN_TOKEN }}
+          persist-credentials: false
+          path: maas-build-actions
+
       - name: Retrieve secrets from Vault
         id: secrets
         uses: hashicorp/vault-action@v3
