@@ -17,7 +17,7 @@ on:
         default: 'main'
 jobs:
   release_binder:
-    uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@master
+    uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@spark-connector-products
     with:
       main_branch: "${{ github.event.inputs.release_branch}}"
       push_external: ${{ github.event.inputs.release_central == 'true'}}
@@ -25,3 +25,28 @@ jobs:
       whitesource_product_name: 'techCoE-micro-integrations'
     secrets:
       COMMIT_KEY: ${{ secrets.COMMIT_KEY }}
+
+  push_to_products_solace:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - name: Copy JAR and User Guide to release_artifacts
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/release_artifacts
+          cp ${{ github.event.repository.name }}_3.x/target/${{ github.event.repository.name }}-${{ github.event.inputs.release_version }}.jar $GITHUB_WORKSPACE/release_artifacts/
+          cp ${{ github.event.repository.name }}_3.x/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ github.event.repository.name }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
+
+      - name: Push Artifacts to products.solace.com
+        uses: SolaceDev/maas-build-actions/.github/actions/transfer-files-products-solace@spark-connector-products
+        with:
+          artifact_directory: $GITHUB_WORKSPACE/release_artifacts
+          version: ${{ github.event.inputs.release_version }}
+          project_name: "Spark"
+          release_type: "GA"
+          artifact_id: ${{ github.event.repository.name }}
+          release_notes_product: "spark"
+          symlink_name: "SPARK"
+          server: "filedrop-sandbox.solace.com"
