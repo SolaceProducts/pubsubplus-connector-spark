@@ -42,15 +42,6 @@ jobs:
           fetch-depth: 0
           ssh-key: ${{ secrets.COMMIT_KEY }}
 
-      - name: Checkout SolaceDev/maas-build-actions
-        uses: actions/checkout@v4
-        with:
-          repository: SolaceDev/maas-build-actions
-          ref: refs/heads/master
-          token: ${{ steps.secrets.outputs.PACKAGES_ADMIN_TOKEN }}
-          persist-credentials: false
-          path: maas-build-actions
-
       - name: Retrieve secrets from Vault
         id: secrets
         uses: hashicorp/vault-action@v3
@@ -64,6 +55,16 @@ jobs:
           exportToken: true
           secrets: secret/data/tools/githubactions PACKAGES_ADMIN_USER | PACKAGES_ADMIN_USER ;
             secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
+
+
+      - name: Checkout SolaceDev/maas-build-actions
+        uses: actions/checkout@v4
+        with:
+          repository: SolaceDev/maas-build-actions
+          ref: refs/heads/master
+          token: ${{ steps.secrets.outputs.PACKAGES_ADMIN_TOKEN }}
+          persist-credentials: false
+          path: maas-build-actions
 
       - name: Set up JDK
         uses: actions/setup-java@v4
