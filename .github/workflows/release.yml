@@ -96,7 +96,7 @@ jobs:
         run: |
           mkdir -p $GITHUB_WORKSPACE/release_artifacts
           cp pubsubplus-connector-spark_3.x/target/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}.jar $GITHUB_WORKSPACE/release_artifacts/
-          cp pubsubplus-connector-spark_3.x/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
+          cp pubsubplus-connector-spark_3.x/target/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
 
       - name: Push Artifacts to products.solace.com
         uses: SolaceDev/maas-build-actions/.github/actions/transfer-files-products-solace@spark-connector-products
