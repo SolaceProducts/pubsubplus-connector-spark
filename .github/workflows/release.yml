@@ -66,36 +66,6 @@ jobs:
           persist-credentials: false
           path: maas-build-actions
 
-      # - name: Set up JDK
-      #   uses: actions/setup-java@v4
-      #   with:
-      #     distribution: zulu
-      #     java-version: 17
-      #     cache: 'maven'
-
-      # - name: Release Version - Prepare
-      #   run: >-
-      #     mvn -B -U validate
-      #     versions:set-property
-      #     -Dproperty=revision
-      #     -DnewVersion="${{ inputs.release_version }}" &&
-      #     mvn validate
-      #     versions:set-property
-      #     -Dproperty=changelist
-      #     -DnewVersion=""
-
-      # - name: Set Build Params
-      #   run: |
-      #     export SKIP_FLAGS_NON_UNIT_TESTS="-Dcheckstyle.skip -Dpmd.skip -Dcpd.skip -Dfindbugs.skip -Dspotbugs.skip"
-      #     echo "SKIP_FLAGS_NON_UNIT_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS" >> $GITHUB_ENV
-      #     echo "SKIP_FLAGS_ALL_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS -DskipTests=true" >> $GITHUB_ENV
-
-      # - name: Package Artifacts
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   run: >-
-      #     mvn package -B -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
-
       - name: Get Artifact ID
         run: |
           cd pubsubplus-connector-spark_3.x
@@ -107,9 +77,6 @@ jobs:
         with:
           name: build-artifacts
           path: ./downloaded_artifacts
-
-      - name: List artifacts after download
-        run: ls -al $GITHUB_WORKSPACE/downloaded_artifacts/pubsubplus-connector-spark_3.x/target
 
       - name: Copy JAR and User Guide to release_artifacts
         run: |
@@ -128,4 +95,3 @@ jobs:
           artifact_id: ${{ env.ARTIFACT_ID }}
           release_notes_product: "spark"
           symlink_name: "SPARK"
-          server: "filedrop-sandbox.solace.com"
