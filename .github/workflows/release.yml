@@ -127,7 +127,7 @@ jobs:
       #     ls -l $GITHUB_WORKSPACE/release_artifacts
 
       - name: Push Artifacts to products.solace.com
-        uses: SolaceDev/maas-build-actions/.github/actions/transfer-files-products-solace@master
+        uses: SolaceDev/maas-build-actions/.github/actions/transfer-files-products-solace@spark-connector-products
         with:
           artifact_directory: "${{ github.workspace }}/release_artifacts"
           version: ${{ github.event.inputs.release_version }}
