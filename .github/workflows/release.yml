@@ -109,15 +109,15 @@ jobs:
           path: ./release_artifacts
 
       - name: List artifacts after download
-        run: ls -al $GITHUB_WORKSPACE/release_artifacts
+        run: ls -al $GITHUB_WORKSPACE/release_artifacts/pubsubplus-connector-spark_3.x
 
       - name: Remove unwanted files
         run: |
-          cd $GITHUB_WORKSPACE/release_artifacts
+          cd $GITHUB_WORKSPACE/release_artifacts/pubsubplus-connector-spark_3.x
           find . -type f ! -name 'User-Guide.pdf' ! -name '${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}.jar' -delete
 
       - name: List artifacts after cleanup
-        run: ls -al $GITHUB_WORKSPACE/release_artifacts
+        run: ls -al $GITHUB_WORKSPACE/release_artifacts/pubsubplus-connector-spark_3.x
 
       # - name: Copy JAR and User Guide to release_artifacts
       #   run: |
