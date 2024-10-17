@@ -108,11 +108,14 @@ jobs:
           name: build-artifacts
           path: ./downloaded_artifacts
 
+      - name: List artifacts after download
+        run: ls -al $GITHUB_WORKSPACE/downloaded_artifacts/pubsubplus-connector-spark_3.x/target
+
       - name: Copy JAR and User Guide to release_artifacts
         run: |
           mkdir -p $GITHUB_WORKSPACE/release_artifacts
-          cp downloaded_artifacts/target/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}.jar $GITHUB_WORKSPACE/release_artifacts/
-          cp downloaded_artifacts/target/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
+          cp downloaded_artifacts/pubsubplus-connector-spark_3.x/target/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}.jar $GITHUB_WORKSPACE/release_artifacts/
+          cp downloaded_artifacts/pubsubplus-connector-spark_3.x/target/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
           ls -l $GITHUB_WORKSPACE/release_artifacts
 
       - name: Push Artifacts to products.solace.com
