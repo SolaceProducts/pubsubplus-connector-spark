@@ -119,4 +119,4 @@ jobs:
           artifact_id: ${{ env.ARTIFACT_ID }}
           release_notes_product: "spark"
           symlink_name: "SPARK"
-          server: "filedrop-sandbox.solace.com"
+          # server: "filedrop-sandbox.solace.com"
