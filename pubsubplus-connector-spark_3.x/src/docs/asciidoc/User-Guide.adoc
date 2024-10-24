@@ -55,7 +55,7 @@ In some cases, there might be checkpoint failures as spark may fail to write to 
 
 Solace Spark Connector supports Basic and OAuth authentication to Solace. Client Credentials flow is supported when connecting using OAuth.
 
-Use below options to enable OAuth authentication. For property description please refer to <<Configuration>> section.
+If OAuth server is available use below options to enable OAuth authentication to fetch access token from endpoint. For property description please refer to <<Configuration>> section.
 
 [source,scala]
 ----
@@ -71,6 +71,19 @@ Use below options to enable OAuth authentication. For property description pleas
     .option("solace.oauth.client.auth-server.ssl.validate-certificate", false)
     .option("solace.oauth.client.token.refresh.interval", 110)
 ----
+
+If rotating access token is present in file accessible by connector use below options to enable OAuth authentication to read access token from file. For property description please refer to <<solace-oAuth-client-refresh-interval, Solace OAuth Client Refresh Interval>> property. In case when access token file is not updated, connector retries the connection based on <<reconnect-retries, Reconnect Retries>> and stops if authentication is not successful.
+
+[source,scala]
+----
+    spark.readStream.format("solace").option("host", "")
+    .option("vpn", "default")
+    .option("solace.apiProperties.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_OAUTH2")
+    .option("solace.oauth.client.access-token", "<absolute-path-to-token-file>")
+    .option("solace.oauth.client.token.refresh.interval", 110)
+----
+
+NOTE: When access token is read from file, it may lose some of it's expiry time by the time it is accessed by connector. It is recommended to have minimal time difference between writing to file and access by the connector so that a valid new token is updated in solace session before expiry of old token.
 
 === Solace Spark Streaming Schema Structure
 

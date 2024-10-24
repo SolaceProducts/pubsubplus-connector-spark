@@ -23,6 +23,9 @@ public class SolaceSparkStreamingProperties {
     public static String SOLACE_CONNECT_RETRIES_PER_HOST = "connectRetriesPerHost";
     public static String SOLACE_RECONNECT_RETRIES_WAIT_TIME = "reconnectRetryWaitInMillis";
     public static String SOLACE_API_PROPERTIES_PREFIX = "solace.apiProperties.";
+    public static String OAUTH_CLIENT_ACCESSTOKEN_SOURCE = "solace.oauth.client.access-token.source";
+    public static String OAUTH_CLIENT_ACCESSTOKEN_SOURCE_DEFAULT = "file";
+    public static String OAUTH_CLIENT_ACCESSTOKEN = "solace.oauth.client.access-token";
     public static String OAUTH_CLIENT_AUTHSERVER_URL = "solace.oauth.client.auth-server-url";
     public static String OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE = "solace.oauth.client.auth-server.client-certificate.file";
     public static String OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_FILE = "solace.oauth.client.auth-server.truststore.file";

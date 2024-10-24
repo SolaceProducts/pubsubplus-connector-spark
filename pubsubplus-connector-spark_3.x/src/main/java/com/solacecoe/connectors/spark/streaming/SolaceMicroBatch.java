@@ -58,19 +58,24 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
         if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+ JCSMPProperties.AUTHENTICATION_SCHEME) &&
                 properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+ JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
-            if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL).isEmpty()) {
-                log.error("SolaceSparkConnector - Please provide OAuth Client Authentication Server URL");
-                throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client Authentication Server URL");
-            }
+            if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN)) {
+                if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL).isEmpty()) {
+                    log.error("SolaceSparkConnector - Please provide OAuth Client Authentication Server URL");
+                    throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client Authentication Server URL");
+                }
 
-            if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID).isEmpty()) {
-                log.error("SolaceSparkConnector - Please provide OAuth Client ID");
-                throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client ID");
-            }
+                if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID).isEmpty()) {
+                    log.error("SolaceSparkConnector - Please provide OAuth Client ID");
+                    throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client ID");
+                }
 
-            if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET).isEmpty()) {
-                log.error("SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
-                throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
+                if(!properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET) || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET) == null || properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET).isEmpty()) {
+                    log.error("SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
+                    throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
+                }
+            } else if(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, null) == null) {
+                log.error("SolaceSparkConnector - Please provide valid access token input");
+                throw new RuntimeException("SolaceSparkConnector - Please provide valid access token input");
             }
         } else {
             if (!properties.containsKey(SolaceSparkStreamingProperties.USERNAME) || properties.get(SolaceSparkStreamingProperties.USERNAME) == null || properties.get(SolaceSparkStreamingProperties.USERNAME).isEmpty()) {
@@ -141,6 +146,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
     @Override
     public Offset latestOffset() {
+        checkSolaceException();
         latestOffsetValue+=batchSize;
 //        log.info("SolaceSparkConnector - latestOffset :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
         return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
@@ -232,17 +238,20 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
     @Override
     public InputPartition[] planInputPartitions(Offset start, Offset end) {
+        checkSolaceException();
         return splitDataOnPartitions();
     }
 
     @Override
     public PartitionReaderFactory createReaderFactory() {
+        checkSolaceException();
         log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: " + this.includeHeaders);
         return new SolaceDataSourceReaderFactory(this.includeHeaders);
     }
 
     @Override
     public Offset latestOffset(Offset startOffset, ReadLimit limit) {
+        checkSolaceException();
         latestOffsetValue+=batchSize;
 //        log.info("SolaceSparkConnector - latestOffset with params :: (key,value) - (" + latestOffsetValue + "," + String.join(",", this.processedMessageIDs) + ")");
         return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
@@ -250,11 +259,13 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
     @Override
     public Offset initialOffset() {
+        checkSolaceException();
         return new BasicOffset(latestOffsetValue, String.join(",", this.messages.keySet().stream().collect(Collectors.toList())));
     }
 
     @Override
     public Offset deserializeOffset(String json) {
+        checkSolaceException();
         JsonObject gson = new Gson().fromJson(json, JsonObject.class);
         if(gson != null && gson.has("offset")) {
             latestOffsetValue = gson.get("offset").getAsInt();
@@ -272,6 +283,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
     @Override
     public void commit(Offset end) {
+        checkSolaceException();
         log.info("SolaceSparkConnector - Commit triggered");
         BasicOffset basicOffset = (BasicOffset) end;
 //        log.info("SolaceSparkConnector - Processed message ID's by Spark " + basicOffset.json());
@@ -291,6 +303,14 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         }
 
         isCommitTriggered = true;
+    }
+
+    public void checkSolaceException() {
+        solaceConnectionManager.getConnections().forEach(solaceBroker -> {
+            if(solaceBroker.isException()) {
+                throw new RuntimeException(solaceBroker.getException());
+            }
+        });
     }
 
     @Override

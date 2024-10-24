@@ -39,7 +39,7 @@
 | 0
 | The number of times to attempt and retry a connection during initial connection setup. Zero means no automatic connection retries (that is, try once and give up). -1 means "retry forever".
 
-| reconnectRetries
+| reconnectRetries[[reconnect-retries]]
 | int
 | (-1) or greater
 | 3
@@ -67,6 +67,12 @@ a| Any additional Solace Java API properties can be set through configuring sola
 solace.apiProperties.reapply_subscriptions=false
 solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 ----
+
+| solace.oauth.client.access-token
+| string
+| absolute file path to token file
+| empty
+| Set this configuration, if rotating access token is present in file. In this case connector will read access token directly from file instead of sending request to OAuth Server. Please note <<solace-oAuth-client-refresh-interval, Solace OAuth Client Refresh Interval>> should be set to read access token from file at regular intervals.
 
 | solace.oauth.client.auth-server-url
 | string
@@ -124,7 +130,7 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | TLSv1.2
 | Indicate the type of SSL connection.
 
-| solace.oauth.client.token.refresh.interval
+| solace.oauth.client.token.refresh.interval[[solace-oAuth-client-refresh-interval]]
 | integer
 | positive integer value
 | 60
