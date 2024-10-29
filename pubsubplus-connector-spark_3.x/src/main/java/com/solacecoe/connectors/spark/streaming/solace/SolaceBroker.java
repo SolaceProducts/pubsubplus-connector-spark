@@ -5,30 +5,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SolaceBroker implements Serializable {
-    private static Logger log = LoggerFactory.getLogger(SolaceBroker.class);
-    private JCSMPSession session;
-    private final String host;
-    private final String vpn;
-    private final String username;
-    private final String password;
+    private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
     private final String queue;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
+    private final JCSMPSession session;
+    private XMLMessageProducer producer;
 
     public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
-        this.host = host;
-        this.vpn = vpn;
-        this.username = username;
-        this.password = password;
         this.queue = queue;
 
         try {
@@ -46,10 +39,10 @@ public class SolaceBroker implements Serializable {
                 jcsmpProperties = JCSMPProperties.fromProperties(props);
             }
 
-            jcsmpProperties.setProperty(JCSMPProperties.HOST, this.host);            // host:port
-            jcsmpProperties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
-            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
-            jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
+            jcsmpProperties.setProperty(JCSMPProperties.HOST, host);            // host:port
+            jcsmpProperties.setProperty(JCSMPProperties.USERNAME, username); // client-username
+            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, vpn);    // message-vpn
+            jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, password); // client-password
 
             // Channel Properties
             JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
@@ -100,6 +93,7 @@ public class SolaceBroker implements Serializable {
 
             cons.start();
             log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue " + this.queue);
+            flowReceivers.add(cons);
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
@@ -108,16 +102,63 @@ public class SolaceBroker implements Serializable {
         // log.info("Listening for messages: "+ this.queueName);
     }
 
-    public void close() {
+    public void initProducer() {
+        try {
+            this.producer = this.session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+                    log.info("SolaceSparkConnector - Message published successfully to Solace");
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+                    log.error("SolaceSparkConnector - Exception when publishing message to Solace", e);
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error creating publisher to Solace", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void publishMessage(String topic, Object msg) {
+        BytesXMLMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
+        xmlMessage.writeBytes(msg.toString().getBytes(StandardCharsets.UTF_8));
+        xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            this.producer.send(xmlMessage, destination);
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void closeProducer() {
+        if(this.producer != null && !this.producer.isClosed()) {
+            this.producer.close();
+            log.info("SolaceSparkConnector - Solace Producer closed");
+        }
+    }
+
+    public void closeReceivers() {
+        log.info("SolaceSparkConnector - Closing {} flow receivers", flowReceivers.size());
         flowReceivers.forEach(flowReceiver -> {
             if(flowReceiver != null && !flowReceiver.isClosed()) {
                 String endpoint = flowReceiver.getEndpoint().getName();
                 flowReceiver.close();
-                log.info("SolaceSparkConnector - Closed flow receiver to endpoint " + endpoint);
+                log.info("SolaceSparkConnector - Closed flow receiver to endpoint {}", endpoint);
             }
         });
+        flowReceivers.clear();
+        eventListeners.clear();
+    }
 
-
+    public void close() {
+        closeProducer();
+        closeReceivers();
+        log.info("Closing Solace Session");
         if(session != null && !session.isClosed()) {
             session.closeSession();
             log.info("SolaceSparkConnector - Closed Solace session");
@@ -125,7 +166,7 @@ public class SolaceBroker implements Serializable {
     }
 
     public ConcurrentLinkedQueue<SolaceMessage> getMessages(int index) {
-        log.info("Requesting messages from event listener " + index + ", total messages available :: " + this.eventListeners.get(index).getMessages().size());
+        log.info("Requesting messages from event listener {}, total messages available :: {}", index, this.eventListeners.get(index).getMessages().size());
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
