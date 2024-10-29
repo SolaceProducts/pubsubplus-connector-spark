@@ -18,6 +18,14 @@ import java.util.concurrent.*;
 public class SolaceBroker implements Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
     private final JCSMPSession session;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+public class SolaceBroker implements Serializable {
+    private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
     private final String queue;
     private OAuthClient oAuthClient;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
@@ -28,6 +36,9 @@ public class SolaceBroker implements Serializable {
     private long accessTokenSourceLastModifiedTime = 0L;
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
+    private final JCSMPSession session;
+    private XMLMessageProducer producer;
+
     public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
@@ -137,7 +148,48 @@ public class SolaceBroker implements Serializable {
         }
     }
 
-    public void close() {
+    public void initProducer() {
+        try {
+            this.producer = this.session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+                    log.info("SolaceSparkConnector - Message published successfully to Solace");
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+                    log.error("SolaceSparkConnector - Exception when publishing message to Solace", e);
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error creating publisher to Solace", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void publishMessage(String topic, Object msg) {
+        BytesXMLMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
+        xmlMessage.writeBytes(msg.toString().getBytes(StandardCharsets.UTF_8));
+        xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            this.producer.send(xmlMessage, destination);
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void closeProducer() {
+        if(this.producer != null && !this.producer.isClosed()) {
+            this.producer.close();
+            log.info("SolaceSparkConnector - Solace Producer closed");
+        }
+    }
+
+    public void closeReceivers() {
+        log.info("SolaceSparkConnector - Closing {} flow receivers", flowReceivers.size());
         flowReceivers.forEach(flowReceiver -> {
             if(flowReceiver != null && !flowReceiver.isClosed()) {
                 String endpoint = flowReceiver.getEndpoint().getName();
@@ -147,8 +199,12 @@ public class SolaceBroker implements Serializable {
         });
         flowReceivers.clear();
         eventListeners.clear();
+    }
 
-
+    public void close() {
+        closeProducer();
+        closeReceivers();
+        log.info("Closing Solace Session");
         if(session != null && !session.isClosed()) {
             session.closeSession();
             log.info("SolaceSparkConnector - Closed Solace session");

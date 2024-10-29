@@ -1,5 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.write;
 
+import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import org.apache.spark.sql.connector.write.BatchWrite;
 import org.apache.spark.sql.connector.write.DataWriterFactory;
 import org.apache.spark.sql.connector.write.PhysicalWriteInfo;
