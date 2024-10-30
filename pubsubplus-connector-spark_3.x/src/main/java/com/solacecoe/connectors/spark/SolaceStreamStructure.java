@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark;
 
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProperties;
 import org.apache.spark.sql.connector.catalog.SupportsRead;
 import org.apache.spark.sql.connector.catalog.SupportsWrite;
 import org.apache.spark.sql.connector.catalog.Table;
@@ -40,7 +41,7 @@ public class SolaceStreamStructure implements SupportsRead, SupportsWrite, Table
 
     @Override
     public StructType schema() {
-        boolean includeHeaders = this.properties.containsKey("includeHeaders") ? Boolean.valueOf(this.properties.get("includeHeaders").toString()) : false;
+        boolean includeHeaders = Boolean.parseBoolean(this.properties.getOrDefault("includeHeaders", "false"));
         return getSchema(includeHeaders);
     }
 
@@ -50,36 +51,18 @@ public class SolaceStreamStructure implements SupportsRead, SupportsWrite, Table
             this.capabilities = new HashSet<>();
             capabilities.add(TableCapability.MICRO_BATCH_READ);
             capabilities.add(TableCapability.BATCH_WRITE);
+            capabilities.add(TableCapability.STREAMING_WRITE);
         }
         return capabilities;
     }
 
     private static StructType getSchema(boolean includeHeaders) {
-        if(includeHeaders) {
-            StructField[] structFields = new StructField[]{
-                    new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
-                    new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
-                    new StructField("PartitionKey", DataTypes.StringType, true, Metadata.empty()),
-                    new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
-                    new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty()),
-                        new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
-            };
-            return new StructType(structFields);
-        }
-
-        StructField[] structFields = new StructField[]{
-                new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
-                new StructField("PartitionKey", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty())
-        };
-        return new StructType(structFields);
+        return new StructType(SolaceSparkSchemaProperties.structFields(includeHeaders));
 
     }
 
     @Override
     public WriteBuilder newWriteBuilder(LogicalWriteInfo logicalWriteInfo) {
-        return new SolaceWriteBuilder(logicalWriteInfo.schema(), logicalWriteInfo.options());
+        return new SolaceWriteBuilder(logicalWriteInfo.schema(), properties, logicalWriteInfo.options());
     }
 }

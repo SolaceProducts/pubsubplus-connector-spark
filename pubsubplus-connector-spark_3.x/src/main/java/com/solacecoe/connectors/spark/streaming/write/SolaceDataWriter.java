@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.write;
 
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.*;
@@ -7,25 +8,27 @@ import org.apache.spark.sql.catalyst.types.DataTypeUtils;
 import org.apache.spark.sql.connector.write.DataWriter;
 import org.apache.spark.sql.connector.write.WriterCommitMessage;
 import org.apache.spark.sql.types.*;
+import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-public class SolaceDataWriter implements DataWriter<InternalRow> {
+public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final StructType schema;
-    private final Map<String, String> options;
+    private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
     private final UnsafeProjection projection;
-    public SolaceDataWriter(StructType schema, Map<String, String> options) {
+    public SolaceDataWriter(StructType schema, Map<String, String> properties) {
         this.schema = schema;
-        this.options = options;
+        this.properties = properties;
 
-        this.solaceBroker = new SolaceBroker(options.get("host"), options.get("vpn"), options.get("username"), options.get("password"), options.get("topic"), options);
+        this.solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("topic"), properties);
         this.solaceBroker.initProducer();
 
         this.projection = createProjection();
@@ -34,21 +37,21 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
     @Override
     public void write(InternalRow row) throws IOException {
         UnsafeRow projectedRow = this.projection.apply(row);
-        this.solaceBroker.publishMessage(projectedRow.get(3, DataTypes.StringType).toString(), projectedRow.get(1, DataTypes.BinaryType));
+        this.solaceBroker.publishMessage(projectedRow.getString(3), projectedRow.getBinary(1), projectedRow.getMap(5));
     }
 
     @Override
-    public WriterCommitMessage commit() throws IOException {
+    public WriterCommitMessage commit() {
         return null;
     }
 
     @Override
-    public void abort() throws IOException {
+    public void abort() {
 
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         this.solaceBroker.close();
     }
 
@@ -66,12 +69,12 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
 
         return new Expression[] {
                 // DataTypeUtils.toAttribute(new StructField("Id", DataTypes.StringType, true, Metadata.empty()))
-                new SolaceRowExpression(attributes, "Id", DataTypes.StringType, null).getExpression(),
-                new SolaceRowExpression(attributes, "Payload", DataTypes.BinaryType, null).getExpression(),
-                new SolaceRowExpression(attributes, "PartitionKey", DataTypes.StringType, null).getExpression(),
-                new SolaceRowExpression(attributes, "Topic", DataTypes.StringType, null).getExpression(),
-                new SolaceRowExpression(attributes, "TimeStamp", DataTypes.TimestampType, null).getExpression(),
-                new SolaceRowExpression(attributes, "Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), null).getExpression()
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.id().name(), SolaceSparkSchemaProperties.id().dataType(), null).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.payload().name(), SolaceSparkSchemaProperties.payload().dataType(), null).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.partitionKey().name(), SolaceSparkSchemaProperties.partitionKey().dataType(), null).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.topic().name(), SolaceSparkSchemaProperties.topic().dataType(), null).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.timestamp().name(), SolaceSparkSchemaProperties.timestamp().dataType(), null).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.headers().name(), SolaceSparkSchemaProperties.headers().dataType(), null).getExpression()
         };
     }
 }
