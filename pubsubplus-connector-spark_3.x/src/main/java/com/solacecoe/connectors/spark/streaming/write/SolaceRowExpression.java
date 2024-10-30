@@ -20,7 +20,10 @@ public class SolaceRowExpression {
 
     public Attribute getExpression() {
         Attribute attribute = this.attributes.find(field -> field.name().equals(attributeName)).getOrElse(() -> this.defaultValue);
-        if( attribute == null || DataTypeUtils.sameType(attribute.dataType(), this.dataType)) {
+        if(attribute == null) {
+            throw new RuntimeException("Could not find attribute " + attributeName);
+        }
+        if(!DataTypeUtils.sameType(attribute.dataType(), this.dataType)) {
             throw new IllegalArgumentException("Attribute " + attributeName + " is not of type " + dataType);
         }
 
