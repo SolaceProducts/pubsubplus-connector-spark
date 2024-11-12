@@ -27,11 +27,11 @@ import java.security.cert.X509Certificate;
 
 public class OAuthClient implements Serializable{
     private static Logger log = LoggerFactory.getLogger(OAuthClient.class);
-    AuthorizationGrant clientGrant;
-    ClientAuthentication clientAuth;
-    Scope scope;
-    URI tokenEndpoint;
-    HTTPRequest httpRequest;
+    private AuthorizationGrant clientGrant;
+    private transient ClientAuthentication clientAuth;
+    private Scope scope;
+    private URI tokenEndpoint;
+    private transient HTTPRequest httpRequest;
 
     public OAuthClient(String url, String clientId, String clientSecret) {
         init(url, clientId, clientSecret);
