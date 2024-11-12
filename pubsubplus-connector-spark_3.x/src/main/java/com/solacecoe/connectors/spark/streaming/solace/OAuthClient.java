@@ -16,7 +16,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.*;
 import java.io.*;
-import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -25,13 +24,14 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 
-public class OAuthClient implements Serializable{
-    private static Logger log = LoggerFactory.getLogger(OAuthClient.class);
+public class OAuthClient implements Serializable {
+    private static final Logger log = LoggerFactory.getLogger(OAuthClient.class);
     private AuthorizationGrant clientGrant;
-    private transient ClientAuthentication clientAuth;
     private Scope scope;
     private URI tokenEndpoint;
     private transient HTTPRequest httpRequest;
+    private ClientID clientID;
+    private Secret secret;
 
     public OAuthClient(String url, String clientId, String clientSecret) {
         init(url, clientId, clientSecret);
@@ -39,9 +39,8 @@ public class OAuthClient implements Serializable{
 
     public void init(String url, String clientId, String clientSecret) {
         clientGrant = new ClientCredentialsGrant();
-        ClientID clientID = new ClientID(clientId);
-        Secret secret = new Secret(clientSecret);
-        clientAuth = new ClientSecretBasic(clientID, secret);
+        clientID = new ClientID(clientId);
+        secret = new Secret(clientSecret);
         // The token endpoint
         scope = new Scope();
         try {
@@ -94,6 +93,7 @@ public class OAuthClient implements Serializable{
 
     private void initHttpRequest(int timeout, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, String truststoreType, boolean validateSSLCertificate, KeyStore keyStore) {
         // Make the token request
+        ClientAuthentication clientAuth = new ClientSecretBasic(clientID, secret);
         TokenRequest request = new TokenRequest(tokenEndpoint, clientAuth, clientGrant, scope);
         try {
             httpRequest = request.toHTTPRequest();

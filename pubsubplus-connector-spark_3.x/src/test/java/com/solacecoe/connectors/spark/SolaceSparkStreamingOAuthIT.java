@@ -88,6 +88,7 @@ public class SolaceSparkStreamingOAuthIT {
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET, "solace-secret")
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                 .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
+                .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
                 .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
