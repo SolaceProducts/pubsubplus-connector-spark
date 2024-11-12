@@ -227,6 +227,7 @@ public class SolaceSparkStreamingIT {
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .option(SolaceSparkStreamingProperties.BATCH_SIZE, 2)
                 .option("createFlowsOnSameSession", true)
+                .option(SolaceSparkStreamingProperties.PARTITIONS, 2)
                 .format("solace");
 
         final long[] count = {0};
