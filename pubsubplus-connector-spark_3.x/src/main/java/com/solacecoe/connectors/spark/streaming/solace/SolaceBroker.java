@@ -154,6 +154,8 @@ public class SolaceBroker implements Serializable {
                 log.info("SolaceSparkConnector - Closed flow receiver to endpoint " + endpoint);
             }
         });
+        flowReceivers.clear();
+        eventListeners.clear();
 
 
         if(session != null && !session.isClosed()) {
