@@ -116,6 +116,17 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
         updateConfigScript(scriptBuilder, "exit");
         updateConfigScript(scriptBuilder, "exit");
 
+        // Create Queue
+        updateConfigScript(scriptBuilder, "message-spool message-vpn default");
+        updateConfigScript(scriptBuilder, "create queue " + INTEGRATION_TEST_QUEUE_NAME);
+        updateConfigScript(scriptBuilder, "access-type exclusive");
+        updateConfigScript(scriptBuilder, "subscription topic " + INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
+        updateConfigScript(scriptBuilder, "max-spool-usage 300");
+        updateConfigScript(scriptBuilder, "permission all consume");
+        updateConfigScript(scriptBuilder, "no shutdown");
+        updateConfigScript(scriptBuilder, "exit");
+        updateConfigScript(scriptBuilder, "exit");
+
         // Create VPN if not default
         if (!vpn.equals(DEFAULT_VPN)) {
             updateConfigScript(scriptBuilder, "create message-vpn " + vpn);
