@@ -25,7 +25,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 
-public class OAuthClient {
+public class OAuthClient implements Serializable{
     private static Logger log = LoggerFactory.getLogger(OAuthClient.class);
     AuthorizationGrant clientGrant;
     ClientAuthentication clientAuth;
