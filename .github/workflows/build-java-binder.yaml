@@ -26,10 +26,10 @@ on:
         required: false
         type: string
         default: 'main'
-    
-    secrets:
-      WHITESOURCE_PROJECT_TOKEN:
-        required: true
+      whitesource_product_name:
+        required: false
+        type: string
+        default: 'techCoE-micro-integrations'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -235,5 +235,6 @@ jobs:
         if: env.WHITESOURCE_SCAN=='true'
         with:
           whitesource_api_key: ${{ steps.secrets.outputs.WHITESOURCE_API_KEY }}
-          whitesource_project_key: ${{ secrets.WHITESOURCE_PROJECT_TOKEN }}
+          whitesource_product_name: ${{ inputs.whitesource_product_name }}
+          whitesource_project_name: "${{ github.event.repository.name }}"
           target_directory: "target/lib"
