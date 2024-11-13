@@ -9,8 +9,13 @@ import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
 import com.nimbusds.oauth2.sdk.util.tls.TLSUtils;
 import com.nimbusds.oauth2.sdk.util.tls.TLSVersion;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceNoopHostnameVerifier;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustManagerDelegate;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustSelfSignedStrategy;
 import com.solacesystems.jcsmp.*;
 import org.apache.hadoop.shaded.org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.hadoop.shaded.org.apache.http.conn.ssl.TrustSelfSignedStrategy;
+import org.apache.hadoop.shaded.org.apache.http.ssl.SSLContextBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +27,9 @@ import java.nio.file.Files;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class OAuthClient implements Serializable {
     private static final Logger log = LoggerFactory.getLogger(OAuthClient.class);
@@ -52,23 +59,34 @@ public class OAuthClient implements Serializable {
     }
 
     public void buildRequest(int timeout, String clientCertificatePath, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, String trustStoreType, boolean validateSSLCertificate) {
+        boolean isDefaultPath = false;
+        if(trustStoreFilePath == null || trustStoreFilePath.isEmpty()) {
+            trustStoreFilePath = getTrustStoreName();
+            if(trustStoreFilePassword == null) {
+                trustStoreFilePassword = "changeit";
+            }
+            isDefaultPath = true;
+        }
         if(clientCertificatePath != null) {
-            readClientCertificate(timeout, clientCertificatePath, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate);
+            readClientCertificate(timeout, clientCertificatePath, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate, isDefaultPath);
         } else {
             initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate, null);
         }
     }
 
-    private void readClientCertificate(int timeout, String clientCertificatePath, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, String trustStoreType, boolean validateSSLCertificate) {
+    private void readClientCertificate(int timeout, String clientCertificatePath, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, String trustStoreType, boolean validateSSLCertificate, boolean isDefaultPath) {
         try {
             File clientCert = new File(clientCertificatePath);
-            FileOutputStream fileOutputStream = new FileOutputStream(trustStoreFilePath);
-            KeyStore keyStore = createKeyStore(Files.readAllBytes(clientCert.toPath()));
-            if(keyStore == null) {
+            KeyStore keyStore = createKeyStore(Files.readAllBytes(clientCert.toPath()), trustStoreType, trustStoreFilePath, trustStoreFilePassword, isDefaultPath);
+            if (keyStore == null) {
                 log.error("SolaceSparkConnector - Unable to create keystore from file {}", clientCertificatePath);
                 throw new RuntimeException("Unable to create keystore from file " + clientCertificatePath);
             }
-            keyStore.store(fileOutputStream, trustStoreFilePassword.toCharArray());
+            // create keystore only for custom path configured by user.
+            if(!isDefaultPath) {
+                FileOutputStream fileOutputStream = new FileOutputStream(trustStoreFilePath);
+                keyStore.store(fileOutputStream, trustStoreFilePassword == null ? null : trustStoreFilePassword.toCharArray());
+            }
             initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate, keyStore);
         } catch (IOException | CertificateException | KeyStoreException | NoSuchAlgorithmException e) {
             log.error("SolaceSparkConnector - Failed to read client certificate", e);
@@ -76,10 +94,14 @@ public class OAuthClient implements Serializable {
         }
     }
 
-    private KeyStore createKeyStore(byte[] ca) {
+    private KeyStore createKeyStore(byte[] ca, String trustStoreType, String trustStoreFilePath, String trustStoreFilePassword, boolean isDefaultPath) throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException {
         try {
-            KeyStore keyStore = KeyStore.getInstance("JKS");
-            keyStore.load(null);
+            KeyStore keyStore = KeyStore.getInstance(trustStoreType);
+            if(isDefaultPath) {
+                keyStore.load(new FileInputStream(trustStoreFilePath), trustStoreFilePassword == null ? null : trustStoreFilePassword.toCharArray());
+            } else {
+                keyStore.load(null);
+            }
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             if (ca != null) {
                 keyStore.setCertificateEntry("client-auth",
@@ -114,25 +136,29 @@ public class OAuthClient implements Serializable {
                         getTLSVersion(tlsVersion));
                 httpRequest.setSSLSocketFactory(sslSocketFactory);
             } else {
+//                SSLContext sslContext = new SSLContextBuilder()
+//                        .loadTrustMaterial(null, new TrustSelfSignedStrategy())
+//                        .build();
+                TrustManagerFactory tmfactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                tmfactory.init((KeyStore) null);
+                TrustManager[] tms = tmfactory.getTrustManagers();
+                Set<TrustManager> trustManagers = new LinkedHashSet<>();
+                SolaceTrustSelfSignedStrategy trustStrategy = new SolaceTrustSelfSignedStrategy();
+                if (tms != null) {
+                    for (int i = 0; i < tms.length; ++i) {
+                        TrustManager tm = tms[i];
+                        if (tm instanceof X509TrustManager) {
+                            tms[i] = new SolaceTrustManagerDelegate((X509TrustManager) tm, trustStrategy);
+                        }
+                    }
+                    int len = tms.length;
+                    trustManagers.addAll(Arrays.asList(tms).subList(0, len));
+                }
+
+
                 SSLContext sslContext = SSLContext.getInstance(tlsVersion);
-                TrustManager trustManager = new X509TrustManager() {
-                    @Override
-                    public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-
-                    }
-
-                    @Override
-                    public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-
-                    }
-
-                    @Override
-                    public X509Certificate[] getAcceptedIssuers() {
-                        return new X509Certificate[0];
-                    }
-                };
-                sslContext.init(null, new TrustManager[]{trustManager}, new SecureRandom());
-                httpRequest.setHostnameVerifier(new NoopHostnameVerifier());
+                sslContext.init(null, trustManagers.toArray(new TrustManager[]{}), new SecureRandom());
+                httpRequest.setHostnameVerifier(new SolaceNoopHostnameVerifier());
                 httpRequest.setSSLSocketFactory(sslContext.getSocketFactory());
             }
         } catch (IOException | NoSuchAlgorithmException | KeyManagementException | CertificateException | KeyStoreException |
@@ -178,5 +204,22 @@ public class OAuthClient implements Serializable {
             log.error("SolaceSparkConnector - Exception occurred when fetching access token", e);
             throw new RuntimeException(e);
         }
+    }
+
+    private String getTrustStoreName() {
+        String separator = File.separator;
+        String javaHome = System.getProperty("java.home");
+        String trustStoreName = javaHome + separator + "lib" + separator + "security" + separator + "cacerts";
+        String jssecacerts = javaHome + separator + "lib" + separator + "security" + separator + "jssecacerts";
+        File file = new File(jssecacerts);
+        try {
+            if (file.exists())
+                trustStoreName = jssecacerts;
+        } catch(SecurityException securityException) {
+            log.error("SolaceSparkConnector - Exception occurred when getting trust store name: {}", securityException.toString());
+            throw new RuntimeException(securityException);
+        }
+
+        return trustStoreName;
     }
 }
