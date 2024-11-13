@@ -78,8 +78,9 @@ public class OAuthClient implements Serializable {
             }
             // create keystore only for custom path configured by user.
             if(!isDefaultPath) {
-                FileOutputStream fileOutputStream = new FileOutputStream(trustStoreFilePath);
-                keyStore.store(fileOutputStream, trustStoreFilePassword == null ? null : trustStoreFilePassword.toCharArray());
+                try(FileOutputStream fileOutputStream = new FileOutputStream(trustStoreFilePath)) {
+                    keyStore.store(fileOutputStream, trustStoreFilePassword == null ? null : trustStoreFilePassword.toCharArray());
+                }
             }
             initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate, keyStore);
         } catch (IOException | CertificateException | KeyStoreException | NoSuchAlgorithmException e) {
