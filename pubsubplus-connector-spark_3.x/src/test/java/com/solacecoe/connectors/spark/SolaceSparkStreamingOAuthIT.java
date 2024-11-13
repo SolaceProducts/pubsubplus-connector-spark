@@ -1,6 +1,5 @@
 package com.solacecoe.connectors.spark;
 
-import com.solace.semp.v2.config.ApiException;
 import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.oauth.ContainerResource;
 import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
@@ -84,7 +83,7 @@ public class SolaceSparkStreamingOAuthIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingDisableOAuthCertValidation() throws TimeoutException, StreamingQueryException {
+    public void Should_ConnectToOAuthServer_WithoutValidatingCertificates_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
@@ -137,12 +136,10 @@ public class SolaceSparkStreamingOAuthIT {
             } while (runProcess[0]);
         });
         streamingQuery.awaitTermination();
-
-//        assertEquals("Number of events consumed from Solace is not equal to number of records written to Spark", 100L, count[0]);
     }
 
     @Test
-    public void testSolaceSparkStreamingInsecureOAuthEndpoint() throws TimeoutException, StreamingQueryException {
+    public void Should_ConnectToInSecureOAuthServer_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
@@ -195,12 +192,10 @@ public class SolaceSparkStreamingOAuthIT {
             } while (runProcess[0]);
         });
         streamingQuery.awaitTermination();
-
-//        assertEquals("Number of events consumed from Solace is not equal to number of records written to Spark", 100L, count[0]);
     }
 
     @Test
-    public void testSolaceSparkStreamingOAuthCertValidation() throws TimeoutException, StreamingQueryException {
+    public void Should_ConnectToOAuthServer_AddClientCertificateToDefaultTrustStore_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path resources = Paths.get("src", "test", "resources");
         Path path = Paths.get(resources.toAbsolutePath().toString(), "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
@@ -255,12 +250,10 @@ public class SolaceSparkStreamingOAuthIT {
             } while (runProcess[0]);
         });
         streamingQuery.awaitTermination();
-
-//        assertEquals("Number of events consumed from Solace is not equal to number of records written to Spark", 100L, count[0]);
     }
 
     @Test
-    public void testSolaceSparkStreamingOAuthCertValidationCustomTrustStore() throws TimeoutException, StreamingQueryException {
+    public void Should_ConnectToOAuthServer_AddClientCertificateToCustomTrustStore_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path resources = Paths.get("src", "test", "resources");
         Path path = Paths.get(resources.toAbsolutePath().toString(), "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
@@ -322,7 +315,7 @@ public class SolaceSparkStreamingOAuthIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingOAuthFileSource() throws TimeoutException, StreamingQueryException, JCSMPException, IOException {
+    public void Should_ReadAccessTokenFromFile_And_ProcessData() throws TimeoutException, StreamingQueryException, JCSMPException, IOException {
         Path resources = Paths.get("src", "test", "resources");
         Path path = Paths.get(resources.toAbsolutePath().toString(), "spark-checkpoint-1");
 
@@ -385,12 +378,55 @@ public class SolaceSparkStreamingOAuthIT {
             } while (runProcess[0]);
         });
         streamingQuery.awaitTermination();
-
-//        assertEquals("Number of events consumed from Solace is not equal to number of records written to Spark", 100L, count[0]);
     }
 
     @Test
-    public void testSolaceSparkStreamingOAuthFileSourceMultipleAccessToken() throws TimeoutException, StreamingQueryException, JCSMPException, IOException {
+    public void Should_Fail_When_AccessTokenIsInvalid() throws TimeoutException, StreamingQueryException, JCSMPException, IOException {
+        Path resources = Paths.get("src", "test", "resources");
+        Path path = Paths.get(resources.toAbsolutePath().toString(), "spark-checkpoint-1");
+
+        OAuthClient oAuthClient = new OAuthClient("https://localhost:7778/realms/solace/protocol/openid-connect/token", "solace", "solace-secret");
+
+        oAuthClient.buildRequest(10,
+                resources.toAbsolutePath().toString() + "/keycloak.crt",
+                null, null, "TLSv1.2",
+                "JKS", false);
+
+        String accessToken = oAuthClient.getAccessToken().getValue();
+        Files.write(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"), accessToken.getBytes(StandardCharsets.UTF_8));
+
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
+                    .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
+                    .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, resources.toAbsolutePath().toString() + "/accesstoken.txt")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            final long[] count = {0};
+            final boolean[] runProcess = {true};
+            final Object lock = new Object();
+            Dataset<Row> dataset = reader.load();
+
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                synchronized (lock) {
+                    count[0] = count[0] + dataset1.count();
+                }
+                Files.write(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"), "Invalid Token".getBytes(StandardCharsets.UTF_8));
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+
+        Files.delete(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"));
+
+    }
+
+    @Test
+    public void Should_Fail_When_MultipleAccessTokensArePresentInFile() throws JCSMPException, IOException {
         Path resources = Paths.get("src", "test", "resources");
         Path path = Paths.get(resources.toAbsolutePath().toString(), "spark-checkpoint-1");
 
@@ -430,7 +466,7 @@ public class SolaceSparkStreamingOAuthIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingDNoOAuthUrl() {
+    public void Should_Fail_IfMandatoryOAuthURLIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -456,7 +492,33 @@ public class SolaceSparkStreamingOAuthIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingDNoOAuthClientId() throws TimeoutException, StreamingQueryException {
+    public void Should_Fail_IfMandatoryOAuthURLIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
+                    .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL, "")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID, "solace")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET, "solace-secret")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
+                    .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    public void Should_Fail_IfMandatoryOAuthClientIdIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -482,7 +544,33 @@ public class SolaceSparkStreamingOAuthIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingDNoOAuthClientSecret() {
+    public void Should_Fail_IfMandatoryOAuthClientIdIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
+                    .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL, "https://localhost:7778/realms/solace/protocol/openid-connect/token")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID, "")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET, "solace-secret")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
+                    .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    public void Should_Fail_IfMandatoryOAuthClientSecretIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -508,7 +596,33 @@ public class SolaceSparkStreamingOAuthIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingDNoOAuthAccessTokenFile() {
+    public void Should_Fail_IfMandatoryOAuthClientSecretIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
+                    .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL, "https://localhost:7778/realms/solace/protocol/openid-connect/token")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID, "solace")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET, "")
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
+                    .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    public void Should_Fail_IfAccessTokenFileIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()

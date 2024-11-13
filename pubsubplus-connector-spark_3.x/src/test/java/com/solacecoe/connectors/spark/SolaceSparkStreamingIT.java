@@ -100,7 +100,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreaming() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -152,7 +152,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingCheckPayload() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessSolaceTextMessage() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -213,7 +213,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingMultipleConsumersOnSameSession() throws TimeoutException, StreamingQueryException {
+    public void Should_CreateMultipleConsumersOnSameSession_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-2");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -276,7 +276,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingMultipleConsumersOnDifferentSession() throws TimeoutException, StreamingQueryException {
+    public void Should_CreateMultipleConsumersOnDifferentSessions_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-3");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -337,7 +337,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingUnknownQueue() {
+    public void Should_Fail_IfQueueIsUnknown() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -362,7 +362,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingInvalidHost() {
+    public void Should_Fail_IfSolaceHostIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -387,7 +387,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingNoHost() {
+    public void Should_Fail_IfMandatoryHostIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -412,7 +412,32 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingNoVpn() {
+    public void Should_Fail_IfMandatoryHostIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, "")
+                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    public void Should_Fail_IfMandatoryVpnIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -437,7 +462,32 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingNoUsername() {
+    public void Should_Fail_IfMandatoryVpnIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, "")
+                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    public void Should_Fail_IfMandatoryUsernameIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -462,7 +512,32 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingNoPassword() {
+    public void Should_Fail_IfMandatoryUsernameIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, "")
+                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    public void Should_Fail_IfMandatoryPasswordIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -487,7 +562,32 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingNoQueue() {
+    public void Should_Fail_IfMandatoryPasswordIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, "")
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    public void Should_Fail_IfMandatoryQueueIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -512,7 +612,33 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void testSolaceSparkStreamingInvalidBatchSize() {
+    public void Should_Fail_IfMandatoryQueueIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.QUEUE, "")
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+//                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    public void Should_Fail_IfBatchSizeLessThan1() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
