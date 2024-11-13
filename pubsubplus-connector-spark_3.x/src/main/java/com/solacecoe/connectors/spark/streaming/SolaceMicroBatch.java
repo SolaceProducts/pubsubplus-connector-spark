@@ -78,7 +78,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 if(trustStoreFilePassword == null || trustStoreFilePassword.isEmpty()) {
                     log.error("SolaceSparkConnector - Please provide OAuth Client TrustStore Password. If TrustStore file path is not configured, please provide password for default java truststore");
                 }
-            } else if(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, null) == null) {
+            } else if(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, null) == null || properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, null).isEmpty()) {
                 log.error("SolaceSparkConnector - Please provide valid access token input");
                 throw new RuntimeException("SolaceSparkConnector - Please provide valid access token input");
             }

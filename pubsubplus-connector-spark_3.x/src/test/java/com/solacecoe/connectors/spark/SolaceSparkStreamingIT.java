@@ -339,7 +339,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void testSolaceSparkStreamingUnknownQueue() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -355,7 +355,8 @@ public class SolaceSparkStreamingIT {
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
@@ -363,7 +364,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void testSolaceSparkStreamingInvalidHost() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, "tcp://invalid-host:55555")
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -379,7 +380,8 @@ public class SolaceSparkStreamingIT {
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
@@ -387,7 +389,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void testSolaceSparkStreamingNoHost() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
 //                    .option(SolaceSparkStreamingProperties.HOST, "tcp://invalid-host:55555")
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -403,7 +405,8 @@ public class SolaceSparkStreamingIT {
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
@@ -411,7 +414,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void testSolaceSparkStreamingNoVpn() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
 //                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -427,7 +430,8 @@ public class SolaceSparkStreamingIT {
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
@@ -435,7 +439,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void testSolaceSparkStreamingNoUsername() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -451,7 +455,8 @@ public class SolaceSparkStreamingIT {
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
@@ -459,7 +464,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void testSolaceSparkStreamingNoPassword() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -475,7 +480,8 @@ public class SolaceSparkStreamingIT {
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
@@ -483,7 +489,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void testSolaceSparkStreamingNoQueue() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -499,7 +505,8 @@ public class SolaceSparkStreamingIT {
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
@@ -507,7 +514,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void testSolaceSparkStreamingInvalidBatchSize() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -523,7 +530,8 @@ public class SolaceSparkStreamingIT {
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }

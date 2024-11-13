@@ -407,7 +407,7 @@ public class SolaceSparkStreamingOAuthIT {
         lines.add(accessToken);
         Files.write(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"), lines);
 
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
                     .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
@@ -421,15 +421,18 @@ public class SolaceSparkStreamingOAuthIT {
                     .format("solace");
             Dataset<Row> dataset = reader.load();
 
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
+
+        Files.delete(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"));
     }
 
     @Test
-    public void testSolaceSparkStreamingDNoOAuthUrl() throws TimeoutException, StreamingQueryException {
+    public void testSolaceSparkStreamingDNoOAuthUrl() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
                     .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
@@ -446,7 +449,8 @@ public class SolaceSparkStreamingOAuthIT {
                     .format("solace");
             Dataset<Row> dataset = reader.load();
 
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
@@ -454,7 +458,7 @@ public class SolaceSparkStreamingOAuthIT {
     @Test
     public void testSolaceSparkStreamingDNoOAuthClientId() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
                     .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
@@ -471,15 +475,16 @@ public class SolaceSparkStreamingOAuthIT {
                     .format("solace");
             Dataset<Row> dataset = reader.load();
 
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
 
     @Test
-    public void testSolaceSparkStreamingDNoOAuthClientSecret() throws TimeoutException, StreamingQueryException {
+    public void testSolaceSparkStreamingDNoOAuthClientSecret() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
                     .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
@@ -496,28 +501,31 @@ public class SolaceSparkStreamingOAuthIT {
                     .format("solace");
             Dataset<Row> dataset = reader.load();
 
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }
 
     @Test
-    public void testSolaceSparkStreamingDNoOAuthAccessTokenFile() throws TimeoutException, StreamingQueryException {
+    public void testSolaceSparkStreamingDNoOAuthAccessTokenFile() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
                     .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
                     .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)
                     .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
+                    .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, "")
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "50")
                     .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
 
-            StreamingQuery streamingQuery = dataset.writeStream().start();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            }).start();
             streamingQuery.awaitTermination();
         });
     }

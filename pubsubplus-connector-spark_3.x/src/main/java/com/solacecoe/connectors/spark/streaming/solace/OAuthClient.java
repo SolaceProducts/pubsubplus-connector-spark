@@ -30,7 +30,6 @@ import java.util.Set;
 
 public class OAuthClient implements Serializable {
     private static final Logger log = LoggerFactory.getLogger(OAuthClient.class);
-    private AuthorizationGrant clientGrant;
     private Scope scope;
     private URI tokenEndpoint;
     private transient HTTPRequest httpRequest;
@@ -42,7 +41,6 @@ public class OAuthClient implements Serializable {
     }
 
     public void init(String url, String clientId, String clientSecret) {
-        clientGrant = new ClientCredentialsGrant();
         clientID = new ClientID(clientId);
         secret = new Secret(clientSecret);
         // The token endpoint
@@ -113,6 +111,7 @@ public class OAuthClient implements Serializable {
     private void initHttpRequest(int timeout, String trustStoreFilePath, String trustStoreFilePassword, String tlsVersion, String truststoreType, boolean validateSSLCertificate, KeyStore keyStore) {
         // Make the token request
         ClientAuthentication clientAuth = new ClientSecretBasic(clientID, secret);
+        AuthorizationGrant clientGrant = new ClientCredentialsGrant();;
         TokenRequest request = new TokenRequest(tokenEndpoint, clientAuth, clientGrant, scope);
         try {
             httpRequest = request.toHTTPRequest();
@@ -158,8 +157,7 @@ public class OAuthClient implements Serializable {
                 httpRequest.setHostnameVerifier(new SolaceNoopHostnameVerifier());
                 httpRequest.setSSLSocketFactory(sslContext.getSocketFactory());
             }
-        } catch (IOException | NoSuchAlgorithmException | KeyManagementException | CertificateException | KeyStoreException |
-                 UnrecoverableKeyException e) {
+        } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception occurred when building access token request", e);
             throw new RuntimeException(e);
         }
