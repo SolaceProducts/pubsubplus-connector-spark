@@ -26,10 +26,10 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionControl {
-    private static Logger log = LoggerFactory.getLogger(SolaceMicroBatch.class);
+    private static final Logger log = LoggerFactory.getLogger(SolaceMicroBatch.class);
     private int latestOffsetValue = 0;
     private boolean isCommitTriggered = false;
-    private String solaceOffsetIndicator = "MESSAGE_ID";
+    private final String solaceOffsetIndicator;
     private JsonObject offsetJson;
     private SolaceInputPartition[] inputPartitions;
     private final SolaceConnectionManager solaceConnectionManager;
@@ -73,6 +73,11 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                     log.error("SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
                     throw new RuntimeException("SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
                 }
+
+                String trustStoreFilePassword = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD, null);
+                if(trustStoreFilePassword == null || trustStoreFilePassword.isEmpty()) {
+                    log.error("SolaceSparkConnector - Please provide OAuth Client TrustStore Password. If TrustStore file path is not configured, please provide password for default java truststore");
+                }
             } else if(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, null) == null) {
                 log.error("SolaceSparkConnector - Please provide valid access token input");
                 throw new RuntimeException("SolaceSparkConnector - Please provide valid access token input");
@@ -106,26 +111,26 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
         ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
         skipMessageReprocessingIfTasksAreRunningLate = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.SKIP_DUPLICATES, SolaceSparkStreamingProperties.SKIP_DUPLICATES_DEFAULT));
-        log.info("SolaceSparkConnector - Ack Last processed messages is set to " + ackLastProcessedMessages);
+        log.info("SolaceSparkConnector - Ack Last processed messages is set to {}", ackLastProcessedMessages);
 
         includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
-        log.info("SolaceSparkConnector - includeHeaders is set to " + includeHeaders);
+        log.info("SolaceSparkConnector - includeHeaders is set to {}", includeHeaders);
 
-        createFlowsOnSameSession = properties.containsKey("createFlowsOnSameSession") ? Boolean.valueOf(properties.get("createFlowsOnSameSession")) : false;
-        log.info("SolaceSparkConnector - createFlowsOnSameSession is set to " + createFlowsOnSameSession);
+        createFlowsOnSameSession = Boolean.parseBoolean(properties.getOrDefault("createFlowsOnSameSession", "false"));
+        log.info("SolaceSparkConnector - createFlowsOnSameSession is set to {}", createFlowsOnSameSession);
 
         batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
-        log.info("SolaceSparkConnector - Batch Size is set to " + batchSize);
+        log.info("SolaceSparkConnector - Batch Size is set to {}", batchSize);
 
         partitions = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.PARTITIONS, SolaceSparkStreamingProperties.PARTITIONS_DEFAULT));
-        log.info("SolaceSparkConnector - Partitions is set to " + partitions);
+        log.info("SolaceSparkConnector - Partitions is set to {}", partitions);
         inputPartitions = new SolaceInputPartition[partitions];
 
         this.solaceOffsetIndicator = properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT);
-        log.info("SolaceSparkConnector - offsetIndicator is set to " + this.solaceOffsetIndicator);
+        log.info("SolaceSparkConnector - offsetIndicator is set to {}", this.solaceOffsetIndicator);
 
         solaceConnectionManager = new SolaceConnectionManager();
-        log.info("SolaceSparkConnector - Solace Connection Details Host : " + properties.get(SolaceSparkStreamingProperties.HOST) + ", VPN : " + properties.get(SolaceSparkStreamingProperties.VPN) + ", Username : " + properties.get(SolaceSparkStreamingProperties.USERNAME));
+        log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
         SolaceBroker solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
         solaceConnectionManager.addConnection(solaceBroker);
         for (int i = 0; i < partitions; i++) {
@@ -136,7 +141,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             EventListener eventListener = new EventListener((i + 1));
             // Initialize connection to Solace Broker
             solaceBroker.addReceiver(eventListener);
-            log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition " + i);
+            log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition {}", i);
         }
 
         this.messages = new ConcurrentHashMap<>();
@@ -166,12 +171,12 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 if(solaceBroker != null) {
                     int listenerIndex = this.createFlowsOnSameSession ? i : 0;
                     ConcurrentLinkedQueue<SolaceMessage> messages = solaceBroker.getMessages(listenerIndex);
-                    log.info("SolaceSparkConnector - Creating new records list. Messages received from Solace " + messages.size());
+                    log.info("SolaceSparkConnector - Creating new records list. Messages received from Solace {}", messages.size());
                     recordList = new CopyOnWriteArrayList<>();
                     for (int j = 0; j < batchSize && j < messages.size(); j++) {
                         SolaceMessage solaceMessage = messages.poll();
                         BytesXMLMessage bytesXMLMessage = solaceMessage.bytesXMLMessage;
-                        SolaceRecord solaceRecord = null;
+                        SolaceRecord solaceRecord;
                         try {
                             solaceRecord = SolaceRecord.getMapper(this.solaceOffsetIndicator).map(bytesXMLMessage);
                         } catch (Exception e) {
@@ -184,9 +189,9 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                                 // based on last successful offset, extract the message ID and see if same message is received, if so ack the message
                                 if (offsetJson != null && offsetJson.has("messageIDs")) {
                                     List<String> messageIDsInLastOffset = Arrays.asList(offsetJson.get("messageIDs").getAsString().split(","));
-                                    log.info("SolaceSparkConnector - Total messages in offset :: " + messageIDsInLastOffset.size());
+                                    log.info("SolaceSparkConnector - Total messages in offset :: {}", messageIDsInLastOffset.size());
                                     if (messageIDsInLastOffset.contains(solaceRecord.getMessageId())) {
-                                        log.info("SolaceSparkConnector - Message found in offset. Acknowledging previously processed message with ID :: " + solaceRecord.getMessageId());
+                                        log.info("SolaceSparkConnector - Message found in offset. Acknowledging previously processed message with ID :: {}", solaceRecord.getMessageId());
                                         bytesXMLMessage.ackMessage();
 
                                         this.messages.remove(solaceRecord.getMessageId());
@@ -223,7 +228,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 recordList = inputPartitions[i].getValues();
             }
 
-            log.info("SolaceSparkConnector - Plan input partitions with records :: " + recordList.size());
+            log.info("SolaceSparkConnector - Plan input partitions with records :: {}", recordList.size());
             partitions[i] = new SolaceInputPartition(i,"", recordList);
         }
 
@@ -245,7 +250,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     @Override
     public PartitionReaderFactory createReaderFactory() {
         checkSolaceException();
-        log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: " + this.includeHeaders);
+        log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: {}", this.includeHeaders);
         return new SolaceDataSourceReaderFactory(this.includeHeaders);
     }
 
@@ -293,7 +298,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             for(String messageID: messageIDs) {
                 if (this.messages.containsKey(messageID)) {
                     this.messages.get(messageID).bytesXMLMessage.ackMessage();
-                    log.info("SolaceSparkConnector - Acknowledged message with ID :: " + messageID);
+                    log.info("SolaceSparkConnector - Acknowledged message with ID :: {}", messageID);
                     this.messages.remove(messageID);
 //                    if (this.processedMessageIDs.contains(messageID)) {
 //                        this.processedMessageIDs.remove(messageID);

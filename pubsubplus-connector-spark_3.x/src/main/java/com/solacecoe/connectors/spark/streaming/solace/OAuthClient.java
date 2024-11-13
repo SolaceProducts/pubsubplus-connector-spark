@@ -13,9 +13,6 @@ import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceNoopHostnameV
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustManagerDelegate;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustSelfSignedStrategy;
 import com.solacesystems.jcsmp.*;
-import org.apache.hadoop.shaded.org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.hadoop.shaded.org.apache.http.conn.ssl.TrustSelfSignedStrategy;
-import org.apache.hadoop.shaded.org.apache.http.ssl.SSLContextBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,9 +59,6 @@ public class OAuthClient implements Serializable {
         boolean isDefaultPath = false;
         if(trustStoreFilePath == null || trustStoreFilePath.isEmpty()) {
             trustStoreFilePath = getTrustStoreName();
-            if(trustStoreFilePassword == null) {
-                trustStoreFilePassword = "changeit";
-            }
             isDefaultPath = true;
         }
         if(clientCertificatePath != null) {
@@ -98,7 +92,9 @@ public class OAuthClient implements Serializable {
         try {
             KeyStore keyStore = KeyStore.getInstance(trustStoreType);
             if(isDefaultPath) {
-                keyStore.load(new FileInputStream(trustStoreFilePath), trustStoreFilePassword == null ? null : trustStoreFilePassword.toCharArray());
+                try(FileInputStream fileInputStream = new FileInputStream(trustStoreFilePath)) {
+                    keyStore.load(fileInputStream, trustStoreFilePassword == null ? null : trustStoreFilePassword.toCharArray());
+                }
             } else {
                 keyStore.load(null);
             }

@@ -118,24 +118,20 @@ public class SolaceBroker implements Serializable {
 
     private void setReceiver(EventListener eventListener) {
         try {
-            ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
+            ConsumerFlowProperties flowProp = new ConsumerFlowProperties();
             Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.queue);
 
-            flow_prop.setEndpoint(listenQueue);
-            flow_prop.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
-            EndpointProperties endpoint_props = new EndpointProperties();
-            endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_NONEXCLUSIVE);
-
-            Context defaultContext = JCSMPFactory.onlyInstance().getDefaultContext();
-
-            Context context = JCSMPFactory.onlyInstance().createContext(null);
+            flowProp.setEndpoint(listenQueue);
+            flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
+            EndpointProperties endpointProps = new EndpointProperties();
+            endpointProps.setAccessType(EndpointProperties.ACCESSTYPE_NONEXCLUSIVE);
 
             eventListener.setBrokerInstance(this);
             FlowReceiver cons = this.session.createFlow(eventListener,
-                    flow_prop, endpoint_props);
+                    flowProp, endpointProps);
 
             cons.start();
-            log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue " + this.queue);
+            log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {} ", this.queue);
             flowReceivers.add(cons);
         } catch (Exception e) {
             handleException("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
