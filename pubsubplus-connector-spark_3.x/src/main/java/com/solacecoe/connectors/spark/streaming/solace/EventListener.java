@@ -3,7 +3,6 @@ package com.solacecoe.connectors.spark.streaming.solace;
 import java.io.Serializable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import com.solacesystems.jcsmp.JCSMPReconnectEventHandler;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;

@@ -124,7 +124,9 @@ public class OAuthClient implements Serializable {
                 if(keyStore == null) {
                     // Load the trust store, the default type is "pkcs12", the alternative is "jks"
                     keyStore = KeyStore.getInstance(truststoreType);
-                    keyStore.load(new FileInputStream(trustStoreFile), trustStorePassword);
+                    try(FileInputStream fileInputStream = new FileInputStream(trustStoreFile)) {
+                        keyStore.load(fileInputStream, trustStorePassword);
+                    }
                 }
 
                 sslSocketFactory = TLSUtils.createSSLSocketFactory(
@@ -187,7 +189,7 @@ public class OAuthClient implements Serializable {
             if (! response.indicatesSuccess()) {
                 // We got an error response...
                 TokenErrorResponse errorResponse = response.toErrorResponse();
-                log.error("SolaceSparkConnector - Exception when fetching access token: {}", errorResponse.getErrorObject().toString());
+                log.error("SolaceSparkConnector - Exception when fetching access token: {}", errorResponse.getErrorObject());
                 throw new IOException(errorResponse.getErrorObject().toString());
             }
 
