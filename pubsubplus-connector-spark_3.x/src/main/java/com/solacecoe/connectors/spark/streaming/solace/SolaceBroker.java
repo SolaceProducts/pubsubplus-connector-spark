@@ -1,6 +1,8 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidAccessTokenException;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
 import com.solacesystems.jcsmp.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,8 +25,7 @@ public class SolaceBroker implements Serializable {
     private ScheduledExecutorService scheduledExecutorService;
     private boolean isException;
     private Exception exception;
-    private String accessTokenSource;
-    private long accessTokenSourceLastModifiedTime = 0l;
+    private long accessTokenSourceLastModifiedTime = 0L;
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
     public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
@@ -36,10 +37,10 @@ public class SolaceBroker implements Serializable {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             // get api properties
             Properties props = new Properties();
-            for(String key : properties.keySet()) {
-                if (key.startsWith(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX)) {
-                    String value = properties.get(key);
-                    String solaceKey = key.substring(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX.length());
+            for(Map.Entry<String, String> entry : properties.entrySet()) {
+                if (entry.getKey().startsWith(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX)) {
+                    String value = entry.getValue();
+                    String solaceKey = entry.getKey().substring(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX.length());
                     props.put("jcsmp." + solaceKey, value);
                 }
             }
@@ -57,7 +58,7 @@ public class SolaceBroker implements Serializable {
                     String accessTokenSourceType = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE, SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE_DEFAULT);
                     // default file source is currently supported
                     if(accessTokenSourceType.equals(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE_DEFAULT)) {
-                        accessTokenSource = properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN);
+                        String accessTokenSource = properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN);
                         String accessToken = readAccessTokenFromFile(accessTokenSource);
                         jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, accessToken);
                         scheduleOAuthRefresh(accessTokenSource, interval);
@@ -98,16 +99,14 @@ public class SolaceBroker implements Serializable {
             if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)) {
                 cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)));
             }
-//            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES, cp);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
-        } catch (Exception e) {
-//            handleException("SolaceSparkConnector - Exception connecting to Solace ", e);
-            log.error("SolaceSparkConnector - Exception connecting to Solace ", e);
+        } catch (Exception ex) {
+            log.error("SolaceSparkConnector - Exception connecting to Solace ", ex);
             close();
             this.isException = true;
-            this.exception = e;
-            throw new RuntimeException(e);
+            this.exception = ex;
+            throw new SolaceSessionException(ex);
         }
     }
 
@@ -135,11 +134,7 @@ public class SolaceBroker implements Serializable {
             flowReceivers.add(cons);
         } catch (Exception e) {
             handleException("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
-//            log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
-//            close();
-//            throw new RuntimeException(e);
         }
-        // log.info("Listening for messages: "+ this.queueName);
     }
 
     public void close() {
@@ -147,7 +142,7 @@ public class SolaceBroker implements Serializable {
             if(flowReceiver != null && !flowReceiver.isClosed()) {
                 String endpoint = flowReceiver.getEndpoint().getName();
                 flowReceiver.close();
-                log.info("SolaceSparkConnector - Closed flow receiver to endpoint " + endpoint);
+                log.info("SolaceSparkConnector - Closed flow receiver to endpoint {}", endpoint);
             }
         });
         flowReceivers.clear();
@@ -166,7 +161,7 @@ public class SolaceBroker implements Serializable {
     }
 
     public ConcurrentLinkedQueue<SolaceMessage> getMessages(int index) {
-        log.info("Requesting messages from event listener " + index + ", total messages available :: " + this.eventListeners.get(index).getMessages().size());
+        log.info("Requesting messages from event listener {}, total messages available :: {}", index, this.eventListeners.get(index).getMessages().size());
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
@@ -213,8 +208,6 @@ public class SolaceBroker implements Serializable {
                     log.info("SolaceSparkConnector - Updated Solace Session with new access token received from OAuth Server");
                 } catch (JCSMPException e) {
                     handleException("SolaceSparkConnector - Exception updating access token", e);
-//                    log.error("SolaceSparkConnector - Exception updating access token", e);
-//                    throw new RuntimeException(e);
                 }
             }
         }, 0, refreshInterval, TimeUnit.SECONDS);
@@ -230,8 +223,6 @@ public class SolaceBroker implements Serializable {
                     log.info("SolaceSparkConnector - Updated Solace Session with new access token retrieved from Access Token File {} ", accessTokenSource);
                 } catch (Exception e) {
                     handleException("SolaceSparkConnector - Exception updating access token", e);
-//                    log.error("SolaceSparkConnector - Exception updating access token", e);
-//                    throw new RuntimeException(e);
                 }
             }
         }, 0, refreshInterval, TimeUnit.SECONDS);
@@ -249,20 +240,18 @@ public class SolaceBroker implements Serializable {
             accessTokenSourceLastModifiedTime = accessTokenFile.lastModified();
             List<String> accessTokens = Files.readAllLines(accessTokenFile.toPath());
             if (accessTokens.size() != 1) {
-//                handleException(String.format("SolaceSparkConnector - File %s is empty or has more than one access token", accessTokenSource), null);
                 log.error("SolaceSparkConnector - File {} is empty or has more than one access token", accessTokenSource);
                 this.isException = true;
-                this.exception = new RuntimeException("SolaceSparkConnector - File " + accessTokenSource + " is empty or has more than one access token");
-                throw new RuntimeException("SolaceSparkConnector - File " + accessTokenSource + " is empty or has more than one access token");
+                this.exception = new SolaceInvalidAccessTokenException("SolaceSparkConnector - File " + accessTokenSource + " is empty or has more than one access token");
+                throw exception;
             }
             return accessTokens.get(0);
         } catch (Exception e) {
-//            handleException("SolaceSparkConnector - Exception when reading access token file", e);
             log.error("SolaceSparkConnector - Exception when reading access token file", e);
             close();
             this.isException = true;
             this.exception = e;
-            throw new RuntimeException(e);
+            throw new SolaceInvalidAccessTokenException(e);
         }
     }
 
@@ -273,7 +262,7 @@ public class SolaceBroker implements Serializable {
             this.isException = true;
             this.exception = e;
             close();
-            throw new RuntimeException(e);
+            throw new SolaceSessionException(e);
         }
     }
 

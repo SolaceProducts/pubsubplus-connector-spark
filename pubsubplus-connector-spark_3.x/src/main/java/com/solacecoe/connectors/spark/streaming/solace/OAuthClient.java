@@ -9,10 +9,11 @@ import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
 import com.nimbusds.oauth2.sdk.util.tls.TLSUtils;
 import com.nimbusds.oauth2.sdk.util.tls.TLSVersion;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidTLSException;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSecurityException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceNoopHostnameVerifier;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustManagerDelegate;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustSelfSignedStrategy;
-import com.solacesystems.jcsmp.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +73,7 @@ public class OAuthClient implements Serializable {
             KeyStore keyStore = createKeyStore(Files.readAllBytes(clientCert.toPath()), trustStoreType, trustStoreFilePath, trustStoreFilePassword, isDefaultPath);
             if (keyStore == null) {
                 log.error("SolaceSparkConnector - Unable to create keystore from file {}", clientCertificatePath);
-                throw new RuntimeException("Unable to create keystore from file " + clientCertificatePath);
+                throw new SolaceSecurityException("Unable to create keystore from file " + clientCertificatePath);
             }
             // create keystore only for custom path configured by user.
             if(!isDefaultPath) {
@@ -83,7 +84,7 @@ public class OAuthClient implements Serializable {
             initHttpRequest(timeout, trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate, keyStore);
         } catch (IOException | CertificateException | KeyStoreException | NoSuchAlgorithmException e) {
             log.error("SolaceSparkConnector - Failed to read client certificate", e);
-            throw new RuntimeException(e);
+            throw new SolaceSecurityException(e);
         }
     }
 
@@ -134,12 +135,9 @@ public class OAuthClient implements Serializable {
                         getTLSVersion(tlsVersion));
                 httpRequest.setSSLSocketFactory(sslSocketFactory);
             } else {
-//                SSLContext sslContext = new SSLContextBuilder()
-//                        .loadTrustMaterial(null, new TrustSelfSignedStrategy())
-//                        .build();
-                TrustManagerFactory tmfactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                tmfactory.init((KeyStore) null);
-                TrustManager[] tms = tmfactory.getTrustManagers();
+                TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                trustManagerFactory.init((KeyStore) null);
+                TrustManager[] tms = trustManagerFactory.getTrustManagers();
                 Set<TrustManager> trustManagers = new LinkedHashSet<>();
                 SolaceTrustSelfSignedStrategy trustStrategy = new SolaceTrustSelfSignedStrategy();
                 if (tms != null) {
@@ -161,7 +159,7 @@ public class OAuthClient implements Serializable {
             }
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception occurred when building access token request", e);
-            throw new RuntimeException(e);
+            throw new SolaceSecurityException(e);
         }
     }
 
@@ -178,11 +176,11 @@ public class OAuthClient implements Serializable {
             case "TLSv1.3":
                 return TLSVersion.TLS_1_3;
             default:
-                throw new RuntimeException("SolaceSparkConnector - Invalid TLS version " + tlsVersion);
+                throw new SolaceInvalidTLSException("SolaceSparkConnector - Invalid TLS version " + tlsVersion);
         }
     }
 
-    public AccessToken getAccessToken() throws JCSMPException {
+    public AccessToken getAccessToken() {
         TokenResponse response = null;
         try {
             response = TokenResponse.parse(httpRequest.send());
@@ -199,7 +197,7 @@ public class OAuthClient implements Serializable {
             return successResponse.getTokens().getAccessToken();
         } catch (ParseException | IOException e) {
             log.error("SolaceSparkConnector - Exception occurred when fetching access token", e);
-            throw new RuntimeException(e);
+            throw new SolaceSecurityException(e);
         }
     }
 
@@ -213,8 +211,8 @@ public class OAuthClient implements Serializable {
             if (file.exists())
                 trustStoreName = jssecacerts;
         } catch(SecurityException securityException) {
-            log.error("SolaceSparkConnector - Exception occurred when getting trust store name: {}", securityException.toString());
-            throw new RuntimeException(securityException);
+            log.error("SolaceSparkConnector - Exception occurred when getting trust store name", securityException);
+            throw new SolaceSecurityException(securityException);
         }
 
         return trustStoreName;
