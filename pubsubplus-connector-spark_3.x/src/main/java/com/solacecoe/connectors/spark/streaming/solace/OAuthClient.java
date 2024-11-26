@@ -11,7 +11,6 @@ import com.nimbusds.oauth2.sdk.util.tls.TLSUtils;
 import com.nimbusds.oauth2.sdk.util.tls.TLSVersion;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidTLSException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSecurityException;
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceNoopHostnameVerifier;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustManagerDelegate;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustSelfSignedStrategy;
 import org.slf4j.Logger;
@@ -154,7 +153,7 @@ public class OAuthClient implements Serializable {
 
                 SSLContext sslContext = SSLContext.getInstance(tlsVersion);
                 sslContext.init(null, trustManagers.toArray(new TrustManager[]{}), new SecureRandom());
-                httpRequest.setHostnameVerifier(new SolaceNoopHostnameVerifier());
+//                httpRequest.setHostnameVerifier(new SolaceNoopHostnameVerifier());
                 httpRequest.setSSLSocketFactory(sslContext.getSocketFactory());
             }
         } catch (Exception e) {
