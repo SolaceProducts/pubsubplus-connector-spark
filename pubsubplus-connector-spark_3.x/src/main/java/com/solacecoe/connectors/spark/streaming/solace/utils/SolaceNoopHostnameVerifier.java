@@ -6,6 +6,6 @@ import javax.net.ssl.SSLSession;
 public class SolaceNoopHostnameVerifier implements HostnameVerifier {
     @Override
     public boolean verify(String hostname, SSLSession session) {
-        return false;
+        return true;
     }
 }

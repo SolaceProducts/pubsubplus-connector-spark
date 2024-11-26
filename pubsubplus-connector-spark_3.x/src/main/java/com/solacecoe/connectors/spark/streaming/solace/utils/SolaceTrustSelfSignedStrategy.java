@@ -10,6 +10,6 @@ public class SolaceTrustSelfSignedStrategy {
     }
 
     public boolean isTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        return chain.length == 1;
+        return true;
     }
 }
