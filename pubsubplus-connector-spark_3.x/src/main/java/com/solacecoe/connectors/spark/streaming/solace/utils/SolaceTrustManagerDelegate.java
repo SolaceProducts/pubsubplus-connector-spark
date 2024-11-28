@@ -14,17 +14,19 @@ public class SolaceTrustManagerDelegate implements X509TrustManager {
     }
 
     public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        this.trustManager.checkClientTrusted(chain, authType);
+        if(this.trustManager != null) {
+            this.trustManager.checkClientTrusted(chain, authType);
+        }
     }
 
     public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        if (!this.trustStrategy.isTrusted(chain, authType)) {
+        if (!this.trustStrategy.isTrusted(chain, authType) && this.trustManager != null) {
             this.trustManager.checkServerTrusted(chain, authType);
         }
 
     }
 
     public X509Certificate[] getAcceptedIssuers() {
-        return this.trustManager.getAcceptedIssuers();
+        return new X509Certificate[0];
     }
 }

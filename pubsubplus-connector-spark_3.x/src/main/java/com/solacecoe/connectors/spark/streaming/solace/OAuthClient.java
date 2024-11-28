@@ -13,6 +13,7 @@ import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidT
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSecurityException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustManagerDelegate;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustSelfSignedStrategy;
+import org.apache.hadoop.shaded.org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -143,7 +144,7 @@ public class OAuthClient implements Serializable {
                     for (int i = 0; i < tms.length; ++i) {
                         TrustManager tm = tms[i];
                         if (tm instanceof X509TrustManager) {
-                            tms[i] = new SolaceTrustManagerDelegate((X509TrustManager) tm, trustStrategy);
+                            tms[i] = new SolaceTrustManagerDelegate(null, trustStrategy);
                         }
                     }
                     int len = tms.length;
@@ -153,7 +154,7 @@ public class OAuthClient implements Serializable {
 
                 SSLContext sslContext = SSLContext.getInstance(tlsVersion);
                 sslContext.init(null, trustManagers.toArray(new TrustManager[]{}), new SecureRandom());
-//                httpRequest.setHostnameVerifier(new SolaceNoopHostnameVerifier());
+                httpRequest.setHostnameVerifier(new NoopHostnameVerifier());
                 httpRequest.setSSLSocketFactory(sslContext.getSocketFactory());
             }
         } catch (Exception e) {

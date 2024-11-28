@@ -36,6 +36,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     private SolaceInputPartition[] inputPartitions;
     private final SolaceConnectionManager solaceConnectionManager;
     private final ConcurrentHashMap<String, SolaceMessage> messages;
+    private final CopyOnWriteArrayList<String> committedMessages;
     private final int batchSize;
     private final int partitions;
     private final boolean ackLastProcessedMessages;
@@ -146,6 +147,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         }
 
         this.messages = new ConcurrentHashMap<>();
+        this.committedMessages = new CopyOnWriteArrayList<>();
         this.offsetJson = new JsonObject();
         log.info("SolaceSparkConnector - Initialization Completed");
     }
@@ -158,7 +160,10 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     }
 
     private boolean shouldAddMessage(String messageID) {
-        return !skipMessageReprocessingIfTasksAreRunningLate || !this.messages.containsKey(messageID);
+        if(this.messages.containsKey(messageID)) {
+            log.info("SolaceSparkConnector - Duplicate message received {}", messageID);
+        }
+        return !this.messages.containsKey(messageID);
     }
 
     private InputPartition[] splitDataOnPartitions() {
@@ -182,31 +187,40 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                         } catch (Exception e) {
                             throw new SolaceRecordMapperException(e);
                         }
-                        if (solaceRecord != null && shouldAddMessage(solaceRecord.getMessageId())) {
-                            this.messages.put(solaceRecord.getMessageId(), solaceMessage);
-                            if (ackLastProcessedMessages) {
-                                log.info("SolaceSparkConnector - Ack last processed messages is enabled. Checking if message is already processed based on available offsets.");
-                                // based on last successful offset, extract the message ID and see if same message is received, if so ack the message
-                                if (offsetJson != null && offsetJson.has("messageIDs")) {
-                                    List<String> messageIDsInLastOffset = Arrays.asList(offsetJson.get("messageIDs").getAsString().split(","));
-                                    log.info("SolaceSparkConnector - Total messages in offset :: {}", messageIDsInLastOffset.size());
-                                    if (messageIDsInLastOffset.contains(solaceRecord.getMessageId())) {
-                                        log.info("SolaceSparkConnector - Message found in offset. Acknowledging previously processed message with ID :: {}", solaceRecord.getMessageId());
-                                        bytesXMLMessage.ackMessage();
 
-                                        this.messages.remove(solaceRecord.getMessageId());
+                        if (solaceRecord != null) {
+                            if(this.committedMessages.contains(solaceRecord.getMessageId())) {
+                                log.info("SolaceSparkConnector - Is Message redelivered {}. Acknowledging message with id {} as it is already processed", solaceRecord.isRedelivered(), solaceRecord.getMessageId());
+                                bytesXMLMessage.ackMessage();
+                                this.committedMessages.remove(solaceRecord.getMessageId());
+                            } else if(this.messages.containsKey(solaceRecord.getMessageId())) {
+                                // update with latest message so that ack is processed correctly. No need to add to input partition as it is already added.
+                                this.messages.put(solaceRecord.getMessageId(), solaceMessage);
+                            } else {
+                                this.messages.put(solaceRecord.getMessageId(), solaceMessage);
+                                if (ackLastProcessedMessages) {
+                                    log.info("SolaceSparkConnector - Ack last processed messages is enabled. Checking if message is already processed based on available offsets.");
+                                    // based on last successful offset, extract the message ID and see if same message is received, if so ack the message
+                                    if (offsetJson != null && offsetJson.has("messageIDs")) {
+                                        List<String> messageIDsInLastOffset = Arrays.asList(offsetJson.get("messageIDs").getAsString().split(","));
+                                        log.info("SolaceSparkConnector - Total messages in offset :: {}", messageIDsInLastOffset.size());
+                                        if (messageIDsInLastOffset.contains(solaceRecord.getMessageId())) {
+                                            log.info("SolaceSparkConnector - Message id found in offset. Acknowledging message with id {}", solaceRecord.getMessageId());
+                                            bytesXMLMessage.ackMessage();
+
+                                            this.messages.remove(solaceRecord.getMessageId());
+                                        } else {
+                                            log.info("SolaceSparkConnector - Message id is not present in offset. Hence reprocessing it.");
+                                            recordList.add(solaceRecord);
+                                        }
                                     } else {
-                                        log.info("SolaceSparkConnector - Message is not present in offset. Hence reprocessing it.");
+                                        log.info("SolaceSparkConnector - No offset is available. Hence reprocessing it.");
                                         recordList.add(solaceRecord);
                                     }
                                 } else {
-                                    log.info("SolaceSparkConnector - Trying to check if messages are already processed but offset is not available. Hence reprocessing it.");
                                     recordList.add(solaceRecord);
                                 }
-                            } else {
-                                recordList.add(solaceRecord);
                             }
-
                         }
                     }
                 }
@@ -214,7 +228,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                 recordList = inputPartitions[i].getValues();
             }
 
-            log.info("SolaceSparkConnector - Plan input partitions with records :: {}", recordList.size());
+            log.info("SolaceSparkConnector - Creating input partitions with {} records", recordList.size());
             solaceInputPartitions[i] = new SolaceInputPartition(i,"", recordList);
         }
 
@@ -236,7 +250,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     @Override
     public PartitionReaderFactory createReaderFactory() {
         checkSolaceException();
-        log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: {}", this.includeHeaders);
+        log.info("SolaceSparkConnector - Create reader factory with includeHeaders set to {}", this.includeHeaders);
         return new SolaceDataSourceReaderFactory(this.includeHeaders);
     }
 
@@ -258,6 +272,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         checkSolaceException();
         JsonObject gson = new Gson().fromJson(json, JsonObject.class);
         if(gson != null && gson.has("offset")) {
+            log.info("SolaceSparkConnector - Found previous offset with id {} and is messageIDs present {}", gson.get("offset").getAsInt(), gson.has("messageIDs"));
             latestOffsetValue = gson.get("offset").getAsInt();
             offsetJson = gson;
         }
@@ -267,17 +282,25 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     @Override
     public void commit(Offset end) {
         checkSolaceException();
-        log.info("SolaceSparkConnector - Commit triggered");
+        log.info("SolaceSparkConnector - Commit triggered. Starting to acknowledge messages");
         BasicOffset basicOffset = (BasicOffset) end;
-
-        if(basicOffset != null && basicOffset.getMessageIDs() != null && basicOffset.getMessageIDs().length() > 0) {
+        long startTime = System.currentTimeMillis();
+        if(basicOffset != null && basicOffset.getMessageIDs() != null && !basicOffset.getMessageIDs().isEmpty()) {
             String[] messageIDs = basicOffset.getMessageIDs().split(",");
             for(String messageID: messageIDs) {
                 if (this.messages.containsKey(messageID)) {
                     this.messages.get(messageID).bytesXMLMessage.ackMessage();
-                    log.info("SolaceSparkConnector - Acknowledged message with ID :: {}", messageID);
+                    if(log.isDebugEnabled()) {
+                        log.debug("SolaceSparkConnector - Acknowledged message with ID :: {}", messageID);
+                    }
                     this.messages.remove(messageID);
+                    this.committedMessages.add(messageID);
                 }
+            }
+
+            log.info("SolaceSparkConnector - Message acknowledgements completed.");
+            if(log.isDebugEnabled()) {
+                log.debug("SolaceSparkConnector - Time taken to acknowledge {} messages :: {}", messageIDs.length, System.currentTimeMillis() - startTime);
             }
         }
 
