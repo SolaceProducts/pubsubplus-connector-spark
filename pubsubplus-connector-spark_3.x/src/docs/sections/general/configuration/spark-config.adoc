@@ -39,7 +39,7 @@
 | 0
 | The number of times to attempt and retry a connection during initial connection setup. Zero means no automatic connection retries (that is, try once and give up). -1 means "retry forever".
 
-| reconnectRetries
+| reconnectRetries[[reconnect-retries]]
 | int
 | (-1) or greater
 | 3
@@ -67,6 +67,80 @@ a| Any additional Solace Java API properties can be set through configuring sola
 solace.apiProperties.reapply_subscriptions=false
 solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 ----
+
+| solace.oauth.client.access-token
+| string
+| absolute file path to token file
+| empty
+| Set this configuration, if rotating access token is present in file. In this case connector will read access token directly from file instead of sending request to OAuth Server. Please note <<solace-oAuth-client-refresh-interval, Solace OAuth Client Refresh Interval>> should be set to read access token from file at regular intervals.
+
+| solace.oauth.client.auth-server-url
+| string
+| any
+| empty
+| Full representation of token endpoint to fetch access token.
+
+| solace.oauth.client.client-id
+| string
+| any
+| empty
+| OAuth Client ID
+
+| solace.oauth.client.credentials.client-secret
+| string
+| any
+| empty
+| OAuth Client Secret
+
+| solace.oauth.client.auth-server.client-certificate.file
+| string
+| any
+| empty
+| Absolute path to X.509 client certificate file for TLS connections. Make sure file path is accessible by the connector.
+
+| solace.oauth.client.auth-server.truststore.file
+| string
+| any
+| empty
+| Absolute path to trust store file for TLS connections. This property works in two ways
+
+1. If JKS file is available in cluster configure absolute path so that connector will load the JKS file.
+
+2. If solace.oauth.client.auth-server.client-certificate.file is configured simply provide a path(should include file name as well). The connector will load the client certificate to key store and saves to JKS file .
+
+| solace.oauth.client.auth-server.truststore.password
+| string
+| any
+| empty
+| Password for JKS file. This property works in two ways
+
+1. If JKS file is available in cluster provide the password to JKS file.
+
+2. If solace.oauth.client.auth-server.client-certificate.file is configured simply provide a password which will be used to protect the JKS file created in above configuration option 2.
+
+| solace.oauth.client.auth-server.ssl.validate-certificate
+| boolean
+| any
+| true
+| Boolean value to enable or disable ssl certificate validation. If set to false connector will send TLS request without any validation.
+
+| solace.oauth.client.auth-server.tls.version
+| string
+| SSL, TLS, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3
+| TLSv1.2
+| Indicate the type of SSL connection.
+
+| solace.oauth.client.token.refresh.interval[[solace-oAuth-client-refresh-interval]]
+| integer
+| positive integer value
+| 60
+| Interval(Seconds) to fetch access token by the connector to avoid disconnection on token expiry. This value should be less than your token expiry time.
+
+| solace.oauth.client.token.fetch.timeout
+| integer
+| positive integer value
+| 100
+| Connection timeout(MS) for access token request.
 
 | queue
 | string
@@ -123,7 +197,5 @@ Note: Default value uses replication group message ID property as offset indicat
 | true or false
 | false
 | If enabled consumer flows are enabled on same session. The number of consumer flows is equal to number of partitions configured. This is helpful when users want to optimize on number of connections created from Spark. By default, the connector creates a new connection for each consumer.
-
-
 
 |===

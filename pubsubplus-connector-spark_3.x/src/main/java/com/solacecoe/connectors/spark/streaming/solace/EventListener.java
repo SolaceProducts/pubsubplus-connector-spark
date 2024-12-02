@@ -1,12 +1,8 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -18,10 +14,14 @@ public class EventListener implements XMLMessageListener, Serializable {
     private static Logger log = LoggerFactory.getLogger(EventListener.class);
     private final int id;
     private final ConcurrentLinkedQueue<SolaceMessage> messages;
-
+    private SolaceBroker solaceBroker;
     public EventListener(int id) {
         this.id = id;
         this.messages = new ConcurrentLinkedQueue<>();
+    }
+
+    public void setBrokerInstance(SolaceBroker solaceBroker) {
+        this.solaceBroker = solaceBroker;
     }
 
     @Override
@@ -38,8 +38,12 @@ public class EventListener implements XMLMessageListener, Serializable {
 
     @Override
     public void onException(JCSMPException e) {
-        log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
-        throw new RuntimeException(e);
+        if(solaceBroker != null) {
+            solaceBroker.handleException("SolaceSparkConnector - Consumer received exception", e);
+        } else {
+            log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
+            throw new RuntimeException(e);
+        }
     }
 
     public ConcurrentLinkedQueue<SolaceMessage> getMessages() {
