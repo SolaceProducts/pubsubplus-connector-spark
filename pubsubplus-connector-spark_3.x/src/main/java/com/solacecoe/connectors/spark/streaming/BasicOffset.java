@@ -5,14 +5,16 @@ import org.apache.spark.sql.connector.read.streaming.Offset;
 public class BasicOffset extends Offset {
     private final int offset;
     private String messageIDs = "NA";
+    private static String previousMessageIDs = "";
     public BasicOffset(int offset, String messageIDs) {
         this.offset = offset;
         this.messageIDs = messageIDs;
     }
     @Override
     public String json() {
-        String offsetString = "{\"offset\":" + offset + "}";
-        if(messageIDs.length() > 0) {
+        String offsetString = "{\"offset\":" + offset + ", \"messageIDs\":\"" + previousMessageIDs + "\"}";
+        if(!messageIDs.isEmpty()) {
+            previousMessageIDs = messageIDs;
             offsetString = "{\"offset\":" + offset + ", \"messageIDs\":\"" + messageIDs + "\"}";
         }
 
