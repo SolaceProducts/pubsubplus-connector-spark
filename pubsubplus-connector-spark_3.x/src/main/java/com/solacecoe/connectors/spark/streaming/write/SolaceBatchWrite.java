@@ -43,10 +43,10 @@ public class SolaceBatchWrite implements BatchWrite, Serializable {
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Password in configuration options");
         }
 
-        if(!properties.containsKey("topic") || properties.get("topic") == null || properties.get("topic").isEmpty()) {
-            log.error("SolaceSparkConnector - Please provide Solace Queue name in configuration options");
-            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
-        }
+//        if(!properties.containsKey("topic") || properties.get("topic") == null || properties.get("topic").isEmpty()) {
+//            log.error("SolaceSparkConnector - Please provide Solace Queue name in configuration options");
+//            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Topic in configuration options");
+//        }
     }
     @Override
     public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo physicalWriteInfo) {

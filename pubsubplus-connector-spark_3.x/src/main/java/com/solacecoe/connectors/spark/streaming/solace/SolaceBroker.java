@@ -1,5 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceSessionEventListener;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidAccessTokenException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
@@ -18,6 +20,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.Serializable;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +74,7 @@ public class SolaceBroker implements Serializable {
 
             jcsmpProperties.setProperty(JCSMPProperties.HOST, host);            // host:port
             jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, vpn);    // message-vpn
+            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
                 isOAuth = true;
                 int interval = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT));
@@ -165,7 +171,7 @@ public class SolaceBroker implements Serializable {
         }
     }
 
-    public void publishMessage(String topic, Object msg, UnsafeMapData headersMap) {
+    public void publishMessage(String applicationMessageId, String topic, String partitionKey, Object msg, long timestamp, UnsafeMapData headersMap) {
         Map<String, Object> headers = new HashMap<>();
         if(headersMap != null && headersMap.numElements() > 0) {
             for (int i = 0; i < headersMap.numElements(); i++) {
@@ -173,12 +179,20 @@ public class SolaceBroker implements Serializable {
                         headersMap.valueArray().get(i, DataTypes.BinaryType));
             }
         }
+        if(partitionKey != null && !partitionKey.isEmpty()) {
+            headers.put(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY, partitionKey);
+        }
         try {
             XMLMessage xmlMessage = SolaceUtils.map(msg, headers, UUID.randomUUID(), new ArrayList<>(), false);
 //            xmlMessage.writeBytes(msg.toString().getBytes(StandardCharsets.UTF_8));
 //            xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
-            xmlMessage.setCorrelationId(UUID.randomUUID().toString());
-            xmlMessage.setCorrelationKey(UUID.randomUUID().toString());
+            xmlMessage.setCorrelationKey(applicationMessageId);
+            xmlMessage.setCorrelationId(applicationMessageId);
+            xmlMessage.setApplicationMessageId(applicationMessageId);
+            if(timestamp > 0L) {
+                xmlMessage.setSenderTimestamp(timestamp);
+            }
+            xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
             Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
             this.producer.send(xmlMessage, destination);
         } catch (SDTException e) {

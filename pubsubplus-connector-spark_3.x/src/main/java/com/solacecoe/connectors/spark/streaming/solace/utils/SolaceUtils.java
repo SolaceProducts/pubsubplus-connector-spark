@@ -134,7 +134,6 @@ public class SolaceUtils {
         }
 
         xmlMessage.setProperties(metadata);
-        xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
         return xmlMessage;
     }
 
