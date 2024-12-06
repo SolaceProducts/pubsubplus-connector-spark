@@ -1,4 +1,4 @@
-= Solace Spark Connector Configuration Options
+= Solace Spark Connector Source Configuration Options
 :doctype: book
 
 [cols="2m,1m,1m,1m,2", options="header"]

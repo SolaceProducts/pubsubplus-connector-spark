@@ -52,6 +52,7 @@ public class SolaceStreamStructure implements SupportsRead, SupportsWrite, Table
             capabilities.add(TableCapability.MICRO_BATCH_READ);
             capabilities.add(TableCapability.BATCH_WRITE);
             capabilities.add(TableCapability.STREAMING_WRITE);
+            capabilities.add(TableCapability.ACCEPT_ANY_SCHEMA); // Required for WriteStream
         }
         return capabilities;
     }

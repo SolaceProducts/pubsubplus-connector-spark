@@ -85,37 +85,81 @@ If rotating access token is present in file accessible by connector use below op
 
 NOTE: When access token is read from file, it may lose some of it's expiry time by the time it is accessed by connector. It is recommended to have minimal time difference between writing to file and access by the connector so that a valid new token is updated in solace session before expiry of old token.
 
-=== Solace Spark Streaming Schema Structure
+=== Solace Spark Streaming Source Schema Structure
 
 Solace Spark Connector transforms the incoming message to Spark row with below schema definition.
 
-[cols="2m,2m", options="header"]
+[cols="2m,2m,2m", options="header"]
 |===
 | Column Name
 | Column Type
+| Description
 
 | Id
 | String
+| Represents Message ID present in message. This value is based on Offset_Indicator option. By, default it returns replication group message id.
 
 | Payload
 | Binary
+| Represents payload in binary format.
 
 | PartitionKey
 | String
+| Represents Partition Key if present in message.
 
 | Topic
 | String
+| Represents the topic on which message is published.
 
 | TimeStamp
 | Timestamp
+| Represents sender timestamp if present in message. By, default it returns the timestamp when message is received by connector.
 
 | Headers
 | Map<string, binary>
+| Represent message headers if present in message. This column is created only when includeHeaders option is set to true.
+|===
+
+=== Solace Spark Streaming Sink Schema Structure
+
+Solace Spark Connector transforms the incoming message to Spark row with below schema definition.
+
+[cols="2m,2m,2m", options="header"]
+|===
+| Column Name
+| Column Type
+| Description
+
+| Id
+| String
+| Set's the message id for the published message. This will be overwritten if message id is set using the id option. If no message id is set connector will throw an exception as message id is required to track the state of published messages.
+
+| Payload
+| Binary
+| Payload to be added to the published message. If no payload is set connector will throw an exception.
+
+| PartitionKey(Optional)
+| String
+| Partition Key for the published message. Useful when published message topic is subscribed by partitioned queues.
+
+| Topic(Optional)
+| String
+| Set's the topic for the published message. This will be overwritten if topic is set using the topic option. If no topic is set connector will throw an exception as topic is required to publish a message.
+
+| TimeStamp(Optional)
+| Timestamp
+| Set the timestamp for published message. This column is mapped to Sender Timestamp field in Solace Message.
+
+| Headers(Optional)
+| Map<string, binary>
+| Set the headers to be added in published message. This column is mapped only when includeHeaders option is set to true.
 |===
 
 == Configuration
 
-include::{docdir}/../sections/general/configuration/spark-config.adoc[leveloffset=+2]
+include::{docdir}/../sections/general/configuration/solace-spark-source-config.adoc[leveloffset=+2]
+
+include::{docdir}/../sections/general/configuration/solace-spark-sink-config.adoc[leveloffset=+2]
 
 NOTE: This connector is tested on Databricks environment with Cluster Version 14.3 LTS (includes Apache Spark 3.5.0, Scala 2.12)
 

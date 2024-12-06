@@ -2,6 +2,7 @@ package com.solacecoe.connectors.spark.streaming.write;
 
 import com.google.gson.Gson;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProperties;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceAbortMessage;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceClassLoader;
@@ -30,6 +31,8 @@ import java.util.*;
 
 public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
+    private String topic;
+    private String messageId;
     private final StructType schema;
     private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
@@ -38,11 +41,15 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final Map<String, SolaceAbortMessage> abortedMessages;
     private Exception exception;
     private Class acknowledgementCallback;
+    private final boolean includeHeaders;
     public SolaceDataWriter(StructType schema, Map<String, String> properties) {
         this.schema = schema;
         this.properties = properties;
-
-        this.solaceBroker = new SolaceBroker(properties.get("host"), properties.get("vpn"), properties.get("username"), properties.get("password"), properties.get("topic"), properties);
+        this.includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
+        this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
+        this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
+        this.solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN),
+                properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), "", properties);
         this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
 
         this.projection = createProjection();
@@ -64,9 +71,36 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     @Override
     public void write(InternalRow row) throws IOException {
         try {
-            UnsafeRow projectedRow = this.projection.apply(row);
             checkForException();
-            this.solaceBroker.publishMessage(projectedRow.getString(3), projectedRow.getBinary(1), projectedRow.getMap(5));
+            UnsafeRow projectedRow = this.projection.apply(row);
+            if(this.topic == null) {
+                this.topic = projectedRow.getUTF8String(3).toString();
+            }
+
+            if(this.messageId == null) {
+                this.messageId = projectedRow.getUTF8String(0).toString();
+            }
+            byte[] payload;
+            if(projectedRow.getBinary(1) != null) {
+                payload = projectedRow.getBinary(1);
+            } else {
+                throw new RuntimeException("SolaceSparkConnector - Payload Column is not present in data frame.");
+            }
+            long timestamp = 0L;
+            if(projectedRow.get(4, DataTypes.TimestampType) != null) {
+                timestamp = Long.parseLong(projectedRow.get(4, DataTypes.TimestampType).toString());
+            }
+            UnsafeMapData headersMap = new UnsafeMapData();
+            if(projectedRow.numFields() > 5 && projectedRow.getMap(5) != null) {
+                headersMap = projectedRow.getMap(5);
+            }
+            String partitionKey = "";
+            if(projectedRow.getUTF8String(2) != null) {
+                partitionKey = projectedRow.getUTF8String(2).toString();
+            }
+            this.solaceBroker.publishMessage(this.messageId, this.topic,
+                    partitionKey, payload,
+                    timestamp, headersMap);
             checkForException();
         } catch (Exception e) {
             StringWriter sw = new StringWriter();
@@ -74,21 +108,25 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             e.printStackTrace(pw);
             String sStackTrace = sw.toString();
             SolaceAbortMessage abortMessage = new SolaceAbortMessage(SolacePublishStatus.FAILED, sStackTrace);
-            abortedMessages.put(row.getString(0), abortMessage);
+            abortedMessages.put(this.messageId != null ? this.messageId : row.getUTF8String(0).toString(), abortMessage);
             exception = e;
-            throw new RuntimeException(abortedMessages.toString());
+            Gson gson = new Gson();
+            String exMessage = gson.toJson(abortedMessages, Map.class);
+            abortedMessages.clear();
+            throw new RuntimeException(exMessage);
         }
     }
 
     @Override
     public WriterCommitMessage commit() {
         checkForException();
-        if(this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault("batchSize", "1"))) {
+        if(this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT))) {
             try {
-                log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault("batchSize", "1"), this.commitMessages.size());
+                log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT), this.commitMessages.size());
                 log.info("SolaceSparkConnector - Sleeping for 3000ms to check for pending acknowledgments");
                 Thread.sleep(3000);
             } catch (InterruptedException e) {
+                log.error("SolaceSparkConnector - Interrupted while waiting for pending acknowledgments", e);
                 throw new RuntimeException(e);
             }
         }
@@ -101,11 +139,15 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     public void abort() {
         log.error("SolaceSparkConnector - Publishing to Solace aborted", exception);
         invokeCallback(abortedMessages);
-        throw new RuntimeException(abortedMessages.toString());
+        Gson gson = new Gson();
+        String exMessage = gson.toJson(abortedMessages, Map.class);
+        abortedMessages.clear();
+        throw new RuntimeException(exMessage);
     }
 
     @Override
     public void close() {
+        log.info("SolaceSparkConnector - SolaceDataWriter Closed");
         this.solaceBroker.close();
     }
 
@@ -121,14 +163,25 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
 
     private Expression[] getExpressions(Seq<Attribute> attributes) {
 
+        Expression headerExpression = new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.headers().name(), SolaceSparkSchemaProperties.headers().dataType(), null, false).getExpression();
+        if(!this.includeHeaders) {
+            return new Expression[] {
+                    // DataTypeUtils.toAttribute(new StructField("Id", DataTypes.StringType, true, Metadata.empty()))
+                    new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.id().name(), SolaceSparkSchemaProperties.id().dataType(), null, (this.messageId == null)).getExpression(),
+                    new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.payload().name(), SolaceSparkSchemaProperties.payload().dataType(), null, false).getExpression(),
+                    new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.partitionKey().name(), SolaceSparkSchemaProperties.partitionKey().dataType(), null, false).getExpression(),
+                    new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.topic().name(), SolaceSparkSchemaProperties.topic().dataType(), null, (this.topic == null)).getExpression(),
+                    new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.timestamp().name(), SolaceSparkSchemaProperties.timestamp().dataType(), null, false).getExpression(),
+            };
+        }
         return new Expression[] {
                 // DataTypeUtils.toAttribute(new StructField("Id", DataTypes.StringType, true, Metadata.empty()))
-                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.id().name(), SolaceSparkSchemaProperties.id().dataType(), null).getExpression(),
-                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.payload().name(), SolaceSparkSchemaProperties.payload().dataType(), null).getExpression(),
-                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.partitionKey().name(), SolaceSparkSchemaProperties.partitionKey().dataType(), null).getExpression(),
-                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.topic().name(), SolaceSparkSchemaProperties.topic().dataType(), null).getExpression(),
-                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.timestamp().name(), SolaceSparkSchemaProperties.timestamp().dataType(), null).getExpression(),
-                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.headers().name(), SolaceSparkSchemaProperties.headers().dataType(), null).getExpression()
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.id().name(), SolaceSparkSchemaProperties.id().dataType(), null, (this.messageId == null)).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.payload().name(), SolaceSparkSchemaProperties.payload().dataType(), null, false).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.partitionKey().name(), SolaceSparkSchemaProperties.partitionKey().dataType(), null, false).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.topic().name(), SolaceSparkSchemaProperties.topic().dataType(), null, (this.topic == null)).getExpression(),
+                new SolaceRowExpression(attributes, SolaceSparkSchemaProperties.timestamp().name(), SolaceSparkSchemaProperties.timestamp().dataType(), null, false).getExpression(),
+                headerExpression
         };
     }
 
@@ -157,7 +210,10 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
 
     private void checkForException() {
         if(exception != null) {
-            throw new RuntimeException(abortedMessages.toString());
+            Gson gson = new Gson();
+            String exMessage = gson.toJson(abortedMessages, Map.class);
+            abortedMessages.clear();
+            throw new RuntimeException(exMessage);
         }
     }
 

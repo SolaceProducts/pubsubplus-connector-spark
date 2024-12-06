@@ -6,6 +6,8 @@ public class SolaceSparkStreamingProperties {
     public static final String USERNAME = "username";
     public static final String PASSWORD = "password";
     public static final String QUEUE = "queue";
+    public static final String TOPIC = "topic";
+    public static final String MESSAGE_ID = "id";
     public static final String BATCH_SIZE = "batchSize";
     public static final String BATCH_SIZE_DEFAULT = "1";
     public static final String ACK_LAST_PROCESSED_MESSAGES = "ackLastProcessedMessages";
