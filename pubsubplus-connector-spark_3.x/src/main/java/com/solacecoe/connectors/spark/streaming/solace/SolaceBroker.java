@@ -133,7 +133,7 @@ public class SolaceBroker implements Serializable {
             flowProp.setEndpoint(listenQueue);
             flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
             EndpointProperties endpointProps = new EndpointProperties();
-            endpointProps.setAccessType(EndpointProperties.ACCESSTYPE_NONEXCLUSIVE);
+            endpointProps.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
 
             eventListener.setBrokerInstance(this);
             FlowReceiver cons = this.session.createFlow(eventListener,
@@ -267,9 +267,10 @@ public class SolaceBroker implements Serializable {
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
-//    protected void finalize() {
-//        close();
-//    }
+    @Override
+    protected void finalize() {
+        close();
+    }
 
 //    public boolean preReconnect() {
 //        log.info("SolaceSparkConnector - Pre reconnect to Solace session");
