@@ -4,15 +4,15 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingP
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidAccessTokenException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
 import com.solacesystems.jcsmp.*;
+import com.solacesystems.jcsmp.Queue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.Serializable;
 import java.nio.file.Files;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.concurrent.*;
 
 public class SolaceBroker implements Serializable {
@@ -28,11 +28,12 @@ public class SolaceBroker implements Serializable {
     private long accessTokenSourceLastModifiedTime = 0L;
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
+    private final Map<String, String> properties;
     public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
         this.queue = queue;
-
+        this.properties = properties;
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             // get api properties
@@ -117,10 +118,39 @@ public class SolaceBroker implements Serializable {
 
     private void setReceiver(EventListener eventListener) {
         try {
+            ReplayStartLocation replayStart = null;
+            String replayStrategy = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY ,null);
+            if(replayStrategy != null) {
+                switch (replayStrategy) {
+                    case "BEGINNING":
+                        replayStart = JCSMPFactory.onlyInstance().createReplayStartLocationBeginning();
+                        break;
+                    case "TIMEBASED":
+                        String dateStr = properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME ,null);
+                        if (dateStr != null) {
+                            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+                            simpleDateFormat.setTimeZone(TimeZone.getTimeZone(properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_TIMEZONE, "UTC"))); // Convert the given date into UTC time zone
+                            Date date = simpleDateFormat.parse(dateStr);
+                            replayStart = JCSMPFactory.onlyInstance().createReplayStartLocationDate(date);
+                        }
+                        break;
+                    case "REPLICATION-GROUP-MESSAGE-ID":
+                        String replicationGroupMsgId = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, null);
+                        if(replicationGroupMsgId != null) {
+                            replayStart = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(replicationGroupMsgId);
+                        }
+                        break;
+                    default:
+                        throw new RuntimeException("Unsupported replay strategy: " + replayStrategy);
+                }
+            }
             ConsumerFlowProperties flowProp = new ConsumerFlowProperties();
             Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.queue);
 
             flowProp.setEndpoint(listenQueue);
+            if(replayStart != null) {
+                flowProp.setReplayStartLocation(replayStart);
+            }
             flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
             EndpointProperties endpointProps = new EndpointProperties();
             endpointProps.setAccessType(EndpointProperties.ACCESSTYPE_NONEXCLUSIVE);
