@@ -1,16 +1,9 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceSessionEventListener;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidAccessTokenException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkHeaders;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaderMeta;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkHeadersMeta;
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceClassLoader;
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceSessionEventListener;
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.*;
 import com.solacesystems.jcsmp.Queue;
 import org.apache.spark.sql.catalyst.expressions.UnsafeMapData;
@@ -28,14 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.*;
-
-public class SolaceBroker implements Serializable {
-    private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
-    private final JCSMPSession session;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SolaceBroker implements Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
@@ -282,10 +267,9 @@ public class SolaceBroker implements Serializable {
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
-    @Override
-    protected void finalize() {
-        close();
-    }
+//    protected void finalize() {
+//        close();
+//    }
 
 //    public boolean preReconnect() {
 //        log.info("SolaceSparkConnector - Pre reconnect to Solace session");
