@@ -59,6 +59,7 @@ public class SolaceBroker implements Serializable {
 
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
+            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             // get api properties
             Properties props = new Properties();
             for(Map.Entry<String, String> entry : properties.entrySet()) {
@@ -74,7 +75,6 @@ public class SolaceBroker implements Serializable {
 
             jcsmpProperties.setProperty(JCSMPProperties.HOST, host);            // host:port
             jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, vpn);    // message-vpn
-            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
                 isOAuth = true;
                 int interval = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT));
@@ -172,28 +172,9 @@ public class SolaceBroker implements Serializable {
     }
 
     public void publishMessage(String applicationMessageId, String topic, String partitionKey, Object msg, long timestamp, UnsafeMapData headersMap) {
-        Map<String, Object> headers = new HashMap<>();
-        if(headersMap != null && headersMap.numElements() > 0) {
-            for (int i = 0; i < headersMap.numElements(); i++) {
-                headers.put(headersMap.keyArray().get(i, DataTypes.StringType).toString(),
-                        headersMap.valueArray().get(i, DataTypes.BinaryType));
-            }
-        }
-        if(partitionKey != null && !partitionKey.isEmpty()) {
-            headers.put(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY, partitionKey);
-        }
-        try {
-            XMLMessage xmlMessage = SolaceUtils.map(msg, headers, UUID.randomUUID(), new ArrayList<>(), false);
-//            xmlMessage.writeBytes(msg.toString().getBytes(StandardCharsets.UTF_8));
-//            xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
-            xmlMessage.setCorrelationKey(applicationMessageId);
-            xmlMessage.setCorrelationId(applicationMessageId);
-            xmlMessage.setApplicationMessageId(applicationMessageId);
-            if(timestamp > 0L) {
-                xmlMessage.setSenderTimestamp(timestamp);
-            }
-            xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        try{
             Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
+            XMLMessage xmlMessage = createMessage(applicationMessageId, partitionKey, msg, timestamp, headersMap);
             this.producer.send(xmlMessage, destination);
         } catch (SDTException e) {
             throw new RuntimeException(e);
@@ -201,6 +182,64 @@ public class SolaceBroker implements Serializable {
             log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
             throw new RuntimeException(e);
         }
+    }
+
+    public void publishBatch(JCSMPSendMultipleEntry[] xmlMessages) {
+        try{
+            int batchSize = 50; // Adjust the batch size as needed
+            int numBatches = (int) Math.ceil((double) xmlMessages.length / batchSize);
+            for (int i = 0; i < numBatches; i++) {
+                int startIndex = i * batchSize;
+                int endIndex = Math.min(startIndex + batchSize, xmlMessages.length);
+
+                JCSMPSendMultipleEntry[] batch = Arrays.copyOfRange(xmlMessages, startIndex, endIndex);
+                producer.sendMultiple(batch, 0, batch.length, 0);
+            }
+//            this.producer.sendMultiple(xmlMessages, 0, xmlMessages.length, 0);
+        } catch (SDTException e) {
+            throw new RuntimeException(e);
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public JCSMPSendMultipleEntry createMultipleEntryMessage(String applicationMessageId, String topic, String partitionKey, Object msg, long timestamp, UnsafeMapData headersMap) {
+        XMLMessage xmlMessage = createMessage(applicationMessageId, partitionKey, msg, timestamp, headersMap);
+        Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
+        return JCSMPFactory.onlyInstance().createSendMultipleEntry(xmlMessage, destination);
+    }
+
+    public XMLMessage createMessage(String applicationMessageId, String partitionKey, Object msg, long timestamp, UnsafeMapData headersMap) {
+        Map<String, Object> headers = new HashMap<>();
+        if(headersMap != null && headersMap.numElements() > 0) {
+            for (int i = 0; i < headersMap.numElements(); i++) {
+                headers.put(headersMap.keyArray().get(i, DataTypes.StringType).toString(),
+                        headersMap.valueArray().get(i, DataTypes.BinaryType));
+            }
+        }
+
+        XMLMessage xmlMessage = null;
+        try {
+            xmlMessage = SolaceUtils.map(msg, headers, applicationMessageId, new ArrayList<>(), false);
+        } catch (SDTException e) {
+            throw new RuntimeException(e);
+        }
+
+        if(partitionKey != null && !partitionKey.isEmpty()) {
+            headers.put(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY, partitionKey);
+        }
+//            xmlMessage.writeBytes(msg.toString().getBytes(StandardCharsets.UTF_8));
+//            xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        xmlMessage.setCorrelationKey(applicationMessageId);
+        xmlMessage.setCorrelationId(applicationMessageId);
+        xmlMessage.setApplicationMessageId(applicationMessageId);
+        if (timestamp > 0L) {
+            xmlMessage.setSenderTimestamp(timestamp);
+        }
+        xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+
+        return xmlMessage;
     }
 
     public void closeProducer() {

@@ -132,7 +132,7 @@ Solace Spark Connector transforms the incoming message to Spark row with below s
 
 | Id
 | String
-| Set's the message id for the published message. This will be overwritten if message id is set using the id option. If no message id is set connector will throw an exception as message id is required to track the state of published messages.
+| Set the message id for the published message. This will be overwritten if message id is set using the id option. If no message id is set connector will throw an exception as message id is required to track the state of published messages. In case of publish failure the message id along with exception is logged.
 
 | Payload
 | Binary

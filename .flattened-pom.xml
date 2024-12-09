@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.solacecoe.connectors</groupId>
   <artifactId>pubsubplus-connector-spark-parent</artifactId>
-  <version>3.0.0</version>
+  <version>3.0.0-EA</version>
   <packaging>pom</packaging>
   <name>PubSubPlus Connector Spark - Parent</name>
   <description>Solace PubSub+ Connector for Spark streams data from Solace PubSub+ broker to Spark Data Sources.</description>
@@ -40,7 +40,7 @@
     <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
     <sha1></sha1>
     <maven.compiler.target>17</maven.compiler.target>
-    <changelist></changelist>
+    <changelist>-EA</changelist>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
   <dependencies>

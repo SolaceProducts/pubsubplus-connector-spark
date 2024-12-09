@@ -94,11 +94,13 @@ NOTE: Before installing latest version of connector make sure earlier versions o
                   .option("username", "default")
                   .option("password", "default")
                   .option("batchSize", outputDf.count())
+                  .option("topic", "solace/spark/publish") // This can be commented if topic column is present in output dataframe.
+                  .option("id", "<application-message-id>") // This can be commented if Id column is present in output dataframe.
                   .mode(SaveMode.Append)
                   .save()
             } catch {
               case e: Exception => {
-                // logic to handle failed messages.
+                // Any logic to handle failed messages. Connector will log application message id along with exception as json object.
                 throw new RuntimeException(e)
               }
             }
