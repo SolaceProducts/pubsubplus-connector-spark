@@ -9,7 +9,9 @@ import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceClassLoader;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolacePublishStatus;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceWriterCommitMessage;
 import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPSendMultipleEntry;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.*;
 import org.apache.spark.sql.catalyst.types.DataTypeUtils;
@@ -33,6 +35,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
     private String topic;
     private String messageId;
+    private final boolean isBatch;
     private final StructType schema;
     private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
@@ -42,9 +45,10 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private Exception exception;
     private Class acknowledgementCallback;
     private final boolean includeHeaders;
-    public SolaceDataWriter(StructType schema, Map<String, String> properties) {
+    public SolaceDataWriter(StructType schema, Map<String, String> properties, boolean isBatch) {
         this.schema = schema;
         this.properties = properties;
+        this.isBatch = isBatch;
         this.includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
         this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
@@ -98,9 +102,22 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             if(projectedRow.getUTF8String(2) != null) {
                 partitionKey = projectedRow.getUTF8String(2).toString();
             }
-            this.solaceBroker.publishMessage(this.messageId, this.topic,
-                    partitionKey, payload,
-                    timestamp, headersMap);
+//            if(!isBatch) {
+//                XMLMessage xmlMessage = this.solaceBroker.createMessage(this.messageId,
+//                        partitionKey, payload,
+//                        timestamp, headersMap);
+                this.solaceBroker.publishMessage(this.messageId, this.topic,
+                        partitionKey, payload, timestamp, headersMap);
+//            }
+//            else if((this.batchMessages.size() + 1) == Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT))) {
+//                this.batchMessages.add(this.solaceBroker.createMultipleEntryMessage(this.messageId, this.topic,
+//                        partitionKey, payload, timestamp, headersMap));
+//                this.solaceBroker.publishBatch(this.batchMessages.toArray(new JCSMPSendMultipleEntry[batchMessages.size()]));
+//                this.batchMessages.clear();
+//            } else {
+//                this.batchMessages.add(this.solaceBroker.createMultipleEntryMessage(this.messageId, this.topic,
+//                        partitionKey, payload, timestamp, headersMap));
+//            }
             checkForException();
         } catch (Exception e) {
             StringWriter sw = new StringWriter();

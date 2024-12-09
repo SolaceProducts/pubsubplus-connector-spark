@@ -50,7 +50,7 @@ public class SolaceBatchWrite implements BatchWrite, Serializable {
     }
     @Override
     public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo physicalWriteInfo) {
-        return new SolaceDataWriterFactory(schema, properties, options);
+        return new SolaceDataWriterFactory(schema, properties);
     }
 
     @Override

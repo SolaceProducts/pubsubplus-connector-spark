@@ -44,7 +44,7 @@ public class SolaceUtils {
 
     public static XMLMessage map(Object payload,
                            Map<String, Object> headers,
-                           UUID messageId,
+                           String messageId,
                            Collection<String> excludedHeaders,
                            boolean convertNonSerializableHeadersToString) throws SDTException {
         XMLMessage xmlMessage;
