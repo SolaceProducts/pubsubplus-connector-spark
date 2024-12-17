@@ -169,32 +169,6 @@ public class SolaceBroker implements Serializable {
         }
     }
 
-    public void publishBatch(JCSMPSendMultipleEntry[] xmlMessages) {
-        try{
-            int batchSize = 50; // Adjust the batch size as needed
-            int numBatches = (int) Math.ceil((double) xmlMessages.length / batchSize);
-            for (int i = 0; i < numBatches; i++) {
-                int startIndex = i * batchSize;
-                int endIndex = Math.min(startIndex + batchSize, xmlMessages.length);
-
-                JCSMPSendMultipleEntry[] batch = Arrays.copyOfRange(xmlMessages, startIndex, endIndex);
-                producer.sendMultiple(batch, 0, batch.length, 0);
-            }
-//            this.producer.sendMultiple(xmlMessages, 0, xmlMessages.length, 0);
-        } catch (SDTException e) {
-            throw new RuntimeException(e);
-        } catch (JCSMPException e) {
-            log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
-            throw new RuntimeException(e);
-        }
-    }
-
-    public JCSMPSendMultipleEntry createMultipleEntryMessage(String applicationMessageId, String topic, String partitionKey, Object msg, long timestamp, UnsafeMapData headersMap) {
-        XMLMessage xmlMessage = createMessage(applicationMessageId, partitionKey, msg, timestamp, headersMap);
-        Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
-        return JCSMPFactory.onlyInstance().createSendMultipleEntry(xmlMessage, destination);
-    }
-
     public XMLMessage createMessage(String applicationMessageId, String partitionKey, Object msg, long timestamp, UnsafeMapData headersMap) {
         Map<String, Object> headers = new HashMap<>();
         if(headersMap != null && headersMap.numElements() > 0) {

@@ -41,10 +41,10 @@ public class SolaceStreamingWrite implements StreamingWrite, Serializable {
             throw new RuntimeException("SolaceSparkConnector - Please provide Solace Password in configuration options");
         }
 
-        if(!properties.containsKey("topic") || properties.get("topic") == null || properties.get("topic").isEmpty()) {
-            log.error("SolaceSparkConnector - Please provide Solace Queue name in configuration options");
-            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
-        }
+//        if(!properties.containsKey("topic") || properties.get("topic") == null || properties.get("topic").isEmpty()) {
+//            log.error("SolaceSparkConnector - Please provide Solace Queue name in configuration options");
+//            throw new RuntimeException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
+//        }
     }
 
     @Override

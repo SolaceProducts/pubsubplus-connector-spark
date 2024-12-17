@@ -5,13 +5,10 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProp
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceAbortMessage;
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceClassLoader;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolacePublishStatus;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceWriterCommitMessage;
 import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPSendMultipleEntry;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
-import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.*;
 import org.apache.spark.sql.catalyst.types.DataTypeUtils;
@@ -43,7 +40,6 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final Map<String, SolaceWriterCommitMessage> commitMessages;
     private final Map<String, SolaceAbortMessage> abortedMessages;
     private Exception exception;
-    private Class acknowledgementCallback;
     private final boolean includeHeaders;
     public SolaceDataWriter(StructType schema, Map<String, String> properties, boolean isBatch) {
         this.schema = schema;
@@ -59,17 +55,6 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         this.projection = createProjection();
         this.commitMessages = new HashMap<>();
         this.abortedMessages = new HashMap<>();
-        try {
-            SolaceClassLoader solaceClassLoader = new SolaceClassLoader(SolaceBroker.class.getClassLoader());
-            String className = properties.getOrDefault("acknowledgementCallback", null);
-            if(className != null) {
-                acknowledgementCallback = solaceClassLoader.loadClass(className);
-            } else {
-                log.warn("SolaceSparkConnector - No acknowledgement callback specified. Producer acknowledgement will not be notified");
-            }
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     @Override
@@ -148,14 +133,12 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             }
         }
         checkForException();
-        invokeCallback(commitMessages);
         return null;
     }
 
     @Override
     public void abort() {
         log.error("SolaceSparkConnector - Publishing to Solace aborted", exception);
-        invokeCallback(abortedMessages);
         Gson gson = new Gson();
         String exMessage = gson.toJson(abortedMessages, Map.class);
         abortedMessages.clear();
@@ -231,19 +214,6 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             String exMessage = gson.toJson(abortedMessages, Map.class);
             abortedMessages.clear();
             throw new RuntimeException(exMessage);
-        }
-    }
-
-    private void invokeCallback(Map<String, ?> messages) {
-        if(acknowledgementCallback != null) {
-            for (Constructor<?> constructor : acknowledgementCallback.getConstructors()) {
-                try {
-                    Gson gson = new Gson();
-                    constructor.newInstance(gson.toJson(messages, Map.class));
-                } catch (InstantiationException | InvocationTargetException | IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
-            }
         }
     }
 }

@@ -141,42 +141,42 @@ public class SolaceUtils {
         SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
         Set<String> serializedHeaders = new HashSet<>();
         for (Map.Entry<String,Object> header : headers.entrySet()) {
-            if (header.getKey().equalsIgnoreCase(SolaceSparkHeaders.CONFIRM_CORRELATION) ||
-                    SolaceHeaderMeta.META.containsKey(header.getKey()) || SolaceSparkHeadersMeta.META.containsKey(header.getKey())) {
-                continue;
-            }
-            if (excludedHeaders != null && excludedHeaders.contains(header.getKey())) {
-                continue;
-            }
+//            if (header.getKey().equalsIgnoreCase(SolaceSparkHeaders.CONFIRM_CORRELATION) ||
+//                    SolaceHeaderMeta.META.containsKey(header.getKey()) || SolaceSparkHeadersMeta.META.containsKey(header.getKey())) {
+//                continue;
+//            }
+//            if (excludedHeaders != null && excludedHeaders.contains(header.getKey())) {
+//                continue;
+//            }
 
             addSDTMapObject(metadata, serializedHeaders, header.getKey(), header.getValue(),
                     convertNonSerializableHeadersToString);
         }
 
-        if (headers.containsKey(SolaceSparkHeaders.PARTITION_KEY)) {
-            Object partitionKeyObj = headers.get(SolaceSparkHeaders.PARTITION_KEY);
-            if (partitionKeyObj instanceof String) {
-//                rethrowableCall(metadata::putString,
-//                        XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
-//                        partitionKey);
-                metadata.putString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY, (String) partitionKeyObj);
-            } else {
-                String msg = String.format("Incorrect type specified for header '%s'. Expected [%s] but actual type is [%s]",
-                        SolaceSparkHeaders.PARTITION_KEY, String.class, partitionKeyObj.getClass());
-//                SolaceMessageConversionException exception = new SolaceMessageConversionException(
-//                        new IllegalArgumentException(msg));
-//                LOGGER.warn(msg, exception);
-                throw new RuntimeException(msg);
-            }
-        }
+//        if (headers.containsKey(SolaceSparkHeaders.PARTITION_KEY)) {
+//            Object partitionKeyObj = headers.get(SolaceSparkHeaders.PARTITION_KEY);
+//            if (partitionKeyObj instanceof String) {
+////                rethrowableCall(metadata::putString,
+////                        XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
+////                        partitionKey);
+//                metadata.putString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY, (String) partitionKeyObj);
+//            } else {
+//                String msg = String.format("Incorrect type specified for header '%s'. Expected [%s] but actual type is [%s]",
+//                        SolaceSparkHeaders.PARTITION_KEY, String.class, partitionKeyObj.getClass());
+////                SolaceMessageConversionException exception = new SolaceMessageConversionException(
+////                        new IllegalArgumentException(msg));
+////                LOGGER.warn(msg, exception);
+//                throw new RuntimeException(msg);
+//            }
+//        }
 
-        if (!serializedHeaders.isEmpty()) {
-//            rethrowableCall(metadata::putString, SolaceBinderHeaders.SERIALIZED_HEADERS,
-//                    rethrowableCall(stringSetWriter::writeValueAsString, serializedHeaders));
-//            metadata.putString(SolaceBinderHeaders.SERIALIZED_HEADERS, );
-//            rethrowableCall(metadata::putString, SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING,
-//                    DEFAULT_ENCODING.getName());
-        }
+//        if (!serializedHeaders.isEmpty()) {
+////            rethrowableCall(metadata::putString, SolaceBinderHeaders.SERIALIZED_HEADERS,
+////                    rethrowableCall(stringSetWriter::writeValueAsString, serializedHeaders));
+////            metadata.putString(SolaceBinderHeaders.SERIALIZED_HEADERS, );
+////            rethrowableCall(metadata::putString, SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING,
+////                    DEFAULT_ENCODING.getName());
+//        }
         return metadata;
     }
 
