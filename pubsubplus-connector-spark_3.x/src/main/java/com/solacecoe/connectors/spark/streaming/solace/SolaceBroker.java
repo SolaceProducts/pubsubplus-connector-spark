@@ -133,7 +133,7 @@ public class SolaceBroker implements Serializable {
             flowProp.setEndpoint(listenQueue);
             flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
             EndpointProperties endpointProps = new EndpointProperties();
-            endpointProps.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            endpointProps.setAccessType(EndpointProperties.ACCESSTYPE_NONEXCLUSIVE);
 
             eventListener.setBrokerInstance(this);
             FlowReceiver cons = this.session.createFlow(eventListener,
