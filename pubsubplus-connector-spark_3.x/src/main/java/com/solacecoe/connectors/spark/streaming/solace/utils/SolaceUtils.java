@@ -1,10 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.solace.utils;
 
 import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaderMeta;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkHeaders;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkHeadersMeta;
 import com.solacesystems.jcsmp.*;
-import org.apache.commons.lang3.SerializationUtils;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -55,24 +52,26 @@ public class SolaceUtils {
             BytesMessage bytesMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
             bytesMessage.setData((byte[]) payload);
             xmlMessage = bytesMessage;
-        } else if (payload instanceof String) {
-            TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-            textMessage.setText((String) payload);
-            xmlMessage = textMessage;
-        } else if (payload instanceof SDTStream) {
-            StreamMessage streamMessage = JCSMPFactory.onlyInstance().createMessage(StreamMessage.class);
-            streamMessage.setStream((SDTStream) payload);
-            xmlMessage = streamMessage;
-        } else if (payload instanceof SDTMap) {
-            MapMessage mapMessage = JCSMPFactory.onlyInstance().createMessage(MapMessage.class);
-            mapMessage.setMap((SDTMap) payload);
-            xmlMessage = mapMessage;
-        } else if (payload instanceof Serializable) {
-            BytesMessage bytesMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
-            bytesMessage.setData(SerializationUtils.serialize((Serializable) payload));
-            metadata.putBoolean(SolaceSparkHeaders.SERIALIZED_PAYLOAD, true);
-            xmlMessage = bytesMessage;
-        } else {
+        }
+//        else if (payload instanceof String) {
+//            TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+//            textMessage.setText((String) payload);
+//            xmlMessage = textMessage;
+//        } else if (payload instanceof SDTStream) {
+//            StreamMessage streamMessage = JCSMPFactory.onlyInstance().createMessage(StreamMessage.class);
+//            streamMessage.setStream((SDTStream) payload);
+//            xmlMessage = streamMessage;
+//        } else if (payload instanceof SDTMap) {
+//            MapMessage mapMessage = JCSMPFactory.onlyInstance().createMessage(MapMessage.class);
+//            mapMessage.setMap((SDTMap) payload);
+//            xmlMessage = mapMessage;
+//        } else if (payload instanceof Serializable) {
+//            BytesMessage bytesMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
+//            bytesMessage.setData(SerializationUtils.serialize((Serializable) payload));
+//            metadata.putBoolean(SolaceSparkHeaders.SERIALIZED_PAYLOAD, true);
+//            xmlMessage = bytesMessage;
+//        }
+        else {
             String msg = String.format(
                     "Invalid payload received. Expected %s. Received: %s",
                     String.join(", ",

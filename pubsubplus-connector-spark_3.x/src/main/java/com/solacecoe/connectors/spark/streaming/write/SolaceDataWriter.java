@@ -122,13 +122,15 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     @Override
     public WriterCommitMessage commit() {
         checkForException();
-        if(this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT))) {
+        int batchSize = Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
+        if(batchSize == 0 || (batchSize > 0 && this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT)))) {
             try {
                 log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT), this.commitMessages.size());
                 log.info("SolaceSparkConnector - Sleeping for 3000ms to check for pending acknowledgments");
                 Thread.sleep(3000);
             } catch (InterruptedException e) {
                 log.error("SolaceSparkConnector - Interrupted while waiting for pending acknowledgments", e);
+                Thread.currentThread().interrupt();
                 throw new RuntimeException(e);
             }
         }

@@ -8,18 +8,19 @@ import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.api.java.function.VoidFunction2;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SaveMode;
-import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.*;
 import org.apache.spark.sql.streaming.DataStreamReader;
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testcontainers.solace.Service;
 import org.testcontainers.solace.SolaceContainer;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
@@ -88,6 +89,8 @@ public class SolaceSparkStreamingIT {
                 TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
                 textMessage.setText("Hello Spark!");
                 textMessage.setPriority(1);
+                textMessage.setCorrelationId("test-correlation-id");
+                textMessage.setDMQEligible(true);
                 Topic topic = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
                 messageProducer.send(textMessage, topic);
             }
@@ -96,6 +99,22 @@ public class SolaceSparkStreamingIT {
             session.getSession().closeSession();
         } else {
             throw new RuntimeException("Solace Container is not started yet");
+        }
+    }
+
+    @AfterEach
+    public void afterEach() throws IOException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        Path path1 = Paths.get("src", "test", "resources", "spark-checkpoint-2");
+        Path path2 = Paths.get("src", "test", "resources", "spark-checkpoint-3");
+        if(Files.exists(path)) {
+            FileUtils.deleteDirectory(path.toAbsolutePath().toFile());
+        }
+        if(Files.exists(path1)) {
+            FileUtils.deleteDirectory(path1.toAbsolutePath().toFile());
+        }
+        if(Files.exists(path2)) {
+            FileUtils.deleteDirectory(path2.toAbsolutePath().toFile());
         }
     }
 
@@ -277,7 +296,7 @@ public class SolaceSparkStreamingIT {
 
     @Test
     public void Should_CreateMultipleConsumersOnDifferentSessions_And_ProcessData() throws TimeoutException, StreamingQueryException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-3");
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-2");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
 //                .master("local[*]")
@@ -660,6 +679,86 @@ public class SolaceSparkStreamingIT {
             }).start();
             streamingQuery.awaitTermination();
         });
+    }
+
+    @Test
+    public void Should_ProcessData_And_Publish_As_Stream_To_Solace() throws TimeoutException, StreamingQueryException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
+//        SparkSession sparkSession = SparkSession.builder()
+//                .appName("data_source_test")
+//                .master("local[*]")
+//                .getOrCreate();
+        DataStreamReader reader = sparkSession.readStream()
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option("checkpointLocation", path.toAbsolutePath().toString())
+                .format("solace");
+        final long[] count = {0};
+        final boolean[] runProcess = {true};
+        final String[] messageId = {""};
+        Dataset<Row> dataset = reader.load();
+
+        StreamingQuery streamingQuery = dataset.writeStream().option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+//                .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset.count())
+                .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
+                .option("checkpointLocation", writePath.toAbsolutePath().toString())
+//                .mode(SaveMode.Append)
+                .format("solace").start();
+
+        SolaceSession session = new SolaceSession(solaceContainer.getOrigin(Service.SMF), solaceContainer.getVpn(), solaceContainer.getUsername(), solaceContainer.getPassword());
+        Topic topic = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
+        XMLMessageConsumer messageConsumer = null;
+        try {
+            messageConsumer = session.getSession().getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    count[0] = count[0] + 1;
+                    if(count[0] == 100) {
+                        messageId[0] = bytesXMLMessage.getApplicationMessageId();
+                    }
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.getSession().addSubscription(topic);
+            messageConsumer.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
+
+        ExecutorService executorService = Executors.newFixedThreadPool(1);
+        executorService.execute(() -> {
+            do {
+                if(count[0] == 100L) {
+                    runProcess[0] = false;
+                    try {
+                        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+                        streamingQuery.stop();
+//                        sparkSession.close();
+                        executorService.shutdown();
+                    } catch (TimeoutException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            } while (runProcess[0]);
+        });
+        streamingQuery.awaitTermination();
     }
 
     @Test
