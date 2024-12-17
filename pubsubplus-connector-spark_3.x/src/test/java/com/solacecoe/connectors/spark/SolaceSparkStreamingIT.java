@@ -1664,6 +1664,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void Should_Fail_Publish_Stream_IfSolaceHostIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
@@ -1680,6 +1681,7 @@ public class SolaceSparkStreamingIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                        .option("checkpointLocation", writePath.toAbsolutePath().toString())
                         .format("solace").start();
             streamingQuery.awaitTermination();
         });
