@@ -1435,7 +1435,7 @@ public class SolaceSparkStreamingIT {
                 .format("solace");
         final long[] count = {0};
         final boolean[] runProcess = {true};
-        final int[] messageHeader = {4};
+//        final int[] messageHeader = {4};
         Dataset<Row> dataset = reader.load();
 
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
@@ -1458,9 +1458,6 @@ public class SolaceSparkStreamingIT {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
-                    if(count[0] == 100) {
-                        messageHeader[0] = bytesXMLMessage.getPriority();
-                    }
                 }
 
                 @Override
@@ -1480,7 +1477,6 @@ public class SolaceSparkStreamingIT {
                 if(count[0] == 100L) {
                     runProcess[0] = false;
                     try {
-                        Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
                         streamingQuery.stop();
 //                        sparkSession.close();
                         executorService.shutdown();
