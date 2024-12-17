@@ -2,6 +2,7 @@ package com.solacecoe.connectors.spark;
 
 import com.solace.semp.v2.config.ApiException;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
+import com.solace.semp.v2.config.client.model.MsgVpnReplayLog;
 import com.solace.semp.v2.monitor.client.model.MsgVpnQueueTxFlowsResponse;
 import com.solacecoe.connectors.spark.base.SempV2Api;
 import com.solacecoe.connectors.spark.base.SolaceSession;
@@ -15,8 +16,6 @@ import org.apache.spark.sql.streaming.DataStreamReader;
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.solace.Service;
 import org.testcontainers.solace.SolaceContainer;
@@ -34,10 +33,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingIT {
     private SempV2Api sempV2Api = null;
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
+    private String replicationGroupMessageId = "";
     @BeforeAll
     public void beforeAll() throws ApiException {
         solaceContainer.start();
@@ -59,6 +60,13 @@ public class SolaceSparkStreamingIT {
 
             sempV2Api.config().createMsgVpnQueue("default", queue, null, null);
             sempV2Api.config().createMsgVpnQueueSubscription("default", "Solace/Queue/0", subscription, null, null);
+
+            MsgVpnReplayLog body = new MsgVpnReplayLog();
+            body.setMaxSpoolUsage(10L);
+            body.setReplayLogName("integration-test-replay-log");
+            body.setIngressEnabled(true);
+            body.setEgressEnabled(true);
+            sempV2Api.config().createMsgVpnReplayLog("default", body, null, null);
         } else {
             throw new RuntimeException("Solace Container is not started yet");
         }
@@ -100,6 +108,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(1)
     public void Should_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
@@ -123,6 +132,9 @@ public class SolaceSparkStreamingIT {
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
             synchronized (lock) {
                 count[0] = count[0] + dataset1.count();
+                if(count[0] == 90) {
+                    replicationGroupMessageId = dataset1.first().getString(0);
+                }
             }
         }).start();
 
@@ -130,6 +142,115 @@ public class SolaceSparkStreamingIT {
         executorService.execute(() -> {
             do {
                 if(count[0] == 100L) {
+                    runProcess[0] = false;
+                    try {
+                        streamingQuery.stop();
+//                        sparkSession.close();
+                        executorService.shutdown();
+                    } catch (TimeoutException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            } while (runProcess[0]);
+        });
+        streamingQuery.awaitTermination();
+
+
+    }
+
+    @Test
+    @Order(2)
+    public void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+//        SparkSession sparkSession = SparkSession.builder()
+//                .appName("data_source_test")
+//                .master("local[*]")
+//                .getOrCreate();
+        DataStreamReader reader = sparkSession.readStream()
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "BEGINNING")
+                .option("checkpointLocation", path.toAbsolutePath().toString())
+                .format("solace");
+        final long[] count = {0};
+        final boolean[] runProcess = {true};
+        final Object lock = new Object();
+        Dataset<Row> dataset = reader.load();
+
+        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            synchronized (lock) {
+                count[0] = count[0] + dataset1.count();
+            }
+        }).start();
+
+        ExecutorService executorService = Executors.newFixedThreadPool(1);
+        executorService.execute(() -> {
+            do {
+                if(count[0] == 200L) {
+                    runProcess[0] = false;
+                    try {
+                        streamingQuery.stop();
+//                        sparkSession.close();
+                        executorService.shutdown();
+                    } catch (TimeoutException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            } while (runProcess[0]);
+        });
+        streamingQuery.awaitTermination();
+
+
+    }
+
+    @Test
+    @Order(3)
+    public void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+//        SparkSession sparkSession = SparkSession.builder()
+//                .appName("data_source_test")
+//                .master("local[*]")
+//                .getOrCreate();
+        DataStreamReader reader = sparkSession.readStream()
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
+                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, replicationGroupMessageId)
+                .option("checkpointLocation", path.toAbsolutePath().toString())
+                .format("solace");
+        final long[] count = {0};
+        final boolean[] runProcess = {true};
+        final Object lock = new Object();
+        Dataset<Row> dataset = reader.load();
+
+        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            synchronized (lock) {
+                count[0] = count[0] + dataset1.count();
+            }
+        }).start();
+
+        ExecutorService executorService = Executors.newFixedThreadPool(1);
+        executorService.execute(() -> {
+            do {
+                if(count[0] == 219L) {
                     runProcess[0] = false;
                     try {
                         streamingQuery.stop();

@@ -9,7 +9,6 @@ public class SolaceSparkStreamingProperties {
     public static final String BATCH_SIZE = "batchSize";
     public static final String BATCH_SIZE_DEFAULT = "1";
     public static final String REPLAY_STRATEGY = "replayStrategy";
-    public static final String REPLAY_STRATEGY_DEFAULT = "";
     public static final String REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID = "replayStrategyReplicationGroupMessageId";
     public static final String REPLAY_STRATEGY_START_TIME = "replayStrategyStartTime";
     public static final String REPLAY_STRATEGY_TIMEZONE = "replayStrategyTimeZone";

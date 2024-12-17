@@ -29,11 +29,13 @@ public class SolaceBroker implements Serializable {
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
     private final Map<String, String> properties;
-    public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
+    private boolean initiateReplay = false; // required when multiple consumers bind to a queue.
+    public SolaceBroker(Map<String, String> properties, boolean initiateReplay) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
-        this.queue = queue;
         this.properties = properties;
+        this.initiateReplay = initiateReplay;
+        this.queue = properties.get(SolaceSparkStreamingProperties.QUEUE);
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             // get api properties
@@ -49,8 +51,8 @@ public class SolaceBroker implements Serializable {
                 jcsmpProperties = JCSMPProperties.fromProperties(props);
             }
 
-            jcsmpProperties.setProperty(JCSMPProperties.HOST, host);            // host:port
-            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, vpn);    // message-vpn
+            jcsmpProperties.setProperty(JCSMPProperties.HOST, properties.get(SolaceSparkStreamingProperties.HOST));            // host:port
+            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, properties.get(SolaceSparkStreamingProperties.VPN));    // message-vpn
             if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
                 isOAuth = true;
                 int interval = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT));
@@ -80,8 +82,8 @@ public class SolaceBroker implements Serializable {
                     scheduleOAuthRefresh(interval);
                 }
             } else {
-                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, username); // client-username
-                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, password); // client-password
+                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, properties.get(SolaceSparkStreamingProperties.USERNAME)); // client-username
+                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, properties.get(SolaceSparkStreamingProperties.PASSWORD)); // client-password
             }
 
             // Channel Properties
@@ -149,6 +151,7 @@ public class SolaceBroker implements Serializable {
 
             flowProp.setEndpoint(listenQueue);
             if(replayStart != null) {
+                this.initiateReplay = true;
                 flowProp.setReplayStartLocation(replayStart);
             }
             flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
@@ -163,6 +166,7 @@ public class SolaceBroker implements Serializable {
             log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {} ", this.queue);
             flowReceivers.add(cons);
         } catch (Exception e) {
+            this.initiateReplay = false;
             handleException("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
         }
     }

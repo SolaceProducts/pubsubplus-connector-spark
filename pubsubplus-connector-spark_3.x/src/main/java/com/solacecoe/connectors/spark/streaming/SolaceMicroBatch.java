@@ -43,6 +43,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     private final boolean skipMessageReprocessingIfTasksAreRunningLate;
     private final boolean createFlowsOnSameSession;
     private final boolean includeHeaders;
+    private final boolean initiateReplay;
 
     public SolaceMicroBatch(StructType schema, Map<String, String> properties, CaseInsensitiveStringMap options) {
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
@@ -133,11 +134,12 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
 
         solaceConnectionManager = new SolaceConnectionManager();
         log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
-        SolaceBroker solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
+        this.initiateReplay = properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY ,null) != null;
+        SolaceBroker solaceBroker = new SolaceBroker(properties, initiateReplay);
         solaceConnectionManager.addConnection(solaceBroker);
         for (int i = 0; i < partitions; i++) {
             if(!createFlowsOnSameSession && i > 0) {
-                solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
+                solaceBroker = new SolaceBroker(properties, false);
                 solaceConnectionManager.addConnection(solaceBroker);
             }
             EventListener eventListener = new EventListener((i + 1));
@@ -198,7 +200,7 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
                                 this.messages.put(solaceRecord.getMessageId(), solaceMessage);
                             } else {
                                 this.messages.put(solaceRecord.getMessageId(), solaceMessage);
-                                if (ackLastProcessedMessages) {
+                                if (ackLastProcessedMessages && !this.initiateReplay) {
                                     log.info("SolaceSparkConnector - Ack last processed messages is enabled. Checking if message is already processed based on available offsets.");
                                     // based on last successful offset, extract the message ID and see if same message is received, if so ack the message
                                     if (offsetJson != null && offsetJson.has("messageIDs")) {
