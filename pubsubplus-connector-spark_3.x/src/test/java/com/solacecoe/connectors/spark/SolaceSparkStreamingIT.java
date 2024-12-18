@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingIT {
     private SempV2Api sempV2Api = null;
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555);
@@ -110,6 +111,13 @@ public class SolaceSparkStreamingIT {
 
     @AfterEach
     public void afterEach() throws IOException {
+        sparkSession.close();
+        SparkSession.clearDefaultSession();
+        SparkSession.clearActiveSession();
+        sparkSession = SparkSession.builder()
+                .appName("data_source_test")
+                .master("local[*]")
+                .getOrCreate();
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path path1 = Paths.get("src", "test", "resources", "spark-checkpoint-2");
         Path path2 = Paths.get("src", "test", "resources", "spark-checkpoint-3");
@@ -125,6 +133,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(1)
     public void Should_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
@@ -137,7 +146,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -177,6 +186,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(2)
     public void Should_ProcessData_With_CustomOffsetIndicator() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
@@ -189,7 +199,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option(SolaceSparkStreamingProperties.OFFSET_INDICATOR, "custom-sequence")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
@@ -230,6 +240,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(3)
     public void Should_ProcessSolaceTextMessage() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
@@ -291,6 +302,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(4)
     public void Should_CreateMultipleConsumersOnSameSession_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-2");
 //        SparkSession sparkSession = SparkSession.builder()
@@ -303,7 +315,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .option(SolaceSparkStreamingProperties.BATCH_SIZE, 2)
                 .option("createFlowsOnSameSession", true)
@@ -354,6 +366,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(5)
     public void Should_CreateMultipleConsumersOnDifferentSessions_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-2");
 //        SparkSession sparkSession = SparkSession.builder()
@@ -366,7 +379,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .option(SolaceSparkStreamingProperties.PARTITIONS, 2)
                 .format("solace");
@@ -415,6 +428,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(6)
     public void Should_Fail_IfQueueIsUnknown() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -440,6 +454,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(7)
     public void Should_Fail_IfSolaceHostIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -465,6 +480,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(8)
     public void Should_Fail_If_CorrelationIdOffsetIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -490,6 +506,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(9)
     public void Should_Fail_If_ApplicationMessageIdOffsetIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -515,6 +532,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(10)
     public void Should_Fail_If_CustomUserPropertyOffsetIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -540,6 +558,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(11)
     public void Should_Fail_If_CustomUserPropertyOffsetIsNull() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -565,6 +584,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(12)
     public void Should_Fail_If_CustomUserPropertyOffsetIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -590,6 +610,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(13)
     public void Should_Fail_IfMandatoryHostIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -616,6 +637,7 @@ public class SolaceSparkStreamingIT {
 
 
     @Test
+    @Order(14)
     public void Should_Fail_IfMandatoryHostIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -641,6 +663,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(15)
     public void Should_Fail_IfMandatoryVpnIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -666,6 +689,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(16)
     public void Should_Fail_IfMandatoryVpnIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -691,6 +715,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(17)
     public void Should_Fail_IfMandatoryUsernameIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -716,6 +741,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(18)
     public void Should_Fail_IfMandatoryUsernameIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -741,6 +767,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(19)
     public void Should_Fail_IfMandatoryPasswordIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -766,6 +793,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(20)
     public void Should_Fail_IfMandatoryPasswordIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -791,6 +819,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(21)
     public void Should_Fail_IfMandatoryQueueIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -816,6 +845,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(22)
     public void Should_Fail_IfMandatoryQueueIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -842,6 +872,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
+    @Order(23)
     public void Should_Fail_IfBatchSizeLessThan1() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -880,7 +911,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -959,7 +990,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -1040,7 +1071,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -1115,7 +1146,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -1190,7 +1221,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -1266,7 +1297,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option(SolaceSparkStreamingProperties.INCLUDE_HEADERS, true)
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
@@ -1348,7 +1379,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option(SolaceSparkStreamingProperties.INCLUDE_HEADERS, true)
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
@@ -1429,7 +1460,7 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option(SolaceSparkStreamingProperties.INCLUDE_HEADERS, true)
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
@@ -1504,7 +1535,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1533,7 +1564,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1562,7 +1593,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1591,7 +1622,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1620,7 +1651,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1649,7 +1680,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1678,7 +1709,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1707,7 +1738,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1736,7 +1767,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1765,7 +1796,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1794,7 +1825,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1823,7 +1854,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1853,7 +1884,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1879,7 +1910,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1905,7 +1936,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1931,7 +1962,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1948,7 +1979,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void Should_Fail_Publish_Stream_IfMandatoryVpnIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        Path writePath = Paths.get("src", "test", "resoruces", "spark-checkpoint-3");
+        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
@@ -1956,7 +1987,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1973,7 +2004,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void Should_Fail_Publish_Stream_IfMandatoryUsernameIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        Path writePath = Paths.get("src", "test", "resoruces", "spark-checkpoint-3");
+        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
@@ -1981,7 +2012,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -1998,7 +2029,7 @@ public class SolaceSparkStreamingIT {
     @Test
     public void Should_Fail_Publish_Stream_IfMandatoryUsernameIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        Path writePath = Paths.get("src", "test", "resoruces", "spark-checkpoint-3");
+        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
@@ -2006,7 +2037,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -2031,7 +2062,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -2056,7 +2087,7 @@ public class SolaceSparkStreamingIT {
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();

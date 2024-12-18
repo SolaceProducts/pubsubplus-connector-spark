@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
     private static Logger log = LoggerFactory.getLogger(SolaceInputPartitionReader.class);
@@ -73,7 +74,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             headers.put(SolaceHeaders.TIME_TO_LIVE, solaceRecord.getTimeToLive());
             headers.put(SolaceHeaders.PRIORITY, solaceRecord.getPriority());
             headers.put(SolaceHeaders.REDELIVERED, solaceRecord.isRedelivered());
-            MapData mapData = new ArrayBasedMapData(new GenericArrayData(headers.keySet().stream().map(key -> UTF8String.fromString(key)).toArray()), new GenericArrayData(headers.values().stream().map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
+            MapData mapData = new ArrayBasedMapData(new GenericArrayData(headers.keySet().stream().filter(key -> headers.get(key) != null).map(UTF8String::fromString).toArray()), new GenericArrayData(headers.values().stream().filter(Objects::nonNull).map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
             row = new GenericInternalRow(new Object[]{UTF8String.fromString(solaceRecord.getMessageId()),
                     solaceRecord.getPayload(), UTF8String.fromString(solaceRecord.getPartitionKey()), UTF8String.fromString(solaceRecord.getDestination()),
                     DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp)),mapData
