@@ -213,6 +213,7 @@ public class SolaceBroker implements Serializable {
         flowReceivers.forEach(flowReceiver -> {
             if(flowReceiver != null && !flowReceiver.isClosed()) {
                 String endpoint = flowReceiver.getEndpoint().getName();
+                flowReceiver.stop();
                 flowReceiver.close();
                 log.info("SolaceSparkConnector - Closed flow receiver to endpoint {}", endpoint);
             }

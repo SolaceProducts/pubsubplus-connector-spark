@@ -15,6 +15,7 @@ import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
+import org.testcontainers.shaded.org.awaitility.Awaitility;
 import org.testcontainers.solace.Service;
 import org.testcontainers.solace.SolaceContainer;
 
@@ -24,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -112,6 +114,7 @@ public class SolaceSparkStreamingIT {
     @AfterEach
     public void afterEach() throws IOException {
         sparkSession.close();
+        sparkSession.stop();
         SparkSession.clearDefaultSession();
         SparkSession.clearActiveSession();
         sparkSession = SparkSession.builder()
@@ -134,7 +137,7 @@ public class SolaceSparkStreamingIT {
 
     @Test
     @Order(1)
-    public void Should_ProcessData() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -160,34 +163,36 @@ public class SolaceSparkStreamingIT {
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
 
-
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Thread.sleep(3000);
+        streamingQuery.stop();
     }
 
     @Test
     @Order(2)
-    public void Should_ProcessData_With_CustomOffsetIndicator() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_With_CustomOffsetIndicator() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -214,34 +219,35 @@ public class SolaceSparkStreamingIT {
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
-
-
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
     @Order(3)
-    public void Should_ProcessSolaceTextMessage() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessSolaceTextMessage() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -258,52 +264,55 @@ public class SolaceSparkStreamingIT {
                 .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
                 .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
-        final boolean[] runProcess = {true};
         final Object lock = new Object();
         Dataset<Row> dataset = reader.load();
         AtomicReference<String> payload = new AtomicReference<>("");
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
             synchronized (lock) {
                 count[0] = count[0] + dataset1.count();
-                if(dataset1.count() == 1) {
+                if(count[0] == 100) {
                     payload.set(dataset1.select(dataset1.col("Payload").cast("string")).collectAsList().get(0).getString(0));
                 }
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        Assertions.assertEquals("Hello Spark!", payload.get());
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        Assertions.assertEquals("Hello Spark!", payload.get());
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> payload.get().equals("Hello Spark!"));
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
 
 
     }
 
     @Test
     @Order(4)
-    public void Should_CreateMultipleConsumersOnSameSession_And_ProcessData() throws TimeoutException, StreamingQueryException {
+    public void Should_CreateMultipleConsumersOnSameSession_And_ProcessData() throws TimeoutException, StreamingQueryException, InterruptedException, com.solace.semp.v2.monitor.ApiException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-2");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -333,41 +342,50 @@ public class SolaceSparkStreamingIT {
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    try {
-                        MsgVpnQueueTxFlowsResponse msgVpnQueueTxFlowResponse =  sempV2Api.monitor().getMsgVpnQueueTxFlows("default", "Solace/Queue/0", 10, null, null, null);
-                        if(msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
-                            Assertions.assertEquals(2, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 2");
-                            Assertions.assertEquals(msgVpnQueueTxFlowResponse.getData().get(0).getClientName(), msgVpnQueueTxFlowResponse.getData().get(1).getClientName(), "Client Name of two solace sessions should be same");
-                        }
-                    } catch (com.solace.semp.v2.monitor.ApiException e) {
-                        throw new RuntimeException(e);
-                    }
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    try {
+//                        MsgVpnQueueTxFlowsResponse msgVpnQueueTxFlowResponse =  sempV2Api.monitor().getMsgVpnQueueTxFlows("default", "Solace/Queue/0", 10, null, null, null);
+//                        if(msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
+//                            Assertions.assertEquals(2, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 2");
+//                            Assertions.assertEquals(msgVpnQueueTxFlowResponse.getData().get(0).getClientName(), msgVpnQueueTxFlowResponse.getData().get(1).getClientName(), "Client Name of two solace sessions should be same");
+//                        }
+//                    } catch (com.solace.semp.v2.monitor.ApiException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        MsgVpnQueueTxFlowsResponse msgVpnQueueTxFlowResponse =  sempV2Api.monitor().getMsgVpnQueueTxFlows("default", "Solace/Queue/0", 10, null, null, null);
+        if(msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
+            Assertions.assertEquals(2, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 2");
+            Assertions.assertEquals(msgVpnQueueTxFlowResponse.getData().get(0).getClientName(), msgVpnQueueTxFlowResponse.getData().get(1).getClientName(), "Client Name of two solace sessions should be same");
+        }
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
     @Order(5)
-    public void Should_CreateMultipleConsumersOnDifferentSessions_And_ProcessData() throws TimeoutException, StreamingQueryException {
+    public void Should_CreateMultipleConsumersOnDifferentSessions_And_ProcessData() throws TimeoutException, StreamingQueryException, InterruptedException, com.solace.semp.v2.monitor.ApiException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-2");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -394,37 +412,46 @@ public class SolaceSparkStreamingIT {
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    try {
-                        MsgVpnQueueTxFlowsResponse msgVpnQueueTxFlowResponse =  sempV2Api.monitor().getMsgVpnQueueTxFlows("default", "Solace/Queue/0", 10, null, null, null);
-                        if(msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
-                            Assertions.assertEquals(2, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 2");
-                            Assertions.assertNotEquals(msgVpnQueueTxFlowResponse.getData().get(0).getClientName(), msgVpnQueueTxFlowResponse.getData().get(1).getClientName(), "Client Name of two solace sessions should not be the same");
-                        }
-                    } catch (com.solace.semp.v2.monitor.ApiException e) {
-                        throw new RuntimeException(e);
-                    }
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        SparkSession.clearActiveSession();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    try {
+//                        MsgVpnQueueTxFlowsResponse msgVpnQueueTxFlowResponse =  sempV2Api.monitor().getMsgVpnQueueTxFlows("default", "Solace/Queue/0", 10, null, null, null);
+//                        if(msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
+//                            Assertions.assertEquals(2, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 2");
+//                            Assertions.assertNotEquals(msgVpnQueueTxFlowResponse.getData().get(0).getClientName(), msgVpnQueueTxFlowResponse.getData().get(1).getClientName(), "Client Name of two solace sessions should not be the same");
+//                        }
+//                    } catch (com.solace.semp.v2.monitor.ApiException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        SparkSession.clearActiveSession();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        MsgVpnQueueTxFlowsResponse msgVpnQueueTxFlowResponse =  sempV2Api.monitor().getMsgVpnQueueTxFlows("default", "Solace/Queue/0", 10, null, null, null);
+        if(msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
+            Assertions.assertEquals(2, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 2");
+            Assertions.assertNotEquals(msgVpnQueueTxFlowResponse.getData().get(0).getClientName(), msgVpnQueueTxFlowResponse.getData().get(1).getClientName(), "Client Name of two solace sessions should not be the same");
+        }
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
@@ -898,7 +925,7 @@ public class SolaceSparkStreamingIT {
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_As_Stream_To_Solace() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_And_Publish_As_Stream_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
 //        SparkSession sparkSession = SparkSession.builder()
@@ -953,32 +980,37 @@ public class SolaceSparkStreamingIT {
             throw new RuntimeException(e);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -1034,32 +1066,37 @@ public class SolaceSparkStreamingIT {
             throw new RuntimeException(e);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_With_DataFrameId_To_Solace() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_And_Publish_With_DataFrameId_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -1110,31 +1147,35 @@ public class SolaceSparkStreamingIT {
             throw new RuntimeException(e);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_To_DataFrameTopic_Solace() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_And_Publish_To_DataFrameTopic_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -1185,31 +1226,35 @@ public class SolaceSparkStreamingIT {
             throw new RuntimeException(e);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_To_CustomTopic_Solace() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_And_Publish_To_CustomTopic_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -1261,31 +1306,35 @@ public class SolaceSparkStreamingIT {
             throw new RuntimeException(e);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_With_Headers_To_Solace() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_And_Publish_With_Headers_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -1342,32 +1391,37 @@ public class SolaceSparkStreamingIT {
             throw new RuntimeException(e);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_Without_Headers_To_Solace() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_And_Publish_Without_Headers_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -1423,32 +1477,37 @@ public class SolaceSparkStreamingIT {
             throw new RuntimeException(e);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_With_Only_PayloadColumn_To_Solace() throws TimeoutException, StreamingQueryException {
+    public void Should_ProcessData_And_Publish_With_Only_PayloadColumn_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -1502,27 +1561,31 @@ public class SolaceSparkStreamingIT {
             throw new RuntimeException(e);
         }
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
