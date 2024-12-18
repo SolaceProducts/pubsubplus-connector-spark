@@ -17,7 +17,7 @@ on:
         default: 'main'
 jobs:
   release_binder:
-    uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@master
+    uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@fixsonarhotspots
     with:
       main_branch: "${{ github.event.inputs.release_branch}}"
       push_external: ${{ github.event.inputs.release_central == 'true'}}
