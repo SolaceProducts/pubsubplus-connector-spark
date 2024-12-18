@@ -96,7 +96,7 @@ public class SolaceSparkStreamingOAuthIT {
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                 .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -152,7 +152,7 @@ public class SolaceSparkStreamingOAuthIT {
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                 .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -209,7 +209,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -237,7 +237,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE, resources.toAbsolutePath().toString() + "/keycloak.crt")
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD, "changeit")
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TLS_VERSION, "invalidtls")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -264,7 +264,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE, resources.toAbsolutePath().toString() + "/keycloak.crt")
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_FILE, resources.toAbsolutePath().toString() + "/custom_truststore.jks")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -290,7 +290,7 @@ public class SolaceSparkStreamingOAuthIT {
                 .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE, resources.toAbsolutePath().toString() + "/keycloak.crt")
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD, "changeit")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -349,7 +349,7 @@ public class SolaceSparkStreamingOAuthIT {
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE, resources.toAbsolutePath().toString() + "/keycloak.crt")
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_FILE, resources.toAbsolutePath().toString() + "/custom_truststore.jks")
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD, resources.toAbsolutePath().toString() + "changeit")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -417,7 +417,7 @@ public class SolaceSparkStreamingOAuthIT {
                 .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, resources.toAbsolutePath().toString() + "/accesstoken.txt")
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "50")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
@@ -484,7 +484,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, resources.toAbsolutePath().toString() + "/accesstoken.txt")
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             final long[] count = {0};
@@ -532,7 +532,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, resources.toAbsolutePath().toString() + "/accesstoken.txt")
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "50")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -560,7 +560,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -586,7 +586,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -612,7 +612,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -638,7 +638,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -664,7 +664,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -690,7 +690,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
@@ -713,7 +713,7 @@ public class SolaceSparkStreamingOAuthIT {
                     .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, "")
                     .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "50")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "10")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
