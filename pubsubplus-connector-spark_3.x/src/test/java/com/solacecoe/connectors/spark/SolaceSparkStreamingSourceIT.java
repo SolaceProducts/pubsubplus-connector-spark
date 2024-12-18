@@ -87,10 +87,16 @@ public class SolaceSparkStreamingSourceIT {
             for (int i = 0; i < 100; i++) {
                 TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
                 textMessage.setText("Hello Spark!");
+                textMessage.setPriority(1);
+//                textMessage.setCorrelationId("test-correlation-id");
+                textMessage.setDMQEligible(true);
                 SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
+                sdtMap.putString("custom-string", "custom-value");
+                sdtMap.putBoolean("custom-boolean", true);
+                sdtMap.putString("null-custom-property", null);
+                sdtMap.putString("empty-custom-property", "");
                 sdtMap.putInteger("custom-sequence", i);
                 textMessage.setProperties(sdtMap);
-                textMessage.setSenderTimestamp(System.currentTimeMillis());
                 Topic topic = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
                 messageProducer.send(textMessage, topic);
             }
