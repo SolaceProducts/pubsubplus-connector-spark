@@ -87,6 +87,9 @@ public class SolaceSparkStreamingSourceIT {
             for (int i = 0; i < 100; i++) {
                 TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
                 textMessage.setText("Hello Spark!");
+                SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
+                sdtMap.putInteger("custom-sequence", i);
+                textMessage.setProperties(sdtMap);
                 textMessage.setSenderTimestamp(System.currentTimeMillis());
                 Topic topic = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
                 messageProducer.send(textMessage, topic);
