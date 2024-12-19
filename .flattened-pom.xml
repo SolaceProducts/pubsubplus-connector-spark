@@ -35,12 +35,12 @@
   </scm>
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
-    <generated-filtered-resource.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/spark-connector-v2/target/generated-filtered-resources</generated-filtered-resource.directory>
-    <revision>3.0.0</revision>
+    <generated-filtered-resource.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/target/generated-filtered-resources</generated-filtered-resource.directory>
+    <revision>3.0.0-EA</revision>
     <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
     <sha1></sha1>
     <maven.compiler.target>17</maven.compiler.target>
-    <changelist>-EA</changelist>
+    <changelist></changelist>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
   <dependencies>
