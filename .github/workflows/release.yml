@@ -15,6 +15,15 @@ on:
           - false
       release_branch:
         default: 'main'
+      release_type:
+        description: "Type of release may be GA, EA, Beta"
+        type: choice
+        required: true
+        default: "GA"
+        options: 
+        - Beta
+        - EA
+        - GA
 jobs:
   release_binder:
     uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@master
@@ -91,7 +100,7 @@ jobs:
           artifact_directory: "${{ github.workspace }}/release_artifacts"
           version: ${{ github.event.inputs.release_version }}
           project_name: "Spark"
-          release_type: "GA"
           artifact_id: ${{ env.ARTIFACT_ID }}
           release_notes_product: "spark"
           symlink_name: "SPARK"
+          release_type:  ${{ github.event.inputs.release_type }}
