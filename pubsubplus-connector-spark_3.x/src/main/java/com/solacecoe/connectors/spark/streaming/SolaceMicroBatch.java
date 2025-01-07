@@ -135,11 +135,11 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         solaceConnectionManager = new SolaceConnectionManager();
         log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
         this.initiateReplay = properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY ,null) != null;
-        SolaceBroker solaceBroker = new SolaceBroker(properties, initiateReplay);
+        SolaceBroker solaceBroker = new SolaceBroker(properties);
         solaceConnectionManager.addConnection(solaceBroker);
         for (int i = 0; i < partitions; i++) {
             if(!createFlowsOnSameSession && i > 0) {
-                solaceBroker = new SolaceBroker(properties, false);
+                solaceBroker = new SolaceBroker(properties);
                 solaceConnectionManager.addConnection(solaceBroker);
             }
             EventListener eventListener = new EventListener((i + 1));
