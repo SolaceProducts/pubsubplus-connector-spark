@@ -33,7 +33,6 @@ public class SolaceBroker implements Serializable {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
         this.properties = properties;
-        this.initiateReplay = initiateReplay;
         this.queue = properties.get(SolaceSparkStreamingProperties.QUEUE);
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
