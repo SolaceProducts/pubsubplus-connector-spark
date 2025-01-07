@@ -55,7 +55,7 @@
 | int
 | 0 - 60000
 | 3000
-| How much time in (MS) to wait between each attempt to connect or reconnect to a host. If a connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
+| How much time in (MS) to wait between each attempt to connect or reconnect to a host. If connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
 
 | solace.apiProperties.<Property>
 | any

@@ -23,7 +23,6 @@ import org.testcontainers.solace.SolaceContainer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
-import java.text.Format;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.TimeZone;
@@ -34,7 +33,7 @@ import java.util.concurrent.TimeoutException;
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class SolaceSparkStreamingMessageReplayIT {
+class SolaceSparkStreamingMessageReplayIT {
     private SempV2Api sempV2Api = null;
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
@@ -111,7 +110,7 @@ public class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(1)
-    public void Should_ProcessData() throws TimeoutException, StreamingQueryException {
+    void Should_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -175,7 +174,7 @@ public class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(2)
-    public void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
+    void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -229,7 +228,7 @@ public class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(3)
-    public void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
+    void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -284,7 +283,7 @@ public class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(4)
-    public void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
+    void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")

@@ -29,7 +29,6 @@ public class SolaceBroker implements Serializable {
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
     private final Map<String, String> properties;
-    private boolean initiateReplay = false; // required when multiple consumers bind to a queue.
     public SolaceBroker(Map<String, String> properties, boolean initiateReplay) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
@@ -151,7 +150,6 @@ public class SolaceBroker implements Serializable {
 
             flowProp.setEndpoint(listenQueue);
             if(replayStart != null) {
-                this.initiateReplay = true;
                 flowProp.setReplayStartLocation(replayStart);
             }
             flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
@@ -166,7 +164,6 @@ public class SolaceBroker implements Serializable {
             log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {} ", this.queue);
             flowReceivers.add(cons);
         } catch (Exception e) {
-            this.initiateReplay = false;
             handleException("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
         }
     }
