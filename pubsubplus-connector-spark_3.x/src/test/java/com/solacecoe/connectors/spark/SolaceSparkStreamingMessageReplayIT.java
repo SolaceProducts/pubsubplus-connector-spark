@@ -17,6 +17,7 @@ import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.shaded.org.awaitility.Awaitility;
 import org.testcontainers.solace.Service;
 import org.testcontainers.solace.SolaceContainer;
 
@@ -28,6 +29,7 @@ import java.util.Date;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -112,7 +114,7 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(1)
-    void Should_ProcessData() throws TimeoutException, StreamingQueryException {
+    void Should_ProcessData() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -149,34 +151,38 @@ class SolaceSparkStreamingMessageReplayIT {
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 100L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 100L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100L);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
 
 
     }
 
     @Test
     @Order(2)
-    void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
+    void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -203,34 +209,37 @@ class SolaceSparkStreamingMessageReplayIT {
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 200L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 200L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
 
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 200L);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
 
     }
 
     @Test
     @Order(3)
-    void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
+    void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -258,34 +267,38 @@ class SolaceSparkStreamingMessageReplayIT {
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 299L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 299L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 299L);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
 
 
     }
 
     @Test
     @Order(4)
-    void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException {
+    void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 //        SparkSession sparkSession = SparkSession.builder()
 //                .appName("data_source_test")
@@ -313,27 +326,31 @@ class SolaceSparkStreamingMessageReplayIT {
             }
         }).start();
 
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        executorService.execute(() -> {
-            do {
-                if(count[0] == 319L) {
-                    runProcess[0] = false;
-                    try {
-                        streamingQuery.stop();
-//                        sparkSession.close();
-                        executorService.shutdown();
-                    } catch (TimeoutException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } while (runProcess[0]);
-        });
-        streamingQuery.awaitTermination();
+//        ExecutorService executorService = Executors.newFixedThreadPool(1);
+//        executorService.execute(() -> {
+//            do {
+//                if(count[0] == 319L) {
+//                    runProcess[0] = false;
+//                    try {
+//                        streamingQuery.stop();
+////                        sparkSession.close();
+//                        executorService.shutdown();
+//                    } catch (TimeoutException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            } while (runProcess[0]);
+//        });
+//        streamingQuery.awaitTermination();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 319L);
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
 
 
     }

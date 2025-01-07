@@ -29,7 +29,7 @@ public class SolaceBroker implements Serializable {
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
     private final Map<String, String> properties;
-    public SolaceBroker(Map<String, String> properties, boolean initiateReplay) {
+    public SolaceBroker(Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
         this.properties = properties;
