@@ -5,6 +5,7 @@ import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidA
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
 import com.solacesystems.jcsmp.*;
 import com.solacesystems.jcsmp.Queue;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,21 +38,16 @@ public class SolaceBroker implements Serializable {
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             // get api properties
-            Properties props = new Properties();
-            for(Map.Entry<String, String> entry : properties.entrySet()) {
-                if (entry.getKey().startsWith(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX)) {
-                    String value = entry.getValue();
-                    String solaceKey = entry.getKey().substring(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX.length());
-                    props.put("jcsmp." + solaceKey, value);
-                }
-            }
+            Properties props = getProperties(properties);
             if(!props.isEmpty()) {
                 jcsmpProperties = JCSMPProperties.fromProperties(props);
             }
 
             jcsmpProperties.setProperty(JCSMPProperties.HOST, properties.get(SolaceSparkStreamingProperties.HOST));            // host:port
             jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, properties.get(SolaceSparkStreamingProperties.VPN));    // message-vpn
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
+
+            String authenticationScheme = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, null);
+            if(authenticationScheme != null && authenticationScheme.equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
                 isOAuth = true;
                 int interval = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT));
                 // if access token is configured, read it directly from source
@@ -84,22 +80,7 @@ public class SolaceBroker implements Serializable {
                 jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, properties.get(SolaceSparkStreamingProperties.PASSWORD)); // client-password
             }
 
-            // Channel Properties
-            JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
-                    .getProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)) {
-                cp.setConnectRetries(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)));
-            }
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES)) {
-                int reconnectRetryCount = Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES));
-                cp.setReconnectRetries(reconnectRetryCount);
-            }
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)) {
-                cp.setConnectRetriesPerHost(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)));
-            }
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)) {
-                cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)));
-            }
+            addChannelProperties(jcsmpProperties);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
         } catch (Exception ex) {
@@ -109,6 +90,37 @@ public class SolaceBroker implements Serializable {
             this.exception = ex;
             throw new SolaceSessionException(ex);
         }
+    }
+
+    private void addChannelProperties(JCSMPProperties jcsmpProperties) {
+        // Channel Properties
+        JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
+                .getProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)) {
+            cp.setConnectRetries(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)));
+        }
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES)) {
+            int reconnectRetryCount = Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES));
+            cp.setReconnectRetries(reconnectRetryCount);
+        }
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)) {
+            cp.setConnectRetriesPerHost(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)));
+        }
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)) {
+            cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)));
+        }
+    }
+
+    private static @NotNull Properties getProperties(Map<String, String> properties) {
+        Properties props = new Properties();
+        for(Map.Entry<String, String> entry : properties.entrySet()) {
+            if (entry.getKey().startsWith(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX)) {
+                String value = entry.getValue();
+                String solaceKey = entry.getKey().substring(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX.length());
+                props.put("jcsmp." + solaceKey, value);
+            }
+        }
+        return props;
     }
 
     public void addReceiver(EventListener eventListener) {
@@ -199,35 +211,6 @@ public class SolaceBroker implements Serializable {
     protected void finalize() {
         close();
     }
-
-//    public boolean preReconnect() {
-//        log.info("SolaceSparkConnector - Pre reconnect to Solace session");
-//        try {
-//            if (session != null) {
-//                if(oAuthClient != null) {
-//                    session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken().getValue());
-//                } else if(accessTokenSource != null) {
-//                    String accessToken = readAccessTokenFromFile(accessTokenSource);
-//                    session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, accessToken);
-//                }
-//                log.info("SolaceSparkConnector - Updated Solace Session with new access token during pre-reconnect state");
-//            }
-//            reconnectCount++;
-//            return true;
-//        } catch (Exception e) {
-//            reconnectCount--;
-//            handleException("SolaceSparkConnector - Exception reconnecting to Solace ", e);
-//            return false;
-////            log.error("SolaceSparkConnector - Exception reconnecting to Solace ", e);
-////            close();
-////            throw new RuntimeException(e);
-//        }
-//    }
-//
-//    public void postReconnect() {
-//        log.info("SolaceSparkConnector - Post reconnect to Solace session successful");
-//        reconnectCount--;
-//    }
 
     private void scheduleOAuthRefresh(int refreshInterval) {
         scheduledExecutorService = Executors.newScheduledThreadPool(1);

@@ -40,7 +40,6 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     private final int batchSize;
     private final int partitions;
     private final boolean ackLastProcessedMessages;
-    private final boolean skipMessageReprocessingIfTasksAreRunningLate;
     private final boolean createFlowsOnSameSession;
     private final boolean includeHeaders;
     private final boolean initiateReplay;
@@ -113,7 +112,6 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
         }
 
         ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
-        skipMessageReprocessingIfTasksAreRunningLate = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.SKIP_DUPLICATES, SolaceSparkStreamingProperties.SKIP_DUPLICATES_DEFAULT));
         log.info("SolaceSparkConnector - Ack Last processed messages is set to {}", ackLastProcessedMessages);
 
         includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
