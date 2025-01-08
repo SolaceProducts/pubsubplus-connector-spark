@@ -85,6 +85,10 @@ If rotating access token is present in file accessible by connector use below op
 
 NOTE: When access token is read from file, it may lose some of it's expiry time by the time it is accessed by connector. It is recommended to have minimal time difference between writing to file and access by the connector so that a valid new token is updated in solace session before expiry of old token.
 
+=== Message Replay
+
+Solace Spark Connector can replay messages using Solace Replay Log. Connector can replay all messages or after specific replication group message id or after specific timestamp. Please refer to https://docs.solace.com/Features/Replay/Msg-Replay-Concepts-Config.htm[Message Replay Configuration] to enable replay log in Solace PubSub+ broker.
+
 === Solace Spark Streaming Schema Structure
 
 Solace Spark Connector transforms the incoming message to Spark row with below schema definition.
