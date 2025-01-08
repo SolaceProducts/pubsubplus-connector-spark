@@ -182,13 +182,9 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | boolean
 | true or false
 | false
-| Set this value to true if connector needs to identify and acknowledge processed messages in last run during restarts. The connector purely depends on checkpoint generated during Spark commit. We recommended enabling this configuration only when your downstream system has processed data in previous run.
+a| Set this value to true if connector needs to identify and acknowledge processed messages in last run during restarts. The connector purely depends on checkpoint generated during Spark commit. We recommended enabling this configuration only when your downstream system has processed data in previous run.
 
-| skipDuplicates
-| boolean
-| true or false
-| false
-| Set this value to true if connector needs check for duplicates before adding to Spark row. This scenario occurs when a task is running late and new task is started. The new task may have duplicate message as messages from earlier are not acknowledged by the time it is start.
+NOTE: This property will be void if replay strategy is enabled.
 
 | offsetIndicator
 | string
