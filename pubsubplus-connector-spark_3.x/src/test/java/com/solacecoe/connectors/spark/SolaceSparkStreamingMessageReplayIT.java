@@ -173,7 +173,7 @@ class SolaceSparkStreamingMessageReplayIT {
 //        });
 //        streamingQuery.awaitTermination();
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(count[0], 100L));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100L, count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
 
@@ -231,7 +231,7 @@ class SolaceSparkStreamingMessageReplayIT {
 //        });
 //        streamingQuery.awaitTermination();
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(count[0], 200L));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(200L,count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
 
@@ -289,7 +289,7 @@ class SolaceSparkStreamingMessageReplayIT {
 //        });
 //        streamingQuery.awaitTermination();
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(count[0], 299L));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(299L, count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
 
@@ -348,7 +348,7 @@ class SolaceSparkStreamingMessageReplayIT {
 //        });
 //        streamingQuery.awaitTermination();
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(count[0], 319L));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(319L, count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
 
