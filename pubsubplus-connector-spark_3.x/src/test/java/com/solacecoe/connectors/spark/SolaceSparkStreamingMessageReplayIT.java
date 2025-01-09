@@ -23,6 +23,10 @@ import org.testcontainers.solace.SolaceContainer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -36,6 +40,7 @@ class SolaceSparkStreamingMessageReplayIT {
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
     private String replicationGroupMessageId = "";
+    private String messageTimestamp = "";
     @BeforeAll
     public void beforeAll() throws ApiException {
         solaceContainer.start();
@@ -129,6 +134,14 @@ class SolaceSparkStreamingMessageReplayIT {
                 if(count[0] == 90) {
                     replicationGroupMessageId = dataset1.first().getString(0);
                 }
+                if(count[0] == 80) {
+                    Object obj = dataset1.first().get(4);
+                    Timestamp timestamp = (Timestamp) obj;
+                    Date date = new Date(timestamp.getTime());
+                    SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+                    format.setTimeZone(TimeZone.getTimeZone("UTC"));
+                    messageTimestamp = format.format(date);
+                }
             }
         }).start();
 
@@ -169,41 +182,41 @@ class SolaceSparkStreamingMessageReplayIT {
 
     }
 
-//    @Test
-//    @Order(3)
-//    void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
-//        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//
-//        DataStreamReader reader = sparkSession.readStream()
-//                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-//                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-//                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-//                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-//                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-//                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-//                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "TIMEBASED")
-//                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME, messageTimestamp)
-//                .option("checkpointLocation", path.toAbsolutePath().toString())
-//                .format("solace");
-//        final long[] count = {0};
-//        final Object lock = new Object();
-//        Dataset<Row> dataset = reader.load();
-//
-//        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-//            synchronized (lock) {
-//                count[0] = count[0] + dataset1.count();
-//            }
-//        }).start();
-//
-//        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(299L, count[0]));
-//        Thread.sleep(3000); // add timeout to ack messages on queue
-//        streamingQuery.stop();
-//
-//
-//    }
-
     @Test
     @Order(3)
+    void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+
+        DataStreamReader reader = sparkSession.readStream()
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "TIMEBASED")
+                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME, messageTimestamp)
+                .option("checkpointLocation", path.toAbsolutePath().toString())
+                .format("solace");
+        final long[] count = {0};
+        final Object lock = new Object();
+        Dataset<Row> dataset = reader.load();
+
+        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            synchronized (lock) {
+                count[0] = count[0] + dataset1.count();
+            }
+        }).start();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(299L, count[0]));
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
+
+
+    }
+
+    @Test
+    @Order(4)
     void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
 
@@ -228,7 +241,7 @@ class SolaceSparkStreamingMessageReplayIT {
             }
         }).start();
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(219L, count[0]));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(319L, count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
 
