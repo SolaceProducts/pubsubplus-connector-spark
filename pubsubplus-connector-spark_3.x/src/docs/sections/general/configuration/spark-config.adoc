@@ -55,7 +55,7 @@
 | int
 | 0 - 60000
 | 3000
-| How much time in (MS) to wait between each attempt to connect or reconnect to a host. If a connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
+| How much time in (MS) to wait between each attempt to connect or reconnect to a host. If connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
 
 | solace.apiProperties.<Property>
 | any
@@ -154,17 +154,37 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | 1
 | Set number of messages to be processed in batch. The connector can stream data in batches to Spark based on configured size.
 
+| replayStrategy
+| string
+| BEGINNING \| TIMEBASED \| REPLICATION-GROUP-MESSAGE-ID
+| empty
+| Set the replay strategy if messages need to be replayed from broker to connector. For more information refer to https://docs.solace.com/Features/Replay/Msg-Replay-Concepts-Config.htm#Types[SolaceReplayConfiguration]
+
+| replayStrategyReplicationGroupMessageId
+| string
+| valid-replication-group-message-id
+| empty
+| Set the property if replay strategy is REPLICATION-GROUP-MESSAGE-ID. Message playback is started after this replication group message id.
+
+| replayStrategyStartTime
+| string
+| datetime string<yyyy-MM-dd'T'HH:mm:ss>
+| empty
+| Set the property if replay strategy is TIMEBASED. Any messages in the replay log equal to, or newer than, the specified date and time that match the endpoint’s subscriptions are replayed to the connector. The date can't be earlier than the date the replay log was created, otherwise replay will fail.
+
+| replayStrategyTimeZone
+| string
+| valid timezone
+| UTC
+| Set the property if replay strategy is TIMEBASED.
+
 | ackLastProcessedMessages
 | boolean
 | true or false
 | false
-| Set this value to true if connector needs to identify and acknowledge processed messages in last run during restarts. The connector purely depends on checkpoint generated during Spark commit. We recommended enabling this configuration only when your downstream system has processed data in previous run.
+a| Set this value to true if connector needs to identify and acknowledge processed messages in last run during restarts. The connector purely depends on checkpoint generated during Spark commit. We recommended enabling this configuration only when your downstream system has processed data in previous run.
 
-| skipDuplicates
-| boolean
-| true or false
-| false
-| Set this value to true if connector needs check for duplicates before adding to Spark row. This scenario occurs when a task is running late and new task is started. The new task may have duplicate message as messages from earlier are not acknowledged by the time it is start.
+NOTE: This property will be void if replay strategy is enabled.
 
 | offsetIndicator
 | string
