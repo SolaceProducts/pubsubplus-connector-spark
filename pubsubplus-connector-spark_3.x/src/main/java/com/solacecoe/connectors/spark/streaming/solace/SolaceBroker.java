@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
-import java.util.*;
 import java.util.concurrent.*;
 
 public class SolaceBroker implements Serializable {
@@ -35,11 +34,14 @@ public class SolaceBroker implements Serializable {
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
     private final Map<String, String> properties;
+    private final JCSMPSession session;
+    private XMLMessageProducer producer;
+
     public SolaceBroker(Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
         this.properties = properties;
-        this.queue = properties.get(SolaceSparkStreamingProperties.QUEUE);
+        this.queue = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing

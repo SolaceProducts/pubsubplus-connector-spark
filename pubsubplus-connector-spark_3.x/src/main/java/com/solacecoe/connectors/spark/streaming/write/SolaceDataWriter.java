@@ -48,8 +48,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         this.includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
         this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
-        this.solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN),
-                properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), "", properties);
+        this.solaceBroker = new SolaceBroker(properties);
         this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
 
         this.projection = createProjection();
