@@ -8,6 +8,7 @@ import com.solacesystems.jcsmp.*;
 import com.solacesystems.jcsmp.Queue;
 import org.apache.spark.sql.catalyst.expressions.UnsafeMapData;
 import org.apache.spark.sql.types.DataTypes;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,9 +18,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.nio.file.Files;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.concurrent.*;
 
 public class SolaceBroker implements Serializable {
@@ -34,33 +34,26 @@ public class SolaceBroker implements Serializable {
     private long accessTokenSourceLastModifiedTime = 0L;
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
-    private final JCSMPSession session;
-    private XMLMessageProducer producer;
-
-    public SolaceBroker(String host, String vpn, String username, String password, String queue, Map<String, String> properties) {
+    private final Map<String, String> properties;
+    public SolaceBroker(Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
-        this.queue = queue;
-
+        this.properties = properties;
+        this.queue = properties.get(SolaceSparkStreamingProperties.QUEUE);
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             // get api properties
-            Properties props = new Properties();
-            for(Map.Entry<String, String> entry : properties.entrySet()) {
-                if (entry.getKey().startsWith(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX)) {
-                    String value = entry.getValue();
-                    String solaceKey = entry.getKey().substring(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX.length());
-                    props.put("jcsmp." + solaceKey, value);
-                }
-            }
+            Properties props = getProperties(properties);
             if(!props.isEmpty()) {
                 jcsmpProperties = JCSMPProperties.fromProperties(props);
             }
 
-            jcsmpProperties.setProperty(JCSMPProperties.HOST, host);            // host:port
-            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, vpn);    // message-vpn
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME) && properties.get(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+JCSMPProperties.AUTHENTICATION_SCHEME).equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
+            jcsmpProperties.setProperty(JCSMPProperties.HOST, properties.get(SolaceSparkStreamingProperties.HOST));            // host:port
+            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, properties.get(SolaceSparkStreamingProperties.VPN));    // message-vpn
+
+            String authenticationScheme = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, null);
+            if(authenticationScheme != null && authenticationScheme.equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
                 isOAuth = true;
                 int interval = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT));
                 // if access token is configured, read it directly from source
@@ -89,26 +82,11 @@ public class SolaceBroker implements Serializable {
                     scheduleOAuthRefresh(interval);
                 }
             } else {
-                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, username); // client-username
-                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, password); // client-password
+                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, properties.get(SolaceSparkStreamingProperties.USERNAME)); // client-username
+                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, properties.get(SolaceSparkStreamingProperties.PASSWORD)); // client-password
             }
 
-            // Channel Properties
-            JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
-                    .getProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)) {
-                cp.setConnectRetries(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)));
-            }
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES)) {
-                int reconnectRetryCount = Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES));
-                cp.setReconnectRetries(reconnectRetryCount);
-            }
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)) {
-                cp.setConnectRetriesPerHost(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)));
-            }
-            if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)) {
-                cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)));
-            }
+            addChannelProperties(jcsmpProperties);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
         } catch (Exception ex) {
@@ -120,6 +98,37 @@ public class SolaceBroker implements Serializable {
         }
     }
 
+    private void addChannelProperties(JCSMPProperties jcsmpProperties) {
+        // Channel Properties
+        JCSMPChannelProperties cp = (JCSMPChannelProperties) jcsmpProperties
+                .getProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)) {
+            cp.setConnectRetries(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES)));
+        }
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES)) {
+            int reconnectRetryCount = Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES));
+            cp.setReconnectRetries(reconnectRetryCount);
+        }
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)) {
+            cp.setConnectRetriesPerHost(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST)));
+        }
+        if(properties.containsKey(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)) {
+            cp.setReconnectRetryWaitInMillis(Integer.parseInt(properties.get(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME)));
+        }
+    }
+
+    private static @NotNull Properties getProperties(Map<String, String> properties) {
+        Properties props = new Properties();
+        for(Map.Entry<String, String> entry : properties.entrySet()) {
+            if (entry.getKey().startsWith(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX)) {
+                String value = entry.getValue();
+                String solaceKey = entry.getKey().substring(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX.length());
+                props.put("jcsmp." + solaceKey, value);
+            }
+        }
+        return props;
+    }
+
     public void addReceiver(EventListener eventListener) {
         eventListeners.add(eventListener);
         setReceiver(eventListener);
@@ -127,10 +136,39 @@ public class SolaceBroker implements Serializable {
 
     private void setReceiver(EventListener eventListener) {
         try {
+            ReplayStartLocation replayStart = null;
+            String replayStrategy = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY ,null);
+            if(replayStrategy != null) {
+                switch (replayStrategy) {
+                    case "BEGINNING":
+                        replayStart = JCSMPFactory.onlyInstance().createReplayStartLocationBeginning();
+                        break;
+                    case "TIMEBASED":
+                        String dateStr = properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME ,null);
+                        if (dateStr != null) {
+                            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+                            simpleDateFormat.setTimeZone(TimeZone.getTimeZone(properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_TIMEZONE, "UTC"))); // Convert the given date into UTC time zone
+                            Date date = simpleDateFormat.parse(dateStr);
+                            replayStart = JCSMPFactory.onlyInstance().createReplayStartLocationDate(date);
+                        }
+                        break;
+                    case "REPLICATION-GROUP-MESSAGE-ID":
+                        String replicationGroupMsgId = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, null);
+                        if(replicationGroupMsgId != null) {
+                            replayStart = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(replicationGroupMsgId);
+                        }
+                        break;
+                    default:
+                        throw new RuntimeException("Unsupported replay strategy: " + replayStrategy);
+                }
+            }
             ConsumerFlowProperties flowProp = new ConsumerFlowProperties();
             Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.queue);
 
             flowProp.setEndpoint(listenQueue);
+            if(replayStart != null) {
+                flowProp.setReplayStartLocation(replayStart);
+            }
             flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
             EndpointProperties endpointProps = new EndpointProperties();
             endpointProps.setAccessType(EndpointProperties.ACCESSTYPE_NONEXCLUSIVE);
@@ -246,35 +284,6 @@ public class SolaceBroker implements Serializable {
     protected void finalize() {
         close();
     }
-
-//    public boolean preReconnect() {
-//        log.info("SolaceSparkConnector - Pre reconnect to Solace session");
-//        try {
-//            if (session != null) {
-//                if(oAuthClient != null) {
-//                    session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken().getValue());
-//                } else if(accessTokenSource != null) {
-//                    String accessToken = readAccessTokenFromFile(accessTokenSource);
-//                    session.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, accessToken);
-//                }
-//                log.info("SolaceSparkConnector - Updated Solace Session with new access token during pre-reconnect state");
-//            }
-//            reconnectCount++;
-//            return true;
-//        } catch (Exception e) {
-//            reconnectCount--;
-//            handleException("SolaceSparkConnector - Exception reconnecting to Solace ", e);
-//            return false;
-////            log.error("SolaceSparkConnector - Exception reconnecting to Solace ", e);
-////            close();
-////            throw new RuntimeException(e);
-//        }
-//    }
-//
-//    public void postReconnect() {
-//        log.info("SolaceSparkConnector - Post reconnect to Solace session successful");
-//        reconnectCount--;
-//    }
 
     private void scheduleOAuthRefresh(int refreshInterval) {
         scheduledExecutorService = Executors.newScheduledThreadPool(1);
