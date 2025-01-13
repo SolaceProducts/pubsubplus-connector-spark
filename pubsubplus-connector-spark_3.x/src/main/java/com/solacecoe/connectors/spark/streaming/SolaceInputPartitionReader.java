@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark.streaming;
 
 import com.solacecoe.connectors.spark.SolaceRecord;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaders;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
@@ -17,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
     private static Logger log = LoggerFactory.getLogger(SolaceInputPartitionReader.class);
@@ -60,14 +62,19 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         InternalRow row;
         if(this.includeHeaders) {
             log.info("SolaceSparkConnector - Adding event headers to Spark row");
+            Map<String, Object> headers = new HashMap<>();
             Map<String, Object> userProperties = (solaceRecord.getProperties() != null) ? solaceRecord.getProperties() : new HashMap<>();
-            if(solaceRecord.getSequenceNumber() != null) {
-                userProperties.put("solace_sequence_number", solaceRecord.getSequenceNumber());
+            if(!userProperties.isEmpty()) {
+                headers.putAll(userProperties);
             }
-            userProperties.put("solace_expiration", solaceRecord.getExpiration());
-            userProperties.put("solace_time_to_live", solaceRecord.getTimeToLive());
-            userProperties.put("solace_priority", solaceRecord.getPriority());
-            MapData mapData = new ArrayBasedMapData(new GenericArrayData(userProperties.keySet().stream().map(key -> UTF8String.fromString(key)).toArray()), new GenericArrayData(userProperties.values().stream().map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
+            if(solaceRecord.getSequenceNumber() != null) {
+                headers.put(SolaceHeaders.SEQUENCE_NUMBER, solaceRecord.getSequenceNumber());
+            }
+            headers.put(SolaceHeaders.EXPIRATION, solaceRecord.getExpiration());
+            headers.put(SolaceHeaders.TIME_TO_LIVE, solaceRecord.getTimeToLive());
+            headers.put(SolaceHeaders.PRIORITY, solaceRecord.getPriority());
+            headers.put(SolaceHeaders.REDELIVERED, solaceRecord.isRedelivered());
+            MapData mapData = new ArrayBasedMapData(new GenericArrayData(headers.keySet().stream().filter(key -> headers.get(key) != null).map(UTF8String::fromString).toArray()), new GenericArrayData(headers.values().stream().filter(Objects::nonNull).map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
             row = new GenericInternalRow(new Object[]{UTF8String.fromString(solaceRecord.getMessageId()),
                     solaceRecord.getPayload(), UTF8String.fromString(solaceRecord.getPartitionKey()), UTF8String.fromString(solaceRecord.getDestination()),
                     DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp)),mapData

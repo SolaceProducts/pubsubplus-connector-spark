@@ -1,9 +1,13 @@
 package com.solacecoe.connectors.spark;
 
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProperties;
 import org.apache.spark.sql.connector.catalog.SupportsRead;
+import org.apache.spark.sql.connector.catalog.SupportsWrite;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableCapability;
 import org.apache.spark.sql.connector.read.ScanBuilder;
+import org.apache.spark.sql.connector.write.LogicalWriteInfo;
+import org.apache.spark.sql.connector.write.WriteBuilder;
 import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
@@ -11,7 +15,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public class SolaceStreamStructure implements SupportsRead, Table {
+public class SolaceStreamStructure implements SupportsRead, SupportsWrite, Table {
 
     private final StructType schema;
     private final Map<String, String> properties;
@@ -37,7 +41,7 @@ public class SolaceStreamStructure implements SupportsRead, Table {
 
     @Override
     public StructType schema() {
-        boolean includeHeaders = this.properties.containsKey("includeHeaders") ? Boolean.valueOf(this.properties.get("includeHeaders").toString()) : false;
+        boolean includeHeaders = Boolean.parseBoolean(this.properties.getOrDefault("includeHeaders", "false"));
         return getSchema(includeHeaders);
     }
 
@@ -46,32 +50,20 @@ public class SolaceStreamStructure implements SupportsRead, Table {
         if (capabilities == null) {
             this.capabilities = new HashSet<>();
             capabilities.add(TableCapability.MICRO_BATCH_READ);
+            capabilities.add(TableCapability.BATCH_WRITE);
+            capabilities.add(TableCapability.STREAMING_WRITE);
+            capabilities.add(TableCapability.ACCEPT_ANY_SCHEMA); // Required for WriteStream
         }
         return capabilities;
     }
 
     private static StructType getSchema(boolean includeHeaders) {
-        if(includeHeaders) {
-            StructField[] structFields = new StructField[]{
-                    new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
-                    new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
-                    new StructField("PartitionKey", DataTypes.StringType, true, Metadata.empty()),
-                    new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
-                    new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty()),
-                        new StructField("Headers", new MapType(DataTypes.StringType, DataTypes.BinaryType, false), true, Metadata.empty())
-            };
-            return new StructType(structFields);
-        }
-
-        StructField[] structFields = new StructField[]{
-                new StructField("Id", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("Payload", DataTypes.BinaryType, true, Metadata.empty()),
-                new StructField("PartitionKey", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("Topic", DataTypes.StringType, true, Metadata.empty()),
-                new StructField("TimeStamp", DataTypes.TimestampType, true, Metadata.empty())
-        };
-        return new StructType(structFields);
+        return new StructType(SolaceSparkSchemaProperties.structFields(includeHeaders));
 
     }
 
+    @Override
+    public WriteBuilder newWriteBuilder(LogicalWriteInfo logicalWriteInfo) {
+        return new SolaceWriteBuilder(logicalWriteInfo.schema(), properties, logicalWriteInfo.options());
+    }
 }

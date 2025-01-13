@@ -1,0 +1,221 @@
+= Solace Spark Connector Source Configuration Options
+:doctype: book
+
+[cols="2m,1m,1m,1m,2", options="header"]
+|===
+| Config Option
+| Type
+| Valid Values
+| Default Value
+| Description
+
+| host
+| string
+| any
+|
+| Fully Qualified Solace Hostname with protocol and port number.
+
+| vpn
+| string
+| any
+|
+| Solace VPN name.
+
+| username
+| String
+| any
+|
+| Solace Client Username.
+
+| password
+| string
+| any
+|
+| Solace Client Username password.
+
+| connectRetries
+| int
+| (-1) or greater
+| 0
+| The number of times to attempt and retry a connection during initial connection setup. Zero means no automatic connection retries (that is, try once and give up). -1 means "retry forever".
+
+| reconnectRetries[[reconnect-retries]]
+| int
+| (-1) or greater
+| 3
+| The number of times to attempt to reconnect. Zero means no automatic reconnection retries (that is, try once and give up). -1 means "retry forever".
+
+| connectRetriesPerHost
+| int
+| (-1) or greater
+| 0
+| When using a host list for the HOST property, this property defines how many times to try to connect or reconnect to a single host before moving to the next host in the list. NOTE: This property works in conjunction with the connect and reconnect retries settings; it does not replace them. Valid values are >= -1. 0 means make a single connection attempt (that is, 0 retries). -1 means attempt an infinite number of reconnect retries (that is, the API only tries to connect or reconnect to first host listed.)
+
+| reconnectRetryWaitInMillis
+| int
+| 0 - 60000
+| 3000
+| How much time in (MS) to wait between each attempt to connect or reconnect to a host. If connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
+
+| solace.apiProperties.<Property>
+| any
+| any
+|
+a| Any additional Solace Java API properties can be set through configuring solace.apiProperties.<Property> where <Property> is the name of the property as defined in the https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.JCSMPProperties[Solace Java API documentation for com.solacesystems.jcsmp.JCSMPProperties], for example:
+[source,yaml]
+----
+solace.apiProperties.reapply_subscriptions=false
+solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
+----
+
+| solace.oauth.client.access-token
+| string
+| absolute file path to token file
+| empty
+| Set this configuration, if rotating access token is present in file. In this case connector will read access token directly from file instead of sending request to OAuth Server. Please note <<solace-oAuth-client-refresh-interval, Solace OAuth Client Refresh Interval>> should be set to read access token from file at regular intervals.
+
+| solace.oauth.client.auth-server-url
+| string
+| any
+| empty
+| Full representation of token endpoint to fetch access token.
+
+| solace.oauth.client.client-id
+| string
+| any
+| empty
+| OAuth Client ID
+
+| solace.oauth.client.credentials.client-secret
+| string
+| any
+| empty
+| OAuth Client Secret
+
+| solace.oauth.client.auth-server.client-certificate.file
+| string
+| any
+| empty
+| Absolute path to X.509 client certificate file for TLS connections. Make sure file path is accessible by the connector.
+
+| solace.oauth.client.auth-server.truststore.file
+| string
+| any
+| empty
+| Absolute path to trust store file for TLS connections. This property works in two ways
+
+1. If JKS file is available in cluster configure absolute path so that connector will load the JKS file.
+
+2. If solace.oauth.client.auth-server.client-certificate.file is configured simply provide a path(should include file name as well). The connector will load the client certificate to key store and saves to JKS file .
+
+| solace.oauth.client.auth-server.truststore.password
+| string
+| any
+| empty
+| Password for JKS file. This property works in two ways
+
+1. If JKS file is available in cluster provide the password to JKS file.
+
+2. If solace.oauth.client.auth-server.client-certificate.file is configured simply provide a password which will be used to protect the JKS file created in above configuration option 2.
+
+| solace.oauth.client.auth-server.ssl.validate-certificate
+| boolean
+| any
+| true
+| Boolean value to enable or disable ssl certificate validation. If set to false connector will send TLS request without any validation.
+
+| solace.oauth.client.auth-server.tls.version
+| string
+| SSL, TLS, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3
+| TLSv1.2
+| Indicate the type of SSL connection.
+
+| solace.oauth.client.token.refresh.interval[[solace-oAuth-client-refresh-interval]]
+| integer
+| positive integer value
+| 60
+| Interval(Seconds) to fetch access token by the connector to avoid disconnection on token expiry. This value should be less than your token expiry time.
+
+| solace.oauth.client.token.fetch.timeout
+| integer
+| positive integer value
+| 100
+| Connection timeout(MS) for access token request.
+
+| queue
+| string
+| any
+|
+| Solace Queue name.
+
+| batchSize
+| int
+| any
+| 1
+| Set number of messages to be processed in batch. The connector can stream data in batches to Spark based on configured size.
+
+| replayStrategy
+| string
+| BEGINNING \| TIMEBASED \| REPLICATION-GROUP-MESSAGE-ID
+| empty
+| Set the replay strategy if messages need to be replayed from broker to connector. For more information refer to https://docs.solace.com/Features/Replay/Msg-Replay-Concepts-Config.htm#Types[SolaceReplayConfiguration]
+
+| replayStrategyReplicationGroupMessageId
+| string
+| valid-replication-group-message-id
+| empty
+| Set the property if replay strategy is REPLICATION-GROUP-MESSAGE-ID. Message playback is started after this replication group message id.
+
+| replayStrategyStartTime
+| string
+| datetime string<yyyy-MM-dd'T'HH:mm:ss>
+| empty
+| Set the property if replay strategy is TIMEBASED. Any messages in the replay log equal to, or newer than, the specified date and time that match the endpoint’s subscriptions are replayed to the connector. The date can't be earlier than the date the replay log was created, otherwise replay will fail.
+
+| replayStrategyTimeZone
+| string
+| valid timezone
+| UTC
+| Set the property if replay strategy is TIMEBASED.
+
+| ackLastProcessedMessages
+| boolean
+| true or false
+| false
+a| Set this value to true if connector needs to identify and acknowledge processed messages in last run during restarts. The connector purely depends on checkpoint generated during Spark commit. We recommended enabling this configuration only when your downstream system has processed data in previous run.
+
+NOTE: This property will be void if replay strategy is enabled.
+
+| offsetIndicator
+| string
+| any
+| MESSAGE_ID, CORRELATION_ID, APPLICATION_MESSAGE_ID, <CUSTOM_USER_PROPERTY>
+a| Set this value if your Solace Message has unique ID in message header. Supported Values are
+
+ * MESSAGE_ID
+ * CORRELATION_ID
+ * APPLICATION_MESSAGE_ID
+ * <CUSTOM_USER_PROPERTY> - refers to one of headers in user properties
+Header.
+
+Note: Default value uses replication group message ID property as offset indicator. ReplicationGroupMessageId is a unique message id across a broker cluster.
+
+| includeHeaders
+| boolean
+| true or false
+| false
+| Set this value to true if message headers need to be included in output.
+
+| partitions
+| int
+| any
+| 1
+| Sets the number of consumers for configured queue. Equal number of partitions are created to process data received from consumers.
+
+| createFlowsOnSameSession
+| boolean
+| true or false
+| false
+| If enabled consumer flows are enabled on same session. The number of consumer flows is equal to number of partitions configured. This is helpful when users want to optimize on number of connections created from Spark. By default, the connector creates a new connection for each consumer.
+
+|===

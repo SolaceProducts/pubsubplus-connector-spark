@@ -26,7 +26,9 @@ NOTE: Before installing latest version of connector make sure earlier versions o
 
 . Create new scala notebook and copy below code snippets.
 
-. First, let's create a consumer to Solace to read messages and write to parquet file. Update configuration options as per your environment.
+. Creating Solace Source Streaming Queries
+
+.. First, let's create a Solace consumer to read messages and write to parquet file. Update configuration options as per your environment.
 +
 [source,scala]
 ----
@@ -56,7 +58,7 @@ NOTE: Before installing latest version of connector make sure earlier versions o
 
     query.awaitTermination()
 ----
-. Finally, let's read data from the parquet file from the location configured above
+.. Finally, let's read data from the parquet file from the location configured above
 +
 [source,scala]
 ----
@@ -66,3 +68,45 @@ NOTE: Before installing latest version of connector make sure earlier versions o
     // Ex: Parse payload as string
     df.select($"payload".cast("STRING"))
 ----
+
+. Creating Solace Sink Streaming Queries
+
+.. First, let's create a parquet consumer to read messages and publish to Solace. Update configuration options as per your environment.
++
+[source,scala]
+----
+    val parquetData = spark.read.parquet("<path-to-parquet-file>")
+    val struct_stream = spark.readStream
+    .schema(parquetData.schema)
+    .parquet("<path-to-parquet-file>")
+
+    // write to parquet file
+    val query = df.writeStream
+    .foreachBatch((outputDf: Dataset[org.apache.spark.sql.Row], bid: Long) => {
+         // Process valid data frames only
+         if (!outputDf.isEmpty) {
+            // business logic
+            try {
+                outputDf.show()
+                outputDf.write.format("solace")
+                  .option("host", "tcp://localhost:55555")
+                  .option("vpn", "default")
+                  .option("username", "default")
+                  .option("password", "default")
+                  .option("batchSize", outputDf.count())
+                  .option("topic", "solace/spark/publish") // This can be commented if topic column is present in output dataframe.
+                  .option("id", "<application-message-id>") // This can be commented if Id column is present in output dataframe.
+                  .mode(SaveMode.Append)
+                  .save()
+            } catch {
+              case e: Exception => {
+                // Any logic to handle failed messages. Connector will log application message id along with exception as json object.
+                throw new RuntimeException(e)
+              }
+            }
+         }
+    }).start()
+
+    query.awaitTermination()
+----
+.. Finally, create a queue on Solace Broker and subscribe to the topic to spool the messages published by Solace Spark Connector.

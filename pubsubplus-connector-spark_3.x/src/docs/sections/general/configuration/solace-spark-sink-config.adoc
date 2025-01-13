@@ -1,4 +1,4 @@
-= Solace Spark Connector Configuration Options
+= Solace Spark Connector Sink Configuration Options
 :doctype: book
 
 [cols="2m,1m,1m,1m,2", options="header"]
@@ -55,7 +55,7 @@
 | int
 | 0 - 60000
 | 3000
-| How much time in (MS) to wait between each attempt to connect or reconnect to a host. If connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
+| How much time in (MS) to wait between each attempt to connect or reconnect to a host. If a connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
 
 | solace.apiProperties.<Property>
 | any
@@ -64,8 +64,7 @@
 a| Any additional Solace Java API properties can be set through configuring solace.apiProperties.<Property> where <Property> is the name of the property as defined in the https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.JCSMPProperties[Solace Java API documentation for com.solacesystems.jcsmp.JCSMPProperties], for example:
 [source,yaml]
 ----
-solace.apiProperties.reapply_subscriptions=false
-solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
+solace.apiProperties.pub_ack_window_size=50
 ----
 
 | solace.oauth.client.access-token
@@ -142,80 +141,28 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | 100
 | Connection timeout(MS) for access token request.
 
-| queue
+| topic
 | string
 | any
 |
-| Solace Queue name.
+| Sets the topic that all rows will be published to Solace. This option overrides any topic column that may exist in the data.
+
+| id
+| string
+| any
+|
+| Sets the message id to all the messages published to Solace. This option overrides any Id column that may exist in the data.
 
 | batchSize
 | int
 | any
 | 1
-| Set number of messages to be processed in batch. The connector can stream data in batches to Spark based on configured size.
-
-| replayStrategy
-| string
-| BEGINNING \| TIMEBASED \| REPLICATION-GROUP-MESSAGE-ID
-| empty
-| Set the replay strategy if messages need to be replayed from broker to connector. For more information refer to https://docs.solace.com/Features/Replay/Msg-Replay-Concepts-Config.htm#Types[SolaceReplayConfiguration]
-
-| replayStrategyReplicationGroupMessageId
-| string
-| valid-replication-group-message-id
-| empty
-| Set the property if replay strategy is REPLICATION-GROUP-MESSAGE-ID. Message playback is started after this replication group message id.
-
-| replayStrategyStartTime
-| string
-| datetime string<yyyy-MM-dd'T'HH:mm:ss>
-| empty
-| Set the property if replay strategy is TIMEBASED. Any messages in the replay log equal to, or newer than, the specified date and time that match the endpoint’s subscriptions are replayed to the connector. The date can't be earlier than the date the replay log was created, otherwise replay will fail.
-
-| replayStrategyTimeZone
-| string
-| valid timezone
-| UTC
-| Set the property if replay strategy is TIMEBASED.
-
-| ackLastProcessedMessages
-| boolean
-| true or false
-| false
-a| Set this value to true if connector needs to identify and acknowledge processed messages in last run during restarts. The connector purely depends on checkpoint generated during Spark commit. We recommended enabling this configuration only when your downstream system has processed data in previous run.
-
-NOTE: This property will be void if replay strategy is enabled.
-
-| offsetIndicator
-| string
-| any
-| MESSAGE_ID, CORRELATION_ID, APPLICATION_MESSAGE_ID, <CUSTOM_USER_PROPERTY>
-a| Set this value if your Solace Message has unique ID in message header. Supported Values are
-
- * MESSAGE_ID
- * CORRELATION_ID
- * APPLICATION_MESSAGE_ID
- * <CUSTOM_USER_PROPERTY> - refers to one of headers in user properties
-Header.
-
-Note: Default value uses replication group message ID property as offset indicator. ReplicationGroupMessageId is a unique message id across a broker cluster.
+| Set number of messages to be processed in batch. This should be set to dataframe.count().
 
 | includeHeaders
 | boolean
 | true or false
 | false
-| Set this value to true if message headers need to be included in output.
-
-| partitions
-| int
-| any
-| 1
-| Sets the number of consumers for configured queue. Equal number of partitions are created to process data received from consumers.
-
-| createFlowsOnSameSession
-| boolean
-| true or false
-| false
-| If enabled consumer flows are enabled on same session. The number of consumer flows is equal to number of partitions configured. This is helpful when users want to optimize on number of connections created from Spark. By default, the connector creates a new connection for each consumer.
+| Set this value to true if message headers in the row need to be added to published message.
 
 |===
