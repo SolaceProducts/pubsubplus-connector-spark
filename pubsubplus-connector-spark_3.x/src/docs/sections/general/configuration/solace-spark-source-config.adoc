@@ -160,19 +160,19 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | empty
 | Set the replay strategy if messages need to be replayed from broker to connector. For more information refer to https://docs.solace.com/Features/Replay/Msg-Replay-Concepts-Config.htm#Types[SolaceReplayConfiguration]
 
-| replayStrategyReplicationGroupMessageId
+| replayReplicationGroupMessageId
 | string
 | valid-replication-group-message-id
 | empty
 | Set the property if replay strategy is REPLICATION-GROUP-MESSAGE-ID. Message playback is started after this replication group message id.
 
-| replayStrategyStartTime
+| replayStartTime
 | string
 | datetime string<yyyy-MM-dd'T'HH:mm:ss>
 | empty
 | Set the property if replay strategy is TIMEBASED. Any messages in the replay log equal to, or newer than, the specified date and time that match the endpoint’s subscriptions are replayed to the connector. The date can't be earlier than the date the replay log was created, otherwise replay will fail.
 
-| replayStrategyTimeZone
+| replayStartTimeTimezone
 | string
 | valid timezone
 | UTC
