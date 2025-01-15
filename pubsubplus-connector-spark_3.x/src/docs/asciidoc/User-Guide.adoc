@@ -1,0 +1,174 @@
+= {connector-name}: User Guide
+:doctype: book
+:toc: preamble
+:toclevels: 3
+:icons: font
+:imagesdir: {docdir}/../images
+:version: {revnumber}
+// Import common attributes
+// include::{docdir}/../snippets/attributes/common.adoc[]
+// Custom attributes
+:overview: <product-overview>
+
+// Github-Specific Settings
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+[preface]
+== Preface
+
+{overview}
+
+== Getting Started
+
+This guide assumes you are familiar with Spark set up and Spark Structured Streaming concepts. In the following sections we will show how to set up Solace Spark Connector to stream data from Solace to Spark.
+
+=== Prerequisites
+
+* https://solace.com/products/event-broker/[Solace PubSub+ Event Broker]
+* Apache Spark 3.5.1, Scala 2.12
+
+=== Quick Start common steps
+
+include::{docdir}/../sections/general/quick-start/quick-start.adoc[leveloffset=+2]
+
+NOTE: Above sample code used parquet as example data source. You can configure your required data source to write data.
+
+=== Databricks Considerations
+
+In case if you are using Shared compute cluster, make sure your cluster has https://docs.databricks.com/en/data-governance/unity-catalog/manage-privileges/allowlist.html[appropriate permissions] to install connector from maven central and access the jars. Please contact your Databricks administrator for required permissions.
+
+=== Checkpointing & Acknowledgement
+
+Solace Spark connector relies on Spark Checkpointing mechanism to resume from last successful message. Connector acknowledges & writes processed message id's to spark checkpoint whenever Spark sends commit signal to connector. Commit signal is an indication by Spark that data has been processed successfully.
+
+=== Checkpoint Handling
+
+In some cases, there might be checkpoint failures as spark may fail to write to checkpoint during instance crash or unavailability or other reasons. Though the connector will handle duplicates in most cases, we recommend to keep your downstream systems idempotent.
+
+=== User Authentication
+
+Solace Spark Connector supports Basic and OAuth authentication to Solace. Client Credentials flow is supported when connecting using OAuth.
+
+If OAuth server is available use below options to fetch access token from endpoint. For property description please refer to <<Configuration>> section.
+
+[source,scala]
+----
+    spark.readStream.format("solace").option("host", "")
+    .option("vpn", "default")
+    .option("solace.apiProperties.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_OAUTH2")
+    .option("solace.oauth.client.auth-server-url", "")
+    .option("solace.oauth.client.client-id", "")
+    .option("solace.oauth.client.credentials.client-secret", "")
+    .option("solace.oauth.client.auth-server.client-certificate.file", "")
+    .option("solace.oauth.client.auth-server.truststore.file", "")
+    .option("solace.oauth.client.auth-server.truststore.password", "")
+    .option("solace.oauth.client.auth-server.ssl.validate-certificate", false)
+    .option("solace.oauth.client.token.refresh.interval", 110)
+----
+
+If rotating access token is present in file accessible by connector use below options to enable OAuth authentication to read access token from file. For property description please refer to <<solace-oAuth-client-refresh-interval, Solace OAuth Client Refresh Interval>> property. In case when access token file is not updated, connector retries the connection based on <<reconnect-retries, Reconnect Retries>> and stops if authentication is not successful.
+
+[source,scala]
+----
+    spark.readStream.format("solace").option("host", "")
+    .option("vpn", "default")
+    .option("solace.apiProperties.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_OAUTH2")
+    .option("solace.oauth.client.access-token", "<absolute-path-to-token-file>")
+    .option("solace.oauth.client.token.refresh.interval", 110)
+----
+
+NOTE: When access token is read from file, it may lose some of it's expiry time by the time it is accessed by connector. It is recommended to have minimal time difference between writing to file and access by the connector so that a valid new token is updated in solace session before expiry of old token.
+
+=== Message Replay
+
+Solace Spark Connector can replay messages using Solace Replay Log. Connector can replay all messages or after specific replication group message id or after specific timestamp. Please refer to https://docs.solace.com/Features/Replay/Msg-Replay-Concepts-Config.htm[Message Replay Configuration] to enable replay log in Solace PubSub+ broker.
+
+=== Solace Spark Streaming Source Schema Structure
+
+Solace Spark Connector transforms the incoming message to Spark row with below schema definition.
+
+[cols="2m,2m,2m", options="header"]
+|===
+| Column Name
+| Column Type
+| Description
+
+| Id
+| String
+| Represents Message ID present in message. This value is based on Offset_Indicator option. By, default it returns replication group message id.
+
+| Payload
+| Binary
+| Represents payload in binary format.
+
+| PartitionKey
+| String
+| Represents Partition Key if present in message.
+
+| Topic
+| String
+| Represents the topic on which message is published.
+
+| TimeStamp
+| Timestamp
+| Represents sender timestamp if present in message. By, default it returns the timestamp when message is received by connector.
+
+| Headers
+| Map<string, binary>
+| Represent message headers if present in message. This column is created only when includeHeaders option is set to true.
+|===
+
+=== Solace Spark Streaming Sink Schema Structure
+
+Solace Spark Connector transforms the incoming message to Spark row with below schema definition.
+
+[cols="2m,2m,2m", options="header"]
+|===
+| Column Name
+| Column Type
+| Description
+
+| Id
+| String
+| Set the message id for the published message. This will be overwritten if message id is set using the id option. If no message id is set connector will throw an exception as message id is required to track the state of published messages. In case of publish failure the message id along with exception is logged.
+
+| Payload
+| Binary
+| Payload to be added to the published message. If no payload is set connector will throw an exception.
+
+| PartitionKey(Optional)
+| String
+| Partition Key for the published message. Useful when published message topic is subscribed by partitioned queues.
+
+| Topic(Optional)
+| String
+| Set's the topic for the published message. This will be overwritten if topic is set using the topic option. If no topic is set connector will throw an exception as topic is required to publish a message.
+
+| TimeStamp(Optional)
+| Timestamp
+| Set the timestamp for published message. This column is mapped to Sender Timestamp field in Solace Message.
+
+| Headers(Optional)
+| Map<string, binary>
+| Set the headers to be added in published message. This column is mapped only when includeHeaders option is set to true.
+|===
+
+== Configuration
+
+include::{docdir}/../sections/general/configuration/solace-spark-source-config.adoc[leveloffset=+2]
+
+include::{docdir}/../sections/general/configuration/solace-spark-sink-config.adoc[leveloffset=+2]
+
+NOTE: This connector is tested on Databricks environment with Cluster Version 14.3 LTS (includes Apache Spark 3.5.0, Scala 2.12)
+
+== License
+
+This project is licensed under the Solace Community License, Version 1.0. - See the `LICENSE` file for details.
+
+include::{docdir}/../sections/general/support.adoc[leveloffset=+2]

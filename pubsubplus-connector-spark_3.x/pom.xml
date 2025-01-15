@@ -17,6 +17,14 @@
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
+        <shared-remote-resources.directory>${project.build.directory}/shared-remote-resources</shared-remote-resources.directory>
+        <shared-remote-resources.build.main.raw.directory>${shared-remote-resources.directory}/build/main/raw</shared-remote-resources.build.main.raw.directory>
+        <shared-remote-resources.build.main.processed.directory>${shared-remote-resources.directory}/build/main/processed</shared-remote-resources.build.main.processed.directory>
+
+        <!-- Shared Resources: User Docs -->
+        <shared-remote-resources.process.asciidoctor-resources.skip>false</shared-remote-resources.process.asciidoctor-resources.skip>
+        <docs.build.directory>${project.build.directory}/generated-docs</docs.build.directory>
+        <release-notes.url>${project.url}</release-notes.url>
     </properties>
 
     <name>pubsubplus-connector-spark</name>
@@ -37,21 +45,21 @@
         <dependency>
             <groupId>com.solacesystems</groupId>
             <artifactId>sol-jcsmp</artifactId>
-            <version>10.23.0</version>
+            <version>10.24.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-streaming_2.13</artifactId>
+            <artifactId>spark-streaming_2.12</artifactId>
             <version>3.5.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-core_2.13</artifactId>
+            <artifactId>spark-core_2.12</artifactId>
             <version>3.5.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-sql_2.13</artifactId>
+            <artifactId>spark-sql_2.12</artifactId>
             <version>3.5.1</version>
         </dependency>
         <dependency>
@@ -63,6 +71,12 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
             <version>2.23.1</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.nimbusds/oauth2-oidc-sdk -->
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>oauth2-oidc-sdk</artifactId>
+            <version>11.19.1</version>
         </dependency>
         <!-- test dependencies -->
         <dependency>
@@ -247,6 +261,128 @@
                         <goals>
                             <goal>clean</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-remote-resources-plugin</artifactId>
+                <version>3.0.0</version>
+                <configuration>
+                    <attachToMain>false</attachToMain>
+                    <attachToTest>false</attachToTest>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>process-asciidoctor-resources</id>
+                        <goals>
+                            <goal>process</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${shared-remote-resources.directory}/asciidoctor-resources</outputDirectory>
+                            <resourceBundles>
+                                <resourceBundle>com.solace.connector.core.resource:pubsubplus-connector-asciidoctor-resource-bundle:2.6.0</resourceBundle>
+                            </resourceBundles>
+                            <skip>${shared-remote-resources.process.asciidoctor-resources.skip}</skip>
+                        </configuration>
+                    </execution>
+<!--                    <execution>-->
+<!--                        <id>process-connector-framework-docs-resources</id>-->
+<!--                        <goals>-->
+<!--                            <goal>process</goal>-->
+<!--                        </goals>-->
+<!--                        <configuration>-->
+<!--                            <outputDirectory>${shared-remote-resources.process.connector-framework-docs-resources.directory}</outputDirectory>-->
+<!--                            <resourceBundles>-->
+<!--                                <resourceBundle>com.solace.connector.core.resource:pubsubplus-connector-framework-docs-resource-bundle:2.6.0</resourceBundle>-->
+<!--                            </resourceBundles>-->
+<!--                            <skip>${shared-remote-resources.process.connector-framework-docs-resources.skip}</skip>-->
+<!--                        </configuration>-->
+<!--                    </execution>-->
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.asciidoctor</groupId>
+                <artifactId>asciidoctor-maven-plugin</artifactId>
+                <version>2.2.2</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.asciidoctor</groupId>
+                        <artifactId>asciidoctorj-pdf</artifactId>
+                        <version>2.3.0</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.asciidoctor</groupId>
+                        <artifactId>asciidoctorj-diagram</artifactId>
+                        <version>2.2.4</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <embedAssets>true</embedAssets>
+                    <outputDirectory>${docs.build.directory}</outputDirectory>
+                    <relativeBaseDir>true</relativeBaseDir>
+
+                    <logHandler>
+                        <failIf>
+                            <severity>ERROR</severity>
+                        </failIf>
+                    </logHandler>
+
+                    <requires>
+                        <require>asciidoctor-diagram</require>
+                    </requires>
+
+                    <!-- Attributes common to all output formats -->
+                    <attributes>
+                        <revnumber>${project.version}</revnumber>
+                        <author>${project.organization.name}</author>
+                        <email>${project.organization.url}</email>
+                        <sourcedir>${project.build.sourceDirectory}</sourcedir>
+
+<!--                        <connector-framework-docs-dir>${shared-remote-resources.process.connector-framework-docs-resources.directory}</connector-framework-docs-dir>-->
+                        <connector-name>${project.name}</connector-name>
+                        <overview>${project.description}</overview>
+                        <connector-jar-name>${project.build.finalName}</connector-jar-name>
+                        <!--                        <connector-container-repo-name>${container.repository.name}</connector-container-repo-name>-->
+                        <!--                        <connector-container-url>${container.repository.url}</connector-container-url>-->
+                        <connector-url>${project.url}</connector-url>
+                        <connector-release-notes-url>${release-notes.url}</connector-release-notes-url>
+
+                        <imagesoutdir>${docs.build.directory}/.images</imagesoutdir>
+                        <pdf-theme>solace</pdf-theme>
+                        <pdf-themesdir>${shared-remote-resources.directory}/asciidoctor-resources/pdf-themes</pdf-themesdir>
+                        <source-highlighter>rouge</source-highlighter>
+                        <icons>font</icons>
+                        <pagenums/>
+                        <toc/>
+                        <idprefix/>
+                        <idseparator>-</idseparator>
+                    </attributes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>generate-pdf-docs</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>process-asciidoc</goal>
+                        </goals>
+                        <configuration>
+                            <backend>pdf</backend>
+                            <sourceDirectory>${project.basedir}/src/docs/asciidoc</sourceDirectory>
+                            <preserveDirectories>true</preserveDirectories>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-docbook-docs</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>process-asciidoc</goal>
+                        </goals>
+                        <configuration>
+                            <backend>docbook</backend>
+                            <sourceDirectory>${project.basedir}/src/docs/asciidoc</sourceDirectory>
+                            <preserveDirectories>true</preserveDirectories>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

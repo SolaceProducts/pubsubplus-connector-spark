@@ -7,6 +7,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -21,6 +23,11 @@ public class EventListener implements XMLMessageListener, Serializable {
     private List<String> lastKnownMessageIDs = new ArrayList<>();
     private String offsetIndicator = SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT;
     public EventListener(String id) {
+    private static Logger log = LoggerFactory.getLogger(EventListener.class);
+    private final int id;
+    private final ConcurrentLinkedQueue<SolaceMessage> messages;
+    private SolaceBroker solaceBroker;
+    public EventListener(int id) {
         this.id = id;
         this.messages = new LinkedBlockingQueue<>();
         log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
@@ -32,6 +39,10 @@ public class EventListener implements XMLMessageListener, Serializable {
         this.lastKnownMessageIDs = messageIDs;
         this.offsetIndicator = offsetIndicator;
         log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
+    }
+
+    public void setBrokerInstance(SolaceBroker solaceBroker) {
+        this.solaceBroker = solaceBroker;
     }
 
     @Override
@@ -57,8 +68,12 @@ public class EventListener implements XMLMessageListener, Serializable {
 
     @Override
     public void onException(JCSMPException e) {
-        log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
-        throw new RuntimeException(e);
+        if(solaceBroker != null) {
+            solaceBroker.handleException("SolaceSparkConnector - Consumer received exception", e);
+        } else {
+            log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
+            throw new RuntimeException(e);
+        }
     }
 
     public LinkedBlockingQueue<SolaceMessage> getMessages() {

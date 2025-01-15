@@ -15,6 +15,15 @@ on:
           - false
       release_branch:
         default: 'main'
+      release_type:
+        description: "Type of release may be GA, EA, Beta"
+        type: choice
+        required: true
+        default: "GA"
+        options: 
+        - Beta
+        - EA
+        - GA
 jobs:
   release_binder:
     uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@master
@@ -22,5 +31,76 @@ jobs:
       main_branch: "${{ github.event.inputs.release_branch}}"
       push_external: ${{ github.event.inputs.release_central == 'true'}}
       release_version: "${{ github.event.inputs.release_version}}"
+      whitesource_product_name: 'techCoE-micro-integrations'
+      upload_artifacts: true
     secrets:
       COMMIT_KEY: ${{ secrets.COMMIT_KEY }}
+
+  push_to_products_solace:
+    runs-on: ubuntu-22.04
+    needs: release_binder
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    env:
+      VAULT_ADDR: https://vault.maas-vault-prod.solace.cloud:8200
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.release_branch }}
+          fetch-depth: 0
+          ssh-key: ${{ secrets.COMMIT_KEY }}
+
+      - name: Retrieve secrets from Vault
+        id: secrets
+        uses: hashicorp/vault-action@v3
+        continue-on-error: true
+        with:
+          url: "${{ env.VAULT_ADDR }}"
+          role: "cicd-workflows-secret-read-role"
+          method: jwt
+          path: jwt-github
+          jwtGithubAudience: https://github.com/SolaceDev
+          exportToken: true
+          secrets: secret/data/tools/githubactions PACKAGES_ADMIN_USER | PACKAGES_ADMIN_USER ;
+            secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
+
+      - name: Checkout SolaceDev/maas-build-actions
+        uses: actions/checkout@v4
+        with:
+          repository: SolaceDev/maas-build-actions
+          ref: refs/heads/master
+          token: ${{ steps.secrets.outputs.PACKAGES_ADMIN_TOKEN }}
+          persist-credentials: false
+          path: maas-build-actions
+
+      - name: Get Artifact ID
+        run: |
+          cd pubsubplus-connector-spark_3.x
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout --settings "../maven/settings.xml")
+          echo "ARTIFACT_ID=$ARTIFACT_ID" >> $GITHUB_ENV
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./downloaded_artifacts
+
+      - name: Copy JAR and User Guide to release_artifacts
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/release_artifacts
+          cp downloaded_artifacts/pubsubplus-connector-spark_3.x/target/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}.jar $GITHUB_WORKSPACE/release_artifacts/
+          cp downloaded_artifacts/pubsubplus-connector-spark_3.x/target/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
+          ls -l $GITHUB_WORKSPACE/release_artifacts
+
+      - name: Push Artifacts to products.solace.com
+        uses: SolaceDev/maas-build-actions/.github/actions/transfer-files-products-solace@master
+        with:
+          artifact_directory: "${{ github.workspace }}/release_artifacts"
+          version: ${{ github.event.inputs.release_version }}
+          project_name: "Spark"
+          artifact_id: ${{ env.ARTIFACT_ID }}
+          release_notes_product: "spark"
+          symlink_name: "SPARK"
+          release_type:  ${{ github.event.inputs.release_type }}
