@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 
 public class LVQEventListener implements XMLMessageListener, Serializable {
     private static final Logger log = LogManager.getLogger(LVQEventListener.class);
-    private final SolaceSparkOffset[] solaceSparkOffsets = new SolaceSparkOffset[1];
+    private final transient SolaceSparkOffset[] solaceSparkOffsets = new SolaceSparkOffset[1];
     @Override
     public void onReceive(BytesXMLMessage msg) {
         try {
