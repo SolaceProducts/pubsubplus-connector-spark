@@ -3,7 +3,6 @@ package com.solacecoe.connectors.spark;
 import com.solace.semp.v2.config.ApiException;
 import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
-import com.solace.semp.v2.monitor.client.model.MsgVpnQueueTxFlowsResponse;
 import com.solacecoe.connectors.spark.base.SempV2Api;
 import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
@@ -29,15 +28,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class SolaceSparkStreamingSinkIT {
-    private SempV2Api sempV2Api = null;
-    private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class SolaceSparkStreamingSinkIT {
+    private final SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF)
             .withTopic("random/topic", Service.SMF).withTopic("Spark/Topic/0", Service.SMF);
     private SparkSession sparkSession;
     @BeforeAll
@@ -48,7 +46,7 @@ public class SolaceSparkStreamingSinkIT {
                     .appName("data_source_test")
                     .master("local[*]")
                     .getOrCreate();
-            sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
+            SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/0");
             queue.accessType(MsgVpnQueue.AccessTypeEnum.EXCLUSIVE);
@@ -91,7 +89,6 @@ public class SolaceSparkStreamingSinkIT {
                 TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
                 textMessage.setText("Hello Spark!");
                 textMessage.setPriority(1);
-//                textMessage.setCorrelationId("test-correlation-id");
                 textMessage.setDMQEligible(true);
                 SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
                 sdtMap.putString("custom-string", "custom-value");
@@ -136,13 +133,11 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_As_Stream_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    @Order(1)
+    void Should_ProcessData_And_Publish_As_Stream_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
-//        SparkSession sparkSession = SparkSession.builder()
-//                .appName("data_source_test")
-//                .master("local[*]")
-//                .getOrCreate();
+
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -153,7 +148,6 @@ public class SolaceSparkStreamingSinkIT {
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
-        final boolean[] runProcess = {true};
         final String[] messageId = {""};
         Dataset<Row> dataset = reader.load();
 
@@ -161,11 +155,9 @@ public class SolaceSparkStreamingSinkIT {
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-//                .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset.count())
                 .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
                 .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
                 .option("checkpointLocation", writePath.toAbsolutePath().toString())
-//                .mode(SaveMode.Append)
                 .format("solace").start();
 
         SolaceSession session = new SolaceSession(solaceContainer.getOrigin(Service.SMF), solaceContainer.getVpn(), solaceContainer.getUsername(), solaceContainer.getPassword());
@@ -183,7 +175,7 @@ public class SolaceSparkStreamingSinkIT {
 
                 @Override
                 public void onException(JCSMPException e) {
-
+                    // Not required for test
                 }
             });
             session.getSession().addSubscription(topic);
@@ -192,42 +184,16 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-//        ExecutorService executorService = Executors.newFixedThreadPool(1);
-//        executorService.execute(() -> {
-//            do {
-//                if(count[0] == 100L) {
-//                    runProcess[0] = false;
-//                    try {
-//                        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
-//                        streamingQuery.stop();
-////                        sparkSession.close();
-//                        executorService.shutdown();
-//                    } catch (TimeoutException e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//                try {
-//                    Thread.sleep(100);
-//                } catch (InterruptedException e) {
-//                    throw new RuntimeException(e);
-//                }
-//            } while (runProcess[0]);
-//        });
-//        streamingQuery.awaitTermination();
-
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    @Order(2)
+    void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        SparkSession sparkSession = SparkSession.builder()
-//                .appName("data_source_test")
-//                .master("local[*]")
-//                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -238,7 +204,6 @@ public class SolaceSparkStreamingSinkIT {
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
-        final boolean[] runProcess = {true};
         final String[] messageId = {""};
         Dataset<Row> dataset = reader.load();
 
@@ -263,6 +228,7 @@ public class SolaceSparkStreamingSinkIT {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
+                    System.out.println(count[0]);
                     if(count[0] == 100) {
                         messageId[0] = bytesXMLMessage.getApplicationMessageId();
                     }
@@ -270,7 +236,7 @@ public class SolaceSparkStreamingSinkIT {
 
                 @Override
                 public void onException(JCSMPException e) {
-
+                    // Not required for test
                 }
             });
             session.getSession().addSubscription(topic);
@@ -309,12 +275,9 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_With_DataFrameId_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    @Order(3)
+    void Should_ProcessData_And_Publish_With_DataFrameId_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        SparkSession sparkSession = SparkSession.builder()
-//                .appName("data_source_test")
-//                .master("local[*]")
-//                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -352,6 +315,7 @@ public class SolaceSparkStreamingSinkIT {
 
                 @Override
                 public void onException(JCSMPException e) {
+                    // Not required for test
 
                 }
             });
@@ -361,40 +325,15 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-//        ExecutorService executorService = Executors.newFixedThreadPool(1);
-//        executorService.execute(() -> {
-//            do {
-//                if(count[0] == 100L) {
-//                    runProcess[0] = false;
-//                    try {
-//                        streamingQuery.stop();
-////                        sparkSession.close();
-//                        executorService.shutdown();
-//                    } catch (TimeoutException e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//                try {
-//                    Thread.sleep(100);
-//                } catch (InterruptedException e) {
-//                    throw new RuntimeException(e);
-//                }
-//            } while (runProcess[0]);
-//        });
-//        streamingQuery.awaitTermination();
-
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_To_CustomTopic_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    @Order(4)
+    void Should_ProcessData_And_Publish_To_CustomTopic_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        SparkSession sparkSession = SparkSession.builder()
-//                .appName("data_source_test")
-//                .master("local[*]")
-//                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -405,7 +344,6 @@ public class SolaceSparkStreamingSinkIT {
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
-        final boolean[] runProcess = {true};
         Dataset<Row> dataset = reader.load();
 
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
@@ -432,6 +370,7 @@ public class SolaceSparkStreamingSinkIT {
 
                 @Override
                 public void onException(JCSMPException e) {
+                    // Not required for test
 
                 }
             });
@@ -441,40 +380,15 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-//        ExecutorService executorService = Executors.newFixedThreadPool(1);
-//        executorService.execute(() -> {
-//            do {
-//                if(count[0] == 100L) {
-//                    runProcess[0] = false;
-//                    try {
-//                        streamingQuery.stop();
-////                        sparkSession.close();
-//                        executorService.shutdown();
-//                    } catch (TimeoutException e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//                try {
-//                    Thread.sleep(100);
-//                } catch (InterruptedException e) {
-//                    throw new RuntimeException(e);
-//                }
-//            } while (runProcess[0]);
-//        });
-//        streamingQuery.awaitTermination();
-
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_With_Headers_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    @Order(5)
+    void Should_ProcessData_And_Publish_With_Headers_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        SparkSession sparkSession = SparkSession.builder()
-//                .appName("data_source_test")
-//                .master("local[*]")
-//                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -486,7 +400,6 @@ public class SolaceSparkStreamingSinkIT {
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
-        final boolean[] runProcess = {true};
         final int[] messageHeader = {4};
         Dataset<Row> dataset = reader.load();
 
@@ -518,6 +431,7 @@ public class SolaceSparkStreamingSinkIT {
 
                 @Override
                 public void onException(JCSMPException e) {
+                    // Not required for test
 
                 }
             });
@@ -527,29 +441,6 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-//        ExecutorService executorService = Executors.newFixedThreadPool(1);
-//        executorService.execute(() -> {
-//            do {
-//                if(count[0] == 100L) {
-//                    runProcess[0] = false;
-//                    try {
-//                        Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
-//                        streamingQuery.stop();
-////                        sparkSession.close();
-//                        executorService.shutdown();
-//                    } catch (TimeoutException e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//                try {
-//                    Thread.sleep(100);
-//                } catch (InterruptedException e) {
-//                    throw new RuntimeException(e);
-//                }
-//            } while (runProcess[0]);
-//        });
-//        streamingQuery.awaitTermination();
-
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
         Thread.sleep(3000); // add timeout to ack messages on queue
@@ -557,12 +448,9 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_Without_Headers_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    @Order(6)
+    void Should_ProcessData_And_Publish_Without_Headers_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        SparkSession sparkSession = SparkSession.builder()
-//                .appName("data_source_test")
-//                .master("local[*]")
-//                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -574,7 +462,6 @@ public class SolaceSparkStreamingSinkIT {
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
-        final boolean[] runProcess = {true};
         final int[] messageHeader = {4};
         Dataset<Row> dataset = reader.load();
 
@@ -605,6 +492,7 @@ public class SolaceSparkStreamingSinkIT {
 
                 @Override
                 public void onException(JCSMPException e) {
+                    // Not required for test
 
                 }
             });
@@ -614,29 +502,6 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-//        ExecutorService executorService = Executors.newFixedThreadPool(1);
-//        executorService.execute(() -> {
-//            do {
-//                if(count[0] == 100L) {
-//                    runProcess[0] = false;
-//                    try {
-//                        Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
-//                        streamingQuery.stop();
-////                        sparkSession.close();
-//                        executorService.shutdown();
-//                    } catch (TimeoutException e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//                try {
-//                    Thread.sleep(100);
-//                } catch (InterruptedException e) {
-//                    throw new RuntimeException(e);
-//                }
-//            } while (runProcess[0]);
-//        });
-//        streamingQuery.awaitTermination();
-
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
         Thread.sleep(3000); // add timeout to ack messages on queue
@@ -644,12 +509,9 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_ProcessData_And_Publish_With_Only_PayloadColumn_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    @Order(7)
+    void Should_ProcessData_And_Publish_With_Only_PayloadColumn_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        SparkSession sparkSession = SparkSession.builder()
-//                .appName("data_source_test")
-//                .master("local[*]")
-//                .getOrCreate();
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -661,8 +523,6 @@ public class SolaceSparkStreamingSinkIT {
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
-        final boolean[] runProcess = {true};
-//        final int[] messageHeader = {4};
         Dataset<Row> dataset = reader.load();
 
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
@@ -690,6 +550,7 @@ public class SolaceSparkStreamingSinkIT {
 
                 @Override
                 public void onException(JCSMPException e) {
+                    // Not required for test
 
                 }
             });
@@ -699,40 +560,14 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-//        ExecutorService executorService = Executors.newFixedThreadPool(1);
-//        executorService.execute(() -> {
-//            do {
-//                if(count[0] == 100L) {
-//                    runProcess[0] = false;
-//                    try {
-//                        streamingQuery.stop();
-////                        sparkSession.close();
-//                        executorService.shutdown();
-//                    } catch (TimeoutException e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//                try {
-//                    Thread.sleep(100);
-//                } catch (InterruptedException e) {
-//                    throw new RuntimeException(e);
-//                }
-//            } while (runProcess[0]);
-//        });
-//        streamingQuery.awaitTermination();
-
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
     }
 
     @Test
-    public void Should_Fail_With_Publish_Exception_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    void Should_Fail_With_Publish_Exception_To_Solace() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        SparkSession sparkSession = SparkSession.builder()
-//                .appName("data_source_test")
-//                .master("local[*]")
-//                .getOrCreate();
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
@@ -761,7 +596,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMessageIdIsMissing() {
+    void Should_Fail_Publish_IfMessageIdIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -791,7 +626,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMessageTopicIsMissing() {
+    void Should_Fail_Publish_IfMessageTopicIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -820,7 +655,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMessagePayloadIsMissing() {
+    void Should_Fail_Publish_IfMessagePayloadIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -849,7 +684,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfSolaceHostIsInvalid() {
+    void Should_Fail_Publish_IfSolaceHostIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -878,7 +713,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMandatoryHostIsMissing() {
+    void Should_Fail_Publish_IfMandatoryHostIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -907,7 +742,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMandatoryHostIsEmpty() {
+    void Should_Fail_Publish_IfMandatoryHostIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -936,7 +771,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMandatoryVpnIsMissing() {
+    void Should_Fail_Publish_IfMandatoryVpnIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -965,7 +800,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMandatoryVpnIsEmpty() {
+    void Should_Fail_Publish_IfMandatoryVpnIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -994,7 +829,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMandatoryUsernameIsMissing() {
+    void Should_Fail_Publish_IfMandatoryUsernameIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -1023,7 +858,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMandatoryUsernameIsEmpty() {
+    void Should_Fail_Publish_IfMandatoryUsernameIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -1052,7 +887,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMandatoryPasswordIsMissing() {
+    void Should_Fail_Publish_IfMandatoryPasswordIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -1081,7 +916,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_IfMandatoryPasswordIsEmpty() {
+    void Should_Fail_Publish_IfMandatoryPasswordIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -1110,7 +945,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfSolaceHostIsInvalid() {
+    void Should_Fail_Publish_Stream_IfSolaceHostIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
@@ -1136,7 +971,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfMandatoryHostIsMissing() {
+    void Should_Fail_Publish_Stream_IfMandatoryHostIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
@@ -1162,7 +997,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfMandatoryHostIsEmpty() {
+    void Should_Fail_Publish_Stream_IfMandatoryHostIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
@@ -1188,7 +1023,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfMandatoryVpnIsMissing() {
+    void Should_Fail_Publish_Stream_IfMandatoryVpnIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
@@ -1213,7 +1048,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfMandatoryVpnIsEmpty() {
+    void Should_Fail_Publish_Stream_IfMandatoryVpnIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
@@ -1238,7 +1073,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfMandatoryUsernameIsMissing() {
+    void Should_Fail_Publish_Stream_IfMandatoryUsernameIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
@@ -1263,7 +1098,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfMandatoryUsernameIsEmpty() {
+    void Should_Fail_Publish_Stream_IfMandatoryUsernameIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
@@ -1288,7 +1123,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfMandatoryPasswordIsMissing() {
+    void Should_Fail_Publish_Stream_IfMandatoryPasswordIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {
@@ -1313,7 +1148,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    public void Should_Fail_Publish_Stream_IfMandatoryPasswordIsEmpty() {
+    void Should_Fail_Publish_Stream_IfMandatoryPasswordIsEmpty() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         assertThrows(StreamingQueryException.class, () -> {

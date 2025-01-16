@@ -11,15 +11,7 @@ import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import com.solacecoe.connectors.spark.SolaceRecord;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
-import com.solacecoe.connectors.spark.streaming.solace.EventListener;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
-import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceRecordMapperException;
-import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
@@ -30,12 +22,14 @@ import org.apache.spark.sql.connector.read.streaming.SupportsAdmissionControl;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.UUID;
 
 public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionControl {
     private static final Logger log = LogManager.getLogger(SolaceMicroBatch.class);
     private int lastKnownOffsetId = 0;
-    private final SolaceInputPartition[] inputPartitions;
+    private final ArrayList<SolaceInputPartition> inputPartitions;
     private final int partitions;
     private final int batchSize;
     private final boolean includeHeaders;
@@ -111,26 +105,19 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
             throw new SolaceInvalidPropertyException("SolaceSparkConnector - Please set Batch size to minimum of 1");
         }
 
-        ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
-        log.info("SolaceSparkConnector - Ack Last processed messages is set to {}", ackLastProcessedMessages);
-
+        batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
+        log.info("SolaceSparkConnector - Batch Size is set to {}", batchSize);
         includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         log.info("SolaceSparkConnector - includeHeaders is set to {}", includeHeaders);
 
-        createFlowsOnSameSession = Boolean.parseBoolean(properties.getOrDefault("createFlowsOnSameSession", "false"));
-        log.info("SolaceSparkConnector - createFlowsOnSameSession is set to {}", createFlowsOnSameSession);
-
-        batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
-        log.info("SolaceSparkConnector - Batch Size is set to {}", batchSize);
-
         partitions = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.PARTITIONS, SolaceSparkStreamingProperties.PARTITIONS_DEFAULT));
         log.info("SolaceSparkConnector - Partitions is set to {}", partitions);
-        inputPartitions = new SolaceInputPartition[partitions];
+        inputPartitions = new ArrayList<>();
 
         String solaceOffsetIndicator = properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT);
         log.info("SolaceSparkConnector - offsetIndicator is set to {}", solaceOffsetIndicator);
 
-        this.solaceBroker = new SolaceBroker(properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME), properties.get(SolaceSparkStreamingProperties.PASSWORD), properties.get(SolaceSparkStreamingProperties.QUEUE), properties);
+        this.solaceBroker = new SolaceBroker(properties);
         LVQEventListener lvqEventListener = new LVQEventListener();
         this.solaceBroker.addLVQReceiver(lvqEventListener);
         SolaceConnectionManager.addConnection("lvq-"+0, this.solaceBroker);
@@ -153,11 +140,14 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     }
 
     private InputPartition[] getPartitions() {
-        for(int i=0; i < this.partitions; i++) {
+//        long count = Arrays.stream(inputPartitions).filter(Objects::nonNull).count();
+//        if(count <=0 ) {
+            for (int i = 0; i < this.partitions; i++) {
 //            /solaceSparkOffsetManager.messageIDs = offsetJson != null && offsetJson.has("messageIDs") ? Arrays.asList(offsetJson.get("messageIDs").getAsString().split(",")) : new ArrayList<>();
-            inputPartitions[i] = new SolaceInputPartition("partition-"+i, lastKnownOffsetId, "");
-        }
-        return inputPartitions;
+                inputPartitions.add(new SolaceInputPartition("partition-" + i, lastKnownOffsetId, ""));
+            }
+//        }
+        return inputPartitions.toArray(new InputPartition[0]);
     }
 
     @Override
@@ -223,9 +213,9 @@ public class SolaceMicroBatch implements MicroBatchStream, SupportsAdmissionCont
     }
 
     public void checkSolaceException() {
-        solaceConnectionManager.getConnections().forEach(solaceBroker -> {
-            if(solaceBroker.isException()) {
-                throw new RuntimeException(solaceBroker.getException());
+        SolaceConnectionManager.getConnections().forEach((id, broker) -> {
+            if(broker.isException()) {
+                throw new RuntimeException(broker.getException());
             }
         });
     }

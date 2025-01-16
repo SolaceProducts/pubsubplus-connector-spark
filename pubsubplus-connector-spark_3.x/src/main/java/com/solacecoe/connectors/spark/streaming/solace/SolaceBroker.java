@@ -3,13 +3,9 @@ package com.solacecoe.connectors.spark.streaming.solace;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidAccessTokenException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
-import com.solacesystems.jcsmp.*;
 import com.solacesystems.jcsmp.Queue;
 import org.apache.spark.sql.catalyst.expressions.UnsafeMapData;
 import org.apache.spark.sql.types.DataTypes;
@@ -19,8 +15,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
@@ -31,6 +27,7 @@ public class SolaceBroker implements Serializable {
     private final String queue;
     private final String lvqName;
     private final String lvqTopic;
+    private String uniqueName = "";
     private OAuthClient oAuthClient;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
     private final CopyOnWriteArrayList<LVQEventListener> lvqEventListeners;
@@ -41,6 +38,7 @@ public class SolaceBroker implements Serializable {
     private long accessTokenSourceLastModifiedTime = 0L;
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
+    private boolean isLvqConnection = false;
     private final Map<String, String> properties;
     private final JCSMPSession session;
     private XMLMessageProducer producer;
@@ -48,6 +46,7 @@ public class SolaceBroker implements Serializable {
     public SolaceBroker(Map<String, String> properties) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
+        lvqEventListeners = new CopyOnWriteArrayList<>();
         this.properties = properties;
         this.lvqName = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME);
         this.lvqTopic = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC);
@@ -98,6 +97,8 @@ public class SolaceBroker implements Serializable {
                 jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, properties.get(SolaceSparkStreamingProperties.PASSWORD)); // client-password
             }
 
+            this.uniqueName = JCSMPFactory.onlyInstance().createUniqueName("solace/spark/connector");
+            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_NAME, uniqueName);
             addChannelProperties(jcsmpProperties);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
@@ -225,11 +226,21 @@ public class SolaceBroker implements Serializable {
             cons.start();
             flowReceivers.add(cons);
             log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {}", this.queue);
+            this.isLvqConnection = true;
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
         }
         // log.info("Listening for messages: "+ this.queueName);
+    }
+
+    public void initProducer(JCSMPStreamingPublishCorrelatingEventHandler jcsmpStreamingPublishCorrelatingEventHandler) {
+        try {
+            this.producer = this.session.getMessageProducer(jcsmpStreamingPublishCorrelatingEventHandler);
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error creating publisher to Solace", e);
+            throw new RuntimeException(e);
+        }
     }
 
     public void initProducer() {
@@ -248,6 +259,19 @@ public class SolaceBroker implements Serializable {
             });
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Error creating publisher to Solace", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void publishMessage(String topic, Object msg) {
+        BytesXMLMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
+        xmlMessage.writeBytes(msg.toString().getBytes(StandardCharsets.UTF_8));
+        xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            this.producer.send(xmlMessage, destination);
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
             throw new RuntimeException(e);
         }
     }
@@ -334,7 +358,7 @@ public class SolaceBroker implements Serializable {
         }
     }
 
-    public ConcurrentLinkedQueue<SolaceMessage> getMessages(int index) {
+    public LinkedBlockingQueue<SolaceMessage> getMessages(int index) {
         log.info("Requesting messages from event listener {}, total messages available :: {}", index, this.eventListeners.get(index).getMessages().size());
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
@@ -430,5 +454,13 @@ public class SolaceBroker implements Serializable {
 
     public Exception getException() {
         return exception;
+    }
+
+    public boolean isLvqConnection() {
+        return isLvqConnection;
+    }
+
+    public void setLvqConnection(boolean lvqConnection) {
+        isLvqConnection = lvqConnection;
     }
 }

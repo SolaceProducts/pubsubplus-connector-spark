@@ -12,22 +12,18 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public class EventListener implements XMLMessageListener, Serializable {
-    private static final Logger log = LogManager.getLogger(EventListener.class);
+    private static Logger log = LoggerFactory.getLogger(EventListener.class);
     private final LinkedBlockingQueue<SolaceMessage> messages;
     private final String id;
     private List<String> lastKnownMessageIDs = new ArrayList<>();
     private String offsetIndicator = SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT;
-    public EventListener(String id) {
-    private static Logger log = LoggerFactory.getLogger(EventListener.class);
-    private final int id;
-    private final ConcurrentLinkedQueue<SolaceMessage> messages;
     private SolaceBroker solaceBroker;
-    public EventListener(int id) {
+    public EventListener(String id) {
         this.id = id;
         this.messages = new LinkedBlockingQueue<>();
         log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);

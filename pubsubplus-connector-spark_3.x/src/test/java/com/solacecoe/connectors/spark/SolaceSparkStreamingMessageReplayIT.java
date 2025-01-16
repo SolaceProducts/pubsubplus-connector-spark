@@ -36,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SolaceSparkStreamingMessageReplayIT {
-    private SempV2Api sempV2Api = null;
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
     private String replicationGroupMessageId = "";
@@ -49,7 +48,7 @@ class SolaceSparkStreamingMessageReplayIT {
                     .appName("data_source_test")
                     .master("local[*]")
                     .getOrCreate();
-            sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
+            SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/0");
             queue.accessType(MsgVpnQueue.AccessTypeEnum.EXCLUSIVE);
@@ -86,12 +85,12 @@ class SolaceSparkStreamingMessageReplayIT {
             XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
                 @Override
                 public void responseReceivedEx(Object o) {
-
+                    // not required in test
                 }
 
                 @Override
                 public void handleErrorEx(Object o, JCSMPException e, long l) {
-
+                    // not required in test
                 }
             });
 
@@ -250,7 +249,7 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(5)
-    public void Should_Fail_IfReplayStrategyIsInvalid() {
+    void Should_Fail_IfReplayStrategyIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
