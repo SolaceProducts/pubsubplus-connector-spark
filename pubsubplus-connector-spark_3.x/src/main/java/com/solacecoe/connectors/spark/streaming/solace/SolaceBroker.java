@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
-import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkOffset;
+import com.google.gson.JsonObject;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
@@ -43,7 +44,7 @@ public class SolaceBroker implements Serializable {
     private final JCSMPSession session;
     private XMLMessageProducer producer;
 
-    public SolaceBroker(Map<String, String> properties) {
+    public SolaceBroker(Map<String, String> properties, String clientType) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
         lvqEventListeners = new CopyOnWriteArrayList<>();
@@ -97,7 +98,7 @@ public class SolaceBroker implements Serializable {
                 jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, properties.get(SolaceSparkStreamingProperties.PASSWORD)); // client-password
             }
 
-            this.uniqueName = JCSMPFactory.onlyInstance().createUniqueName("solace/spark/connector");
+            this.uniqueName = JCSMPFactory.onlyInstance().createUniqueName("solace/spark/connector/"+clientType);
             jcsmpProperties.setProperty(JCSMPProperties.CLIENT_NAME, uniqueName);
             addChannelProperties(jcsmpProperties);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
@@ -363,10 +364,19 @@ public class SolaceBroker implements Serializable {
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
-    public SolaceSparkOffset getLVQMessage() {
+    public SolaceSparkPartitionCheckpoint getLVQMessage() {
         if(!lvqEventListeners.isEmpty() && this.lvqEventListeners.get(0).getSolaceSparkOffsets().length > 0) {
             log.info("Requesting messages from lvq listener, total messages available :: {}", this.lvqEventListeners.get(0).getSolaceSparkOffsets().length);
             return this.lvqEventListeners.get(0).getSolaceSparkOffsets()[0];
+        }
+
+        return null;
+    }
+
+    public CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getOffsetFromLvq() {
+        if(!lvqEventListeners.isEmpty() && this.lvqEventListeners.get(0).getSolaceSparkOffsets().length > 0) {
+            log.info("Requesting messages from lvq listener, total messages available :: {}", this.lvqEventListeners.get(0).getSolaceSparkOffsets().length);
+            return this.lvqEventListeners.get(0).getLastKnownOffsets();
         }
 
         return null;

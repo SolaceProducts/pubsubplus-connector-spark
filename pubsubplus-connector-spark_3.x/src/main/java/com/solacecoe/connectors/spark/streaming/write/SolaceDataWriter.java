@@ -6,7 +6,6 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingP
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceAbortMessage;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolacePublishStatus;
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceWriterCommitMessage;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -24,43 +23,42 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 
 public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
     private String topic;
     private String messageId;
-    private final boolean isBatch;
+    private final int batchSize;
     private final StructType schema;
     private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
     private final UnsafeProjection projection;
-    private final Map<String, SolaceWriterCommitMessage> commitMessages;
+    private final Map<String, SolaceDataWriterCommitMessage> commitMessages;
     private final Map<String, SolaceAbortMessage> abortedMessages;
+    private final List<UnsafeRow> buffer;
     private Exception exception;
     private final boolean includeHeaders;
-    public SolaceDataWriter(StructType schema, Map<String, String> properties, boolean isBatch) {
+    public SolaceDataWriter(StructType schema, Map<String, String> properties) {
         this.schema = schema;
         this.properties = properties;
-        this.isBatch = isBatch;
+        this.batchSize = Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
         this.includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
         this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
-        this.solaceBroker = new SolaceBroker(properties);
+        this.solaceBroker = new SolaceBroker(properties, "producer");
         this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
 
         this.projection = createProjection();
         this.commitMessages = new HashMap<>();
         this.abortedMessages = new HashMap<>();
+        this.buffer = new ArrayList<>();
+
+        System.out.println("Client " + this.solaceBroker.getUniqueName() + " Batch Size " + this.batchSize);
     }
 
-    @Override
-    public void write(InternalRow row) throws IOException {
-        try {
-            checkForException();
-            UnsafeRow projectedRow = this.projection.apply(row);
+    private void publishMessages() {
+        for(UnsafeRow projectedRow : buffer) {
             if(this.topic == null) {
                 this.topic = projectedRow.getUTF8String(3).toString();
             }
@@ -90,8 +88,8 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
 //                XMLMessage xmlMessage = this.solaceBroker.createMessage(this.messageId,
 //                        partitionKey, payload,
 //                        timestamp, headersMap);
-                this.solaceBroker.publishMessage(this.messageId, this.topic,
-                        partitionKey, payload, timestamp, headersMap);
+            this.solaceBroker.publishMessage(this.messageId, this.topic,
+                    partitionKey, payload, timestamp, headersMap);
 //            }
 //            else if((this.batchMessages.size() + 1) == Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT))) {
 //                this.batchMessages.add(this.solaceBroker.createMultipleEntryMessage(this.messageId, this.topic,
@@ -101,6 +99,20 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
 //            } else {
 //                this.batchMessages.add(this.solaceBroker.createMultipleEntryMessage(this.messageId, this.topic,
 //                        partitionKey, payload, timestamp, headersMap));
+//            }
+        }
+
+        this.buffer.clear();
+    }
+
+    @Override
+    public void write(InternalRow row) throws IOException {
+        try {
+            checkForException();
+            UnsafeRow projectedRow = this.projection.apply(row);
+            this.buffer.add(projectedRow);
+//            if(this.buffer.size() >= batchSize) {
+                publishMessages();
 //            }
             checkForException();
         } catch (Exception e) {
@@ -121,7 +133,9 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     @Override
     public WriterCommitMessage commit() {
         checkForException();
-        int batchSize = Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
+        if(!this.buffer.isEmpty()) {
+            publishMessages();
+        }
         if(batchSize == 0 || (batchSize > 0 && this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT)))) {
             try {
                 log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT), this.commitMessages.size());
@@ -134,7 +148,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             }
         }
         checkForException();
-        return null;
+        return new SolaceDataWriterCommitMessage(SolacePublishStatus.SUCCESS, "");
     }
 
     @Override
@@ -143,12 +157,30 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         Gson gson = new Gson();
         String exMessage = gson.toJson(abortedMessages, Map.class);
         abortedMessages.clear();
+        buffer.clear();
         throw new RuntimeException(exMessage);
     }
 
     @Override
     public void close() {
         log.info("SolaceSparkConnector - SolaceDataWriter Closed");
+        if(!this.buffer.isEmpty()) {
+            publishMessages();
+        }
+        if(batchSize == 0 || (batchSize > 0 && this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT)))) {
+            try {
+                log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT), this.commitMessages.size());
+                log.info("SolaceSparkConnector - Sleeping for 3000ms to check for pending acknowledgments");
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                log.error("SolaceSparkConnector - Interrupted while waiting for pending acknowledgments", e);
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+        }
+        commitMessages.clear();
+        abortedMessages.clear();
+        buffer.clear();
         this.solaceBroker.close();
     }
 
@@ -191,7 +223,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             @Override
             public void responseReceivedEx(Object o) {
                 log.info("SolaceSparkConnector - Message published successfully to Solace");
-                SolaceWriterCommitMessage solaceWriterCommitMessage = new SolaceWriterCommitMessage(SolacePublishStatus.SUCCESS, "");
+                SolaceDataWriterCommitMessage solaceWriterCommitMessage = new SolaceDataWriterCommitMessage(SolacePublishStatus.SUCCESS, "");
                 commitMessages.put(o.toString(), solaceWriterCommitMessage);
             }
 

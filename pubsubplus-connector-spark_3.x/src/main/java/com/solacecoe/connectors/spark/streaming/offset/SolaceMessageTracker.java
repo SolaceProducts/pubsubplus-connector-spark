@@ -1,5 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.offset;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -8,11 +10,13 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-public final class SolaceSparkOffsetManager implements Serializable {
-    private static final Logger logger = LogManager.getLogger(SolaceSparkOffsetManager.class);
-    private static ConcurrentHashMap<String, List<SolaceMessage>> messages = new ConcurrentHashMap<>();
-    private static ConcurrentHashMap<String, List<String>> messageIDs = new ConcurrentHashMap<>();
+public final class SolaceMessageTracker implements Serializable {
+    private static final Logger logger = LogManager.getLogger(SolaceMessageTracker.class);
+    private static ConcurrentHashMap<String, CopyOnWriteArrayList<SolaceMessage>> messages = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, CopyOnWriteArrayList<String>> messageIDs = new ConcurrentHashMap<>();
+    private static final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoint = new CopyOnWriteArrayList<>();
 
     public static String getProcessedMessagesIDs(String uniqueId) {
         if(messageIDs.containsKey(uniqueId)) {
@@ -26,7 +30,7 @@ public final class SolaceSparkOffsetManager implements Serializable {
     }
 
     public static void addMessage(String id, SolaceMessage message) {
-        List<SolaceMessage> messageList = new ArrayList<>();
+        CopyOnWriteArrayList<SolaceMessage> messageList = new CopyOnWriteArrayList<>();
         if(messages.containsKey(id)) {
             messageList = messages.get(id);
         }
@@ -44,12 +48,12 @@ public final class SolaceSparkOffsetManager implements Serializable {
     }
 
     public static void addMessageID(String id, String messageId) {
-        List<String> messageIDList = new ArrayList<>();
+        CopyOnWriteArrayList<String> messageIDList = new CopyOnWriteArrayList<>();
         if (messageIDs.containsKey(id)) {
-            messageIDList = SolaceSparkOffsetManager.messageIDs.get(id);
+            messageIDList = SolaceMessageTracker.messageIDs.get(id);
         }
         messageIDList.add(messageId);
-        SolaceSparkOffsetManager.messageIDs.put(id, messageIDList);
+        SolaceMessageTracker.messageIDs.put(id, messageIDList);
     }
 
     public static List<String> getMessageIDs(String uniqueId) {
@@ -68,6 +72,22 @@ public final class SolaceSparkOffsetManager implements Serializable {
         messages = new ConcurrentHashMap<>();
         messageIDs = new ConcurrentHashMap<>();
         logger.info("SolaceSparkConnector - Cleared all messages from Offset Manager");
+    }
+
+    public static void updateCheckpoint(SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint) {
+        SolaceSparkPartitionCheckpoint existingCheckpoint = checkpoint.stream().filter(entry -> entry.getPartitionId().equals(solaceSparkPartitionCheckpoint.getPartitionId())).findFirst().orElse(null);
+        if(existingCheckpoint != null) {
+            checkpoint.remove(existingCheckpoint);
+        }
+        checkpoint.add(solaceSparkPartitionCheckpoint);
+    }
+
+    public static SolaceSparkPartitionCheckpoint getCheckpoint(String partitionId) {
+        return checkpoint.stream().filter(entry -> entry.getPartitionId().equals(partitionId)).findFirst().orElse(null);
+    }
+
+    public static String getCheckpoint() {
+        return new Gson().toJson(checkpoint);
     }
 
 //    public static ConcurrentHashMap<String, String> getMessages() {

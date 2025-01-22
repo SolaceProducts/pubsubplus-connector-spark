@@ -19,6 +19,6 @@ public class SolaceStreamingDataWriterFactory implements StreamingDataWriterFact
 
     @Override
     public DataWriter<InternalRow> createWriter(int partitionId, long taskId, long epochId) {
-        return new SolaceDataWriter(schema, properties, false);
+        return new SolaceDataWriter(schema, properties);
     }
 }
