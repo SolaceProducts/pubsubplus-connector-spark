@@ -54,7 +54,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         this.abortedMessages = new HashMap<>();
         this.buffer = new ArrayList<>();
 
-        System.out.println("Client " + this.solaceBroker.getUniqueName() + " Batch Size " + this.batchSize);
+//        System.out.println("Client " + this.solaceBroker.getUniqueName() + " Batch Size " + this.batchSize);
     }
 
     private void publishMessages() {

@@ -191,7 +191,7 @@ class SolaceSparkStreamingSinkIT {
 
     @Test
     @Order(2)
-    void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, StreamingQueryException {
+    void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         DataStreamReader reader = sparkSession.readStream()
@@ -207,7 +207,6 @@ class SolaceSparkStreamingSinkIT {
         final String[] messageId = {""};
         Dataset<Row> dataset = reader.load();
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-            System.out.println("Current rows " + dataset1.count() + " batch id " + batchId);
             Dataset<Row> updatedDs = dataset1.drop("Topic", "PartitionKey", "TimeStamp", "Headers");
             try {
                 updatedDs.write()
@@ -215,7 +214,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, updatedDs.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
                         .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
                         .mode(SaveMode.Append)
@@ -249,9 +248,10 @@ class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        streamingQuery.awaitTermination();
-        Assertions.assertEquals(100, count[0]);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
     }
 
     @Test
