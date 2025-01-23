@@ -24,7 +24,6 @@ public class SolaceBatch implements Batch {
         this.properties = properties;
         this.options = options;
         this.filename = options.get("fileName");
-        // System.out.println("**** SolaceBatch Constructor ****");
     }
 
     @Override

@@ -19,7 +19,6 @@ public class SolaceDataWriterFactory implements DataWriterFactory, Serializable 
 
     @Override
     public DataWriter<InternalRow> createWriter(int partitionId, long taskId) {
-//        System.out.println("Current partition " + partitionId + " and taskid " + taskId);
         return new SolaceDataWriter(schema, properties);
     }
 }

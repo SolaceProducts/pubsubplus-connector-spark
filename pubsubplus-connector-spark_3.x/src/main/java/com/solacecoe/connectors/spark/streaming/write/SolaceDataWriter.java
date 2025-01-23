@@ -4,6 +4,9 @@ import com.google.gson.Gson;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProperties;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAbortException;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAckInterruptedException;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceAbortMessage;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolacePublishStatus;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -33,10 +36,9 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final StructType schema;
     private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
-    private final UnsafeProjection projection;
+    private final transient UnsafeProjection projection;
     private final Map<String, SolaceDataWriterCommitMessage> commitMessages;
     private final Map<String, SolaceAbortMessage> abortedMessages;
-    private final List<UnsafeRow> buffer;
     private Exception exception;
     private final boolean includeHeaders;
     public SolaceDataWriter(StructType schema, Map<String, String> properties) {
@@ -52,57 +54,36 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         this.projection = createProjection();
         this.commitMessages = new HashMap<>();
         this.abortedMessages = new HashMap<>();
-        this.buffer = new ArrayList<>();
-
-//        System.out.println("Client " + this.solaceBroker.getUniqueName() + " Batch Size " + this.batchSize);
     }
 
-    private void publishMessages() {
-        for(UnsafeRow projectedRow : buffer) {
-            if(this.topic == null) {
-                this.topic = projectedRow.getUTF8String(3).toString();
-            }
-
-            if(this.messageId == null) {
-                this.messageId = projectedRow.getUTF8String(0).toString();
-            }
-            byte[] payload;
-            if(projectedRow.getBinary(1) != null) {
-                payload = projectedRow.getBinary(1);
-            } else {
-                throw new RuntimeException("SolaceSparkConnector - Payload Column is not present in data frame.");
-            }
-            long timestamp = 0L;
-            if(projectedRow.get(4, DataTypes.TimestampType) != null) {
-                timestamp = Long.parseLong(projectedRow.get(4, DataTypes.TimestampType).toString());
-            }
-            UnsafeMapData headersMap = new UnsafeMapData();
-            if(projectedRow.numFields() > 5 && projectedRow.getMap(5) != null) {
-                headersMap = projectedRow.getMap(5);
-            }
-            String partitionKey = "";
-            if(projectedRow.getUTF8String(2) != null) {
-                partitionKey = projectedRow.getUTF8String(2).toString();
-            }
-//            if(!isBatch) {
-//                XMLMessage xmlMessage = this.solaceBroker.createMessage(this.messageId,
-//                        partitionKey, payload,
-//                        timestamp, headersMap);
-            this.solaceBroker.publishMessage(this.messageId, this.topic,
-                    partitionKey, payload, timestamp, headersMap);
-//            }
-//            else if((this.batchMessages.size() + 1) == Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT))) {
-//                this.batchMessages.add(this.solaceBroker.createMultipleEntryMessage(this.messageId, this.topic,
-//                        partitionKey, payload, timestamp, headersMap));
-//                this.solaceBroker.publishBatch(this.batchMessages.toArray(new JCSMPSendMultipleEntry[batchMessages.size()]));
-//                this.batchMessages.clear();
-//            } else {
-//                this.batchMessages.add(this.solaceBroker.createMultipleEntryMessage(this.messageId, this.topic,
-//                        partitionKey, payload, timestamp, headersMap));
-//            }
+    private void publishMessages(UnsafeRow projectedRow) {
+        if(this.topic == null) {
+            this.topic = projectedRow.getUTF8String(3).toString();
         }
 
-        this.buffer.clear();
+        if(this.messageId == null) {
+            this.messageId = projectedRow.getUTF8String(0).toString();
+        }
+        byte[] payload;
+        if(projectedRow.getBinary(1) != null) {
+            payload = projectedRow.getBinary(1);
+        } else {
+            throw new SolacePublishException("SolaceSparkConnector - Payload Column is not present in data frame.");
+        }
+        long timestamp = 0L;
+        if(projectedRow.get(4, DataTypes.TimestampType) != null) {
+            timestamp = Long.parseLong(projectedRow.get(4, DataTypes.TimestampType).toString());
+        }
+        UnsafeMapData headersMap = new UnsafeMapData();
+        if(projectedRow.numFields() > 5 && projectedRow.getMap(5) != null) {
+            headersMap = projectedRow.getMap(5);
+        }
+        String partitionKey = "";
+        if(projectedRow.getUTF8String(2) != null) {
+            partitionKey = projectedRow.getUTF8String(2).toString();
+        }
+        this.solaceBroker.publishMessage(this.messageId, this.topic,
+                partitionKey, payload, timestamp, headersMap);
     }
 
     @Override
@@ -110,10 +91,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         try {
             checkForException();
             UnsafeRow projectedRow = this.projection.apply(row);
-            this.buffer.add(projectedRow);
-//            if(this.buffer.size() >= batchSize) {
-                publishMessages();
-//            }
+            publishMessages(projectedRow);
             checkForException();
         } catch (Exception e) {
             StringWriter sw = new StringWriter();
@@ -126,25 +104,21 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             Gson gson = new Gson();
             String exMessage = gson.toJson(abortedMessages, Map.class);
             abortedMessages.clear();
-            throw new RuntimeException(exMessage);
+            throw new SolacePublishException(exMessage);
         }
     }
 
     @Override
     public WriterCommitMessage commit() {
         checkForException();
-        if(!this.buffer.isEmpty()) {
-            publishMessages();
-        }
         if(batchSize == 0 || (batchSize > 0 && this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT)))) {
             try {
                 log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT), this.commitMessages.size());
                 log.info("SolaceSparkConnector - Sleeping for 3000ms to check for pending acknowledgments");
                 Thread.sleep(3000);
             } catch (InterruptedException e) {
-                log.error("SolaceSparkConnector - Interrupted while waiting for pending acknowledgments", e);
                 Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
+                throw new SolacePublishAckInterruptedException("SolaceSparkConnector - Interrupted while waiting for pending acknowledgments", e);
             }
         }
         checkForException();
@@ -156,31 +130,14 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         log.error("SolaceSparkConnector - Publishing to Solace aborted", exception);
         Gson gson = new Gson();
         String exMessage = gson.toJson(abortedMessages, Map.class);
-        abortedMessages.clear();
-        buffer.clear();
-        throw new RuntimeException(exMessage);
+        throw new SolacePublishAbortException(exMessage);
     }
 
     @Override
     public void close() {
         log.info("SolaceSparkConnector - SolaceDataWriter Closed");
-        if(!this.buffer.isEmpty()) {
-            publishMessages();
-        }
-        if(batchSize == 0 || (batchSize > 0 && this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT)))) {
-            try {
-                log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT), this.commitMessages.size());
-                log.info("SolaceSparkConnector - Sleeping for 3000ms to check for pending acknowledgments");
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                log.error("SolaceSparkConnector - Interrupted while waiting for pending acknowledgments", e);
-                Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
-            }
-        }
         commitMessages.clear();
         abortedMessages.clear();
-        buffer.clear();
         this.solaceBroker.close();
     }
 
@@ -246,7 +203,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             Gson gson = new Gson();
             String exMessage = gson.toJson(abortedMessages, Map.class);
             abortedMessages.clear();
-            throw new RuntimeException(exMessage);
+            throw new SolacePublishException(exMessage);
         }
     }
 }

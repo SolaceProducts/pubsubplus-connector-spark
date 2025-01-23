@@ -207,9 +207,8 @@ class SolaceSparkStreamingSinkIT {
         final String[] messageId = {""};
         Dataset<Row> dataset = reader.load();
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-            Dataset<Row> updatedDs = dataset1.drop("Topic", "PartitionKey", "TimeStamp", "Headers");
             try {
-                updatedDs.write()
+                dataset1.drop("Topic", "PartitionKey", "TimeStamp", "Headers").write()
                         .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
@@ -276,7 +275,7 @@ class SolaceSparkStreamingSinkIT {
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                     .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
                     .mode(SaveMode.Append)
                     .format("solace").save();
@@ -331,7 +330,7 @@ class SolaceSparkStreamingSinkIT {
                       .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                       .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                       .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                      .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                      .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                       .option(SolaceSparkStreamingProperties.TOPIC, "Spark/Topic/0")
                       .mode(SaveMode.Append)
                       .format("solace").save();
@@ -388,7 +387,7 @@ class SolaceSparkStreamingSinkIT {
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                     .option(SolaceSparkStreamingProperties.INCLUDE_HEADERS, true)
                     .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
                     .mode(SaveMode.Append)
@@ -450,7 +449,7 @@ class SolaceSparkStreamingSinkIT {
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                     .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
                     .mode(SaveMode.Append)
                     .format("solace").save();
@@ -511,7 +510,7 @@ class SolaceSparkStreamingSinkIT {
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                     .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
                     .mode(SaveMode.Append)
                     .format("solace").save();
@@ -565,7 +564,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .option(SolaceSparkStreamingProperties.TOPIC, "publish/deny")
                         .mode(SaveMode.Append)
                         .format("solace").save();
@@ -595,7 +594,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
                         .mode(SaveMode.Append)
                         .format("solace").save();
@@ -625,7 +624,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -654,7 +653,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -683,7 +682,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -712,7 +711,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -741,7 +740,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -770,7 +769,7 @@ class SolaceSparkStreamingSinkIT {
 //                        .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -799,7 +798,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, "")
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -828,7 +827,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
 //                        .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -857,7 +856,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, "")
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -886,7 +885,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
 //                        .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();
@@ -915,7 +914,7 @@ class SolaceSparkStreamingSinkIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, "")
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, dataset1.count())
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
                         .mode(SaveMode.Append)
                         .format("solace").save();
             }).start();

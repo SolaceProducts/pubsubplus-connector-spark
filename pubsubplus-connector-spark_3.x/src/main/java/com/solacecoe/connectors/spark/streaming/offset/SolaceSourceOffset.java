@@ -7,7 +7,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SolaceSourceOffset extends Offset {
     private int offset;
-    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
+    private final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
 
     public SolaceSourceOffset(int offset, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints) {
         this.offset = offset;

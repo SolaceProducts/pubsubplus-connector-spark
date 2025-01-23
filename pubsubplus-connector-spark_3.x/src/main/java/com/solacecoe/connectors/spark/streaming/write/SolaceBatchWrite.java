@@ -48,7 +48,6 @@ public class SolaceBatchWrite implements BatchWrite, Serializable {
     }
     @Override
     public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo physicalWriteInfo) {
-//        System.out.println("Total partitions " + physicalWriteInfo.numPartitions());
         return new SolaceDataWriterFactory(schema, properties);
     }
 
@@ -62,6 +61,5 @@ public class SolaceBatchWrite implements BatchWrite, Serializable {
 
     @Override
     public void abort(WriterCommitMessage[] writerCommitMessages) {
-//        System.out.println("Test");
     }
 }
