@@ -161,7 +161,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                     }
 
                 } catch (InterruptedException | SDTException e) {
-                    log.error("Interrupted while reading message id from message", e);
+                    log.warn("No messages available within specified receiveWaitTimeout", e);
                     return null;
                 }
             }
