@@ -109,14 +109,6 @@ class SolaceSparkStreamingSinkIT {
 
     @AfterEach
     public void afterEach() throws IOException {
-        sparkSession.close();
-        sparkSession.stop();
-        SparkSession.clearDefaultSession();
-        SparkSession.clearActiveSession();
-        sparkSession = SparkSession.builder()
-                .appName("data_source_test")
-                .master("local[*]")
-                .getOrCreate();
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path path1 = Paths.get("src", "test", "resources", "spark-checkpoint-2");
         Path path2 = Paths.get("src", "test", "resources", "spark-checkpoint-3");

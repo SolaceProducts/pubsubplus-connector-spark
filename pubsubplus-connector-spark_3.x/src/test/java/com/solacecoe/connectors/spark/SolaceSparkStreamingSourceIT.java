@@ -110,14 +110,6 @@ class SolaceSparkStreamingSourceIT {
 
     @AfterEach
     public void afterEach() throws IOException {
-        sparkSession.close();
-        sparkSession.stop();
-        SparkSession.clearDefaultSession();
-        SparkSession.clearActiveSession();
-        sparkSession = SparkSession.builder()
-                .appName("data_source_test")
-                .master("local[*]")
-                .getOrCreate();
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path path1 = Paths.get("src", "test", "resources", "spark-checkpoint-2");
         Path path2 = Paths.get("src", "test", "resources", "spark-checkpoint-3");
@@ -178,7 +170,7 @@ class SolaceSparkStreamingSourceIT {
         Dataset<Row> dataset = reader.load();
 
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                count[0] = count[0] + dataset1.count();
+            count[0] = count[0] + dataset1.count();
         }).start();
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
@@ -675,7 +667,7 @@ class SolaceSparkStreamingSourceIT {
     }
 
     @Test
-    void Should_Fail_IfBatchSizeLessThan1() {
+    void Should_Fail_IfBatchSizeLessThan0() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
             DataStreamReader reader = sparkSession.readStream()
@@ -689,7 +681,7 @@ class SolaceSparkStreamingSourceIT {
                     .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
                     .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "-1")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();
