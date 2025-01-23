@@ -221,6 +221,7 @@ public class SolaceBroker implements Serializable {
             } catch (JCSMPException e) {
                 log.warn("SolaceSparkConnector - Subscription already exists on LVQ. Ignoring error");
             }
+            eventListener.setBrokerInstance(this);
             FlowReceiver cons = this.session.createFlow(eventListener,
                     flow_prop, endpoint_props);
 

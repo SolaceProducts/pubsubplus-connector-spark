@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumerException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.BytesXMLMessage;
@@ -57,7 +57,7 @@ public class EventListener implements XMLMessageListener, Serializable {
 //            log.info("Current messages in consumer "+this.id+" is :: " + this.messages.size());
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);
-            throw new RuntimeException(e);
+            throw new SolaceConsumerException(e);
         }
 
     }
