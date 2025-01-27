@@ -1,6 +1,5 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
-import com.google.gson.JsonObject;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
@@ -25,7 +24,6 @@ import java.util.concurrent.*;
 
 public class SolaceBroker implements Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
-    public static boolean isReplayInitiated = false;
     private final String queue;
     private final String lvqName;
     private final String lvqTopic;
@@ -169,20 +167,21 @@ public class SolaceBroker implements Serializable {
                         break;
                     case "REPLICATION-GROUP-MESSAGE-ID":
                         String replicationGroupMsgId = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, null);
-                        if(replicationGroupMsgId != null) {
+                        if(replicationGroupMsgId != null && !replicationGroupMsgId.isEmpty()) {
                             replayStart = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(replicationGroupMsgId);
+                        } else {
+                            handleException("SolaceSparkConnector - Invalid replication group message id", null);
                         }
                         break;
                     default:
-                        handleException("Unsupported replay strategy: " + replayStrategy, null);
+                        handleException("SolaceSparkConnector - Unsupported replay strategy: " + replayStrategy, null);
                 }
             }
             ConsumerFlowProperties flowProp = new ConsumerFlowProperties();
             Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.queue);
 
             flowProp.setEndpoint(listenQueue);
-            if(replayStart != null && !SolaceBroker.isReplayInitiated) {
-                SolaceBroker.isReplayInitiated = true;
+            if(replayStart != null) {
                 flowProp.setReplayStartLocation(replayStart);
             }
             flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
@@ -197,7 +196,6 @@ public class SolaceBroker implements Serializable {
             log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {} ", this.queue);
             flowReceivers.add(cons);
         } catch (Exception e) {
-            SolaceBroker.isReplayInitiated = false;
             e.printStackTrace();
             handleException("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
         }
