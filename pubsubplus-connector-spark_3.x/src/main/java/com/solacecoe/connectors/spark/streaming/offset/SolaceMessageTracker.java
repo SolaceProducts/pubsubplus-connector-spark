@@ -1,7 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.offset;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

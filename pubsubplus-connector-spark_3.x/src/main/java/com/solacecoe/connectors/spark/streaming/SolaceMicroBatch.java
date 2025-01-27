@@ -1,7 +1,6 @@
 package com.solacecoe.connectors.spark.streaming;
 
 import com.google.gson.Gson;
-import com.solacecoe.connectors.spark.streaming.offset.SolaceSourceOffsetWriter;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSourceOffset;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;

@@ -25,6 +25,7 @@ import java.util.concurrent.*;
 
 public class SolaceBroker implements Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
+    public static boolean isReplayInitiated = false;
     private final String queue;
     private final String lvqName;
     private final String lvqTopic;
@@ -173,14 +174,15 @@ public class SolaceBroker implements Serializable {
                         }
                         break;
                     default:
-                        throw new RuntimeException("Unsupported replay strategy: " + replayStrategy);
+                        handleException("Unsupported replay strategy: " + replayStrategy, null);
                 }
             }
             ConsumerFlowProperties flowProp = new ConsumerFlowProperties();
             Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.queue);
 
             flowProp.setEndpoint(listenQueue);
-            if(replayStart != null) {
+            if(replayStart != null && !SolaceBroker.isReplayInitiated) {
+                SolaceBroker.isReplayInitiated = true;
                 flowProp.setReplayStartLocation(replayStart);
             }
             flowProp.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
@@ -195,6 +197,8 @@ public class SolaceBroker implements Serializable {
             log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {} ", this.queue);
             flowReceivers.add(cons);
         } catch (Exception e) {
+            SolaceBroker.isReplayInitiated = false;
+            e.printStackTrace();
             handleException("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
         }
     }
@@ -241,7 +245,7 @@ public class SolaceBroker implements Serializable {
             this.producer = this.session.getMessageProducer(jcsmpStreamingPublishCorrelatingEventHandler);
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Error creating publisher to Solace", e);
-            throw new RuntimeException(e);
+            handleException("SolaceSparkConnector - Exception initializing producer ", e);
         }
     }
 
@@ -250,18 +254,18 @@ public class SolaceBroker implements Serializable {
             this.producer = this.session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
                 @Override
                 public void responseReceivedEx(Object o) {
-                    log.info("SolaceSparkConnector - Message published successfully to Solace");
+                    log.info("SolaceSparkConnector - LVQ Message published successfully to Solace");
                 }
 
                 @Override
                 public void handleErrorEx(Object o, JCSMPException e, long l) {
                     log.error("SolaceSparkConnector - Exception when publishing message to Solace", e);
-                    throw new RuntimeException(e);
+                    handleException("SolaceSparkConnector - Exception publishing message to LVQ ", e);
                 }
             });
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Error creating publisher to Solace", e);
-            throw new RuntimeException(e);
+            handleException("SolaceSparkConnector - Exception initializing producer ", e);
         }
     }
 
@@ -273,8 +277,8 @@ public class SolaceBroker implements Serializable {
         try {
             this.producer.send(xmlMessage, destination);
         } catch (JCSMPException e) {
-            log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
-            throw new RuntimeException(e);
+            log.error("SolaceSparkConnector - Exception publishing lvq message to Solace", e);
+            handleException("SolaceSparkConnector - Exception publishing lvq message to Solace ", e);
         }
     }
 
@@ -286,8 +290,8 @@ public class SolaceBroker implements Serializable {
         } catch (SDTException e) {
             throw new RuntimeException(e);
         } catch (JCSMPException e) {
-            log.error("SolaceSparkConnector - Error publishing connector state to Solace", e);
-            throw new RuntimeException(e);
+            log.error("SolaceSparkConnector - Exception publishing message to Solace ", e);
+            handleException("SolaceSparkConnector - Exception publishing message to Solace ", e);
         }
     }
 
@@ -365,18 +369,9 @@ public class SolaceBroker implements Serializable {
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
-    public SolaceSparkPartitionCheckpoint getLVQMessage() {
-        if(!lvqEventListeners.isEmpty() && this.lvqEventListeners.get(0).getSolaceSparkOffsets().length > 0) {
-            log.info("Requesting messages from lvq listener, total messages available :: {}", this.lvqEventListeners.get(0).getSolaceSparkOffsets().length);
-            return this.lvqEventListeners.get(0).getSolaceSparkOffsets()[0];
-        }
-
-        return null;
-    }
-
     public CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getOffsetFromLvq() {
-        if(!lvqEventListeners.isEmpty() && this.lvqEventListeners.get(0).getSolaceSparkOffsets().length > 0) {
-            log.info("Requesting messages from lvq listener, total messages available :: {}", this.lvqEventListeners.get(0).getSolaceSparkOffsets().length);
+        if(!lvqEventListeners.isEmpty() && !this.lvqEventListeners.get(0).getLastKnownOffsets().isEmpty()) {
+            log.info("Requesting messages from lvq listener, total messages available :: {}", this.lvqEventListeners.get(0).getLastKnownOffsets().size());
             return this.lvqEventListeners.get(0).getLastKnownOffsets();
         }
 
@@ -450,7 +445,7 @@ public class SolaceBroker implements Serializable {
 
     public void handleException(String message, Exception e) {
         log.info("SolaceSparkConnector - Exception handling condition isOAuth {}, isFileModified {}", isOAuth, isAccessTokenSourceModified);
-        if( !isOAuth || !isAccessTokenSourceModified || e.getCause().toString().contains("Unauthorized")) {
+        if( !isOAuth || !isAccessTokenSourceModified || (e != null && e.getCause().toString().contains("Unauthorized"))) {
             log.error(message, e);
             this.isException = true;
             this.exception = e;
@@ -469,9 +464,5 @@ public class SolaceBroker implements Serializable {
 
     public boolean isLvqConnection() {
         return isLvqConnection;
-    }
-
-    public void setLvqConnection(boolean lvqConnection) {
-        isLvqConnection = lvqConnection;
     }
 }

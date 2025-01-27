@@ -1,7 +1,5 @@
 package com.solacecoe.connectors.spark.streaming.partitions;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaders;
 import com.solacecoe.connectors.spark.streaming.solace.*;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
@@ -78,7 +76,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         } else {
             createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
         }
-
+        if(this.solaceBroker != null && this.solaceBroker.isException()) {
+            throw new SolaceSessionException(this.solaceBroker.getException());
+        }
         log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition {}", inputPartition.getId());
         registerTaskListener();
     }
@@ -186,6 +186,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     @Override
     public void close() {
         log.info("SolaceSparkConnector - Input partition reader with ID {} with task {} is closed", this.solaceInputPartition.getId(), this.uniqueId);
+        if(this.solaceBroker != null && this.solaceBroker.isException()) {
+            throw new SolaceSessionException(this.solaceBroker.getException());
+        }
     }
 
     private void registerTaskListener() {
@@ -222,7 +225,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         });
     }
 
-    private void createNewConnection(String inputPartitionId, boolean ackLastProcessedMessages) throws SolaceSessionException {
+    private void createNewConnection(String inputPartitionId, boolean ackLastProcessedMessages) {
         log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
         solaceBroker = new SolaceBroker(properties, "consumer");
         solaceBroker.initProducer();
@@ -230,13 +233,11 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         createReceiver(inputPartitionId, ackLastProcessedMessages);
     }
 
-    private void createReceiver(String inputPartitionId, boolean ackLastProcessedMessages) throws SolaceSessionException {
+    private void createReceiver(String inputPartitionId, boolean ackLastProcessedMessages) {
         EventListener eventListener = new EventListener(inputPartitionId);
         if(ackLastProcessedMessages) {
             log.info("SolaceSparkConnector - last processed messages for list {}", SolaceMessageTracker.getMessageIDs(uniqueId));
-            JsonObject toJsonObject = new Gson().fromJson(this.lastKnownOffset, JsonObject.class);
-            String lastKnownMessageIDs = toJsonObject.has("messageIDs") ? toJsonObject.get("messageIDs").getAsString() : "";
-            List<String> messageIDs = Arrays.stream(lastKnownMessageIDs.split(",")).collect(Collectors.toList());
+            List<String> messageIDs = Arrays.stream(this.lastKnownOffset.split(",")).collect(Collectors.toList());
             eventListener = new EventListener(inputPartitionId, messageIDs, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
         }
         // Initialize connection to Solace Broker

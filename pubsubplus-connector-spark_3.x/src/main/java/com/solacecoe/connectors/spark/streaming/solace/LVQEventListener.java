@@ -17,7 +17,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class LVQEventListener implements XMLMessageListener, Serializable {
     private static final Logger log = LogManager.getLogger(LVQEventListener.class);
-    private final transient SolaceSparkPartitionCheckpoint[] solaceSparkPartitionCheckpoints = new SolaceSparkPartitionCheckpoint[1];
     private transient CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> lastKnownOffset = new CopyOnWriteArrayList<>();
     private SolaceBroker solaceBroker;
     @Override
@@ -50,10 +49,6 @@ public class LVQEventListener implements XMLMessageListener, Serializable {
             log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
             throw new SolaceConsumerException(e);
         }
-    }
-
-    public SolaceSparkPartitionCheckpoint[] getSolaceSparkOffsets() {
-        return solaceSparkPartitionCheckpoints;
     }
 
     public CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getLastKnownOffsets() {
