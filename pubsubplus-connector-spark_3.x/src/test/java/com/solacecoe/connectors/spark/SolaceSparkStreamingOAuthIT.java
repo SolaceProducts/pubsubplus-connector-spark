@@ -241,9 +241,9 @@ class SolaceSparkStreamingOAuthIT {
                 .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)
                 .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
                 .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
-                .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, resources.toAbsolutePath().toString() + "/accesstoken.txt")
+                .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN, resources.toAbsolutePath() + "/accesstoken.txt")
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "50")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "100")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
