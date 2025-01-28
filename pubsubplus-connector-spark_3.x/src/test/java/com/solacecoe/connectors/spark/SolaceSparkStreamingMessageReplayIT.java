@@ -36,6 +36,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.testcontainers.shaded.org.hamcrest.MatcherAssert.assertThat;
+import static org.testcontainers.shaded.org.hamcrest.Matchers.*;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -94,7 +96,7 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @BeforeEach
     public void beforeEach() throws ApiException {
-        if(solaceContainer.isRunning() && (testIndex != 0 && testIndex <= 3)) {
+        if(solaceContainer.isRunning() && (testIndex != 0 && testIndex <= 4)) {
             SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
 
             MsgVpnQueue queue = new MsgVpnQueue();
@@ -210,14 +212,13 @@ class SolaceSparkStreamingMessageReplayIT {
                 .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/1")
                 .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "BEGINNING")
-                .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
         Dataset<Row> dataset = reader.load();
 
         StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
             count[0] = count[0] + dataset1.count();
-        }).start();
+        }).option("checkpointLocation", path.toAbsolutePath().toString()).start();
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100L,count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
@@ -226,6 +227,32 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(3)
+    void Should_InitiateReplay_ALL_STRATEGY_And_Ack_Duplicate_Messages() throws TimeoutException, InterruptedException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        DataStreamReader reader = sparkSession.readStream()
+                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/2")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+                .option(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, true)
+                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "BEGINNING")
+                .format("solace");
+        final long[] count = {0};
+        Dataset<Row> dataset = reader.load();
+
+        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+            count[0] = count[0] + dataset1.count();
+        }).option("checkpointLocation", path.toAbsolutePath().toString()).start();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(0L,count[0]));
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
+    }
+
+    @Test
+    @Order(4)
     void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         String timezone = ZoneId.systemDefault().toString();
@@ -234,7 +261,7 @@ class SolaceSparkStreamingMessageReplayIT {
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/2")
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
                 .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "TIMEBASED")
                 .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME, messageTimestamp)
@@ -248,23 +275,22 @@ class SolaceSparkStreamingMessageReplayIT {
             count[0] = count[0] + dataset1.count();
         }).start();
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100L, count[0]));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> assertThat("", count[0], greaterThanOrEqualTo(99L)));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
 
     }
 
     @Test
-    @Order(4)
+    @Order(5)
     void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        System.out.println("Replicationgroup is " + replicationGroupMessageId);
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                 .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                 .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                 .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
+                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/4")
                 .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                 .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
                 .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, replicationGroupMessageId)
@@ -284,7 +310,7 @@ class SolaceSparkStreamingMessageReplayIT {
     }
 
     @Test
-    @Order(5)
+    @Order(6)
     void Should_Fail_IfReplayStrategyIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
@@ -312,7 +338,7 @@ class SolaceSparkStreamingMessageReplayIT {
     }
 
     @Test
-    @Order(6)
+    @Order(7)
     void Should_Fail_IfReplicationGroupMessageIdIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {

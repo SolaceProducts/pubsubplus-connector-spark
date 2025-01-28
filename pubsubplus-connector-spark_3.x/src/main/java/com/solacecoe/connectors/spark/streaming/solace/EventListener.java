@@ -9,9 +9,8 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingP
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumerException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 
-import com.solacesystems.jcsmp.XMLMessageListener;
-import com.solacesystems.jcsmp.BytesXMLMessage;
-import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.*;
+import com.solacesystems.jcsmp.impl.ReplicationGroupMessageIdImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,11 +45,23 @@ public class EventListener implements XMLMessageListener, Serializable {
         try {
             if(!lastKnownMessageIDs.isEmpty()) {
                 String messageID = SolaceUtils.getMessageID(msg, this.offsetIndicator);
-                if(lastKnownMessageIDs.contains(messageID)) {
-                    log.info("SolaceSparkConnector- Acknowledging message with ID {} as it is present in last known offset and user has set ackLastProcessedMessages to true in configuration", messageID);
-                    msg.ackMessage();
-                    log.info("SolaceSparkConnector- Acknowledged message with ID {} present in last known offset", messageID);
+                for(String msgID : lastKnownMessageIDs) {
+                    if(msgID != null && !msgID.isEmpty()) {
+                        ReplicationGroupMessageId checkpointMsgId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(msgID);
+                        ReplicationGroupMessageId currentMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(messageID);
+
+                        if (currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) {
+                            log.info("SolaceSparkConnector- Acknowledging message with ID {} as it is present in last known offset and user has set ackLastProcessedMessages to true in configuration", messageID);
+                            msg.ackMessage();
+                            log.info("SolaceSparkConnector- Acknowledged message with ID {} present in last known offset", messageID);
+                        }
+                    }
                 }
+//                if(lastKnownMessageIDs.contains(messageID)) {
+//                    log.info("SolaceSparkConnector- Acknowledging message with ID {} as it is present in last known offset and user has set ackLastProcessedMessages to true in configuration", messageID);
+//                    msg.ackMessage();
+//                    log.info("SolaceSparkConnector- Acknowledged message with ID {} present in last known offset", messageID);
+//                }
             } else {
                 this.messages.add(new SolaceMessage(msg));
             }

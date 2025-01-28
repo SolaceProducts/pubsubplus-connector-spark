@@ -88,6 +88,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         }
 
         this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
+        latestOffsetId = (-batchSize);
         if(this.batchSize < 0) {
             throw new SolaceInvalidPropertyException("SolaceSparkConnector - Please set batch size greater than zero");
         }

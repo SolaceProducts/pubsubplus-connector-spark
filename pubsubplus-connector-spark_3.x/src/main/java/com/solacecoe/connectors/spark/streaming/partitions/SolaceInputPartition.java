@@ -13,7 +13,7 @@ public class SolaceInputPartition implements InputPartition, Serializable {
     private final String id;
     private final int offsetId;
     public SolaceInputPartition(String id, int offsetId, String location) {
-        log.info("SolaceSparkConnector - Initializing Solace Input partition");
+        log.info("SolaceSparkConnector - Initializing Solace Input partition with id {}", id);
         this.id = id;
         this.offsetId = offsetId;
         this.location = location;

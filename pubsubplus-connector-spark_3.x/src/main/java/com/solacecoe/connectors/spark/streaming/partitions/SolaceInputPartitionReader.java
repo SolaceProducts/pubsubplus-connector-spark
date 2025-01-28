@@ -45,7 +45,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private final TaskContext taskContext;
     private final String lastKnownOffset;
     private final boolean closeReceiversOnPartitionClose;
-
+    private String lastProcessedMessageID = "";
     public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, String lastKnownOffset, Map<String, String> properties, TaskContext taskContext) {
         log.info("SolaceSparkConnector - Initializing Solace Input Partition reader with id {}", inputPartition.getId());
         this.solaceInputPartition = inputPartition;
@@ -118,6 +118,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             SolaceMessageTracker.addMessage(uniqueId, solaceMessage);
             log.info("SolaceSparkConnector - Updated offset manager with offset");
             log.info("SolaceSparkConnector - Created Spark row for message with ID {}", solaceRecord.getMessageId());
+            lastProcessedMessageID = solaceRecord.getMessageId();
             return row;
         } catch (Exception e) {
             log.error("SolaceSparkConnector- Exception while reading message", e);
@@ -209,10 +210,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                     if(solaceSparkPartitionCheckpoint != null) {
                         solaceSparkPartitionCheckpoint.setStartOffset(solaceSparkPartitionCheckpoint.getEndOffset());
                         solaceSparkPartitionCheckpoint.setEndOffset(solaceSparkPartitionCheckpoint.getEndOffset() + batchSize);
-                        solaceSparkPartitionCheckpoint.setMessageIDs(processedMessageIDs);
+                        solaceSparkPartitionCheckpoint.setMessageIDs(lastProcessedMessageID);
                         solaceSparkPartitionCheckpoint.setPartitionId(this.solaceInputPartition.getId());
                     } else {
-                        solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(0, batchSize, processedMessageIDs, this.solaceInputPartition.getId());
+                        solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(0, batchSize, lastProcessedMessageID, this.solaceInputPartition.getId());
                     }
                     SolaceMessageTracker.updateCheckpoint(solaceSparkPartitionCheckpoint);
                     solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), SolaceMessageTracker.getCheckpoint());
