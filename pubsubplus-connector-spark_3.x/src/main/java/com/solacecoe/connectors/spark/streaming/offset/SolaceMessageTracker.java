@@ -6,8 +6,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -15,7 +13,7 @@ public final class SolaceMessageTracker implements Serializable {
     private static final Logger logger = LogManager.getLogger(SolaceMessageTracker.class);
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<SolaceMessage>> messages = new ConcurrentHashMap<>();
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<String>> messageIDs = new ConcurrentHashMap<>();
-    private static final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoint = new CopyOnWriteArrayList<>();
+    private static CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoint = new CopyOnWriteArrayList<>();
 
     public static String getProcessedMessagesIDs(String uniqueId) {
         if(messageIDs.containsKey(uniqueId)) {
@@ -39,9 +37,7 @@ public final class SolaceMessageTracker implements Serializable {
 
     public static void ackMessages(String uniqueId) {
         if(messages.containsKey(uniqueId)) {
-            messages.get(uniqueId).forEach(message -> {
-                message.bytesXMLMessage.ackMessage();
-            });
+            messages.get(uniqueId).forEach(message -> message.bytesXMLMessage.ackMessage());
             messages.remove(uniqueId);
         }
     }
@@ -55,14 +51,6 @@ public final class SolaceMessageTracker implements Serializable {
         SolaceMessageTracker.messageIDs.put(id, messageIDList);
     }
 
-    public static List<String> getMessageIDs(String uniqueId) {
-        if(messageIDs.containsKey(uniqueId)) {
-            return messageIDs.get(uniqueId);
-        }
-
-        return new ArrayList<>();
-    }
-
     public static boolean containsMessageID(String messageId) {
         return messageIDs.values().stream().anyMatch(list -> list.contains(messageId));
     }
@@ -70,6 +58,7 @@ public final class SolaceMessageTracker implements Serializable {
     public static void reset() {
         messages = new ConcurrentHashMap<>();
         messageIDs = new ConcurrentHashMap<>();
+        checkpoint = new CopyOnWriteArrayList<>();
         logger.info("SolaceSparkConnector - Cleared all messages from Offset Manager");
     }
 
@@ -88,8 +77,4 @@ public final class SolaceMessageTracker implements Serializable {
     public static String getCheckpoint() {
         return new Gson().toJson(checkpoint);
     }
-
-//    public static ConcurrentHashMap<String, String> getMessages() {
-//        return messages;
-//    }
 }

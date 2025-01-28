@@ -38,7 +38,6 @@ public class SolaceBroker implements Serializable {
     private long accessTokenSourceLastModifiedTime = 0L;
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
-    private boolean isLvqConnection = false;
     private final Map<String, String> properties;
     private final JCSMPSession session;
     private XMLMessageProducer producer;
@@ -196,7 +195,6 @@ public class SolaceBroker implements Serializable {
             log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {} ", this.queue);
             flowReceivers.add(cons);
         } catch (Exception e) {
-            e.printStackTrace();
             handleException("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
         }
     }
@@ -230,12 +228,10 @@ public class SolaceBroker implements Serializable {
             cons.start();
             flowReceivers.add(cons);
             log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {}", this.queue);
-            this.isLvqConnection = true;
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
         }
-        // log.info("Listening for messages: "+ this.queueName);
     }
 
     public void initProducer(JCSMPStreamingPublishCorrelatingEventHandler jcsmpStreamingPublishCorrelatingEventHandler) {
@@ -285,8 +281,6 @@ public class SolaceBroker implements Serializable {
             Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
             XMLMessage xmlMessage = createMessage(applicationMessageId, partitionKey, msg, timestamp, headersMap);
             this.producer.send(xmlMessage, destination);
-        } catch (SDTException e) {
-            throw new RuntimeException(e);
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Exception publishing message to Solace ", e);
             handleException("SolaceSparkConnector - Exception publishing message to Solace ", e);
@@ -458,9 +452,5 @@ public class SolaceBroker implements Serializable {
 
     public Exception getException() {
         return exception;
-    }
-
-    public boolean isLvqConnection() {
-        return isLvqConnection;
     }
 }

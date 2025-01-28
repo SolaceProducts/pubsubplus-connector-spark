@@ -1,13 +1,11 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
-import org.apache.log4j.Logger;
-
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 
 public class SolaceRecord implements Serializable {
-    private static final Logger log = Logger.getLogger(SolaceRecord.class);
     private static final long serialVersionUID = 42L;
 
     // Application properties
@@ -169,7 +167,7 @@ public class SolaceRecord implements Serializable {
                     && redelivered == other.redelivered
                     && expiration == other.expiration
                     && priority == other.priority
-                    && text.equals(other.text);
+                    && Arrays.equals(text, other.text);
 
         } else {
             return false;

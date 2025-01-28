@@ -5,7 +5,7 @@ import com.solacesystems.jcsmp.BytesXMLMessage;
 import java.io.Serializable;
 
 public class SolaceMessage implements Serializable {
-    public volatile transient BytesXMLMessage bytesXMLMessage;
+    public transient BytesXMLMessage bytesXMLMessage;
 
     public SolaceMessage(BytesXMLMessage bytesXMLMessage) {
         this.bytesXMLMessage = bytesXMLMessage;

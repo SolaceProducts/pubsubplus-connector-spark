@@ -163,6 +163,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
                 } catch (InterruptedException | SDTException e) {
                     log.warn("No messages available within specified receiveWaitTimeout", e);
+                    Thread.currentThread().interrupt();
                     return null;
                 }
             }
@@ -237,7 +238,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private void createReceiver(String inputPartitionId, boolean ackLastProcessedMessages) {
         EventListener eventListener = new EventListener(inputPartitionId);
         if(ackLastProcessedMessages) {
-            log.info("SolaceSparkConnector - last processed messages for list {}", SolaceMessageTracker.getMessageIDs(uniqueId));
+            log.info("SolaceSparkConnector - last processed messages for list {}", this.lastKnownOffset);
             List<String> messageIDs = Arrays.stream(this.lastKnownOffset.split(",")).collect(Collectors.toList());
             eventListener = new EventListener(inputPartitionId, messageIDs, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
         }

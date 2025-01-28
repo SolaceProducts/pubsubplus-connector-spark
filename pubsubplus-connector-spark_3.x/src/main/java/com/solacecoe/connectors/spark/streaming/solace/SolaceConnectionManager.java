@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.spark.util.ShutdownHookManager;
 import scala.runtime.BoxedUnit;
 
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SolaceConnectionManager {
@@ -29,11 +30,7 @@ public class SolaceConnectionManager {
     }
 
     public static SolaceBroker getFirstConnection() {
-        return brokerConnections.values().stream().filter(value -> value != null && !value.isLvqConnection()).findFirst().orElse(null);
-    }
-
-    public static ConcurrentHashMap<String, SolaceBroker> getConnections() {
-        return brokerConnections;
+        return brokerConnections.values().stream().filter(Objects::nonNull).findFirst().orElse(null);
     }
 
     public static void close() {
