@@ -5,12 +5,11 @@ import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.SDTMap;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessage;
+import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
-
 
 public class SolaceInboundMessageMapper implements InboundMessageMapper<SolaceRecord>, Serializable {
     private static final long serialVersionUID = 42L;
@@ -22,10 +21,10 @@ public class SolaceInboundMessageMapper implements InboundMessageMapper<SolaceRe
 
     @Override
     public SolaceRecord map(BytesXMLMessage msg) throws Exception {
-        Map<String, Object> properties = null;
+        Object2ObjectMap<String, Object> properties = null;
         SDTMap map = msg.getProperties();
         if (map != null) {
-            properties = new HashMap<>();
+            properties = new Object2ObjectOpenHashMap<>();
             for (String key : map.keySet()) {
                 properties.put(key, map.get(key));
             }

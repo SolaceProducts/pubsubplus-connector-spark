@@ -337,6 +337,7 @@ public class SolaceBroker implements Serializable {
             }
         });
         flowReceivers.clear();
+        eventListeners.forEach(eventListener -> eventListener.getMessages().clear());
         eventListeners.clear();
         lvqEventListeners.clear();
     }
@@ -357,7 +358,7 @@ public class SolaceBroker implements Serializable {
     }
 
     public LinkedBlockingQueue<SolaceMessage> getMessages(int index) {
-        log.info("Requesting messages from event listener {}, total messages available :: {}", index, this.eventListeners.get(index).getMessages().size());
+//        log.info("Requesting messages from event listener {}, total messages available :: {}", index, this.eventListeners.get(index).getMessages().size());
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 

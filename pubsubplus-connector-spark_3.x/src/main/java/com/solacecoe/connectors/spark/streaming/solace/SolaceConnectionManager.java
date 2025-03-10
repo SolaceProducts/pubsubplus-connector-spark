@@ -14,9 +14,9 @@ public class SolaceConnectionManager {
     private static final ConcurrentHashMap<String, SolaceBroker> brokerConnections = new ConcurrentHashMap<>();
 
     static {
-        Runtime.getRuntime().addShutdownHook(new Thread(SolaceConnectionManager::close));
+        Runtime.getRuntime().addShutdownHook(new Thread(SolaceConnectionManager::closeAllConnections));
         ShutdownHookManager.addShutdownHook(() -> {
-            close();
+            closeAllConnections();
             return BoxedUnit.UNIT;
         });
     }
@@ -33,11 +33,23 @@ public class SolaceConnectionManager {
         return brokerConnections.values().stream().filter(Objects::nonNull).findFirst().orElse(null);
     }
 
-    public static void close() {
+    public static void closeAllConnections() {
         logger.info("SolaceSparkConnector - Closing connection manager for {} brokers sessions", brokerConnections.size());
         brokerConnections.forEach((id, broker) -> {
             logger.info("SolaceSparkConnector - Closing connection for broker session {}", broker.getUniqueName());
             broker.close();
+        });
+        brokerConnections.clear();
+        SolaceMessageTracker.reset();
+    }
+
+    public static void close(String connectionId) {
+        logger.info("SolaceSparkConnector - Closing connection manager for {} brokers sessions", brokerConnections.size());
+        brokerConnections.forEach((id, broker) -> {
+            if(id.equals(connectionId)) {
+                logger.info("SolaceSparkConnector - Closing connection for broker session {}", broker.getUniqueName());
+                broker.close();
+            }
         });
         brokerConnections.clear();
         SolaceMessageTracker.reset();

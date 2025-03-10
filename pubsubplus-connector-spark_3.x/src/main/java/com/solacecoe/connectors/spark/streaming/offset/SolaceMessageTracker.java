@@ -12,18 +12,18 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class SolaceMessageTracker implements Serializable {
     private static final Logger logger = LogManager.getLogger(SolaceMessageTracker.class);
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<SolaceMessage>> messages = new ConcurrentHashMap<>();
-    private static ConcurrentHashMap<String, CopyOnWriteArrayList<String>> messageIDs = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, String> lastProcessedMessageId = new ConcurrentHashMap<>();
     private static CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoint = new CopyOnWriteArrayList<>();
 
     public static String getProcessedMessagesIDs(String uniqueId) {
-        if(messageIDs.containsKey(uniqueId)) {
-            return String.join(",", messageIDs.get(uniqueId));
+        if(lastProcessedMessageId.containsKey(uniqueId)) {
+            return lastProcessedMessageId.get(uniqueId);
         }
         return null;
     }
 
     public static void removeProcessedMessagesIDs(String uniqueId) {
-        messageIDs.remove(uniqueId);
+        lastProcessedMessageId.remove(uniqueId);
     }
 
     public static void addMessage(String id, SolaceMessage message) {
@@ -43,21 +43,16 @@ public final class SolaceMessageTracker implements Serializable {
     }
 
     public static void addMessageID(String id, String messageId) {
-        CopyOnWriteArrayList<String> messageIDList = new CopyOnWriteArrayList<>();
-        if (messageIDs.containsKey(id)) {
-            messageIDList = SolaceMessageTracker.messageIDs.get(id);
-        }
-        messageIDList.add(messageId);
-        SolaceMessageTracker.messageIDs.put(id, messageIDList);
+        SolaceMessageTracker.lastProcessedMessageId.put(id, messageId);
     }
 
     public static boolean containsMessageID(String messageId) {
-        return messageIDs.values().stream().anyMatch(list -> list.contains(messageId));
+        return lastProcessedMessageId.values().stream().anyMatch(id -> id.equals(messageId));
     }
 
     public static void reset() {
         messages = new ConcurrentHashMap<>();
-        messageIDs = new ConcurrentHashMap<>();
+        lastProcessedMessageId = new ConcurrentHashMap<>();
         checkpoint = new CopyOnWriteArrayList<>();
         logger.info("SolaceSparkConnector - Cleared all messages from Offset Manager");
     }

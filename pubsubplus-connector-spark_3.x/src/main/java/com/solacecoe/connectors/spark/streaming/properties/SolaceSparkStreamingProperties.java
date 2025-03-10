@@ -10,6 +10,7 @@ public class SolaceSparkStreamingProperties {
     public static final String QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT = "10000";
     public static final String BATCH_SIZE = "batchSize";
     public static final String BATCH_SIZE_DEFAULT = "0";
+    public static final String PREFERRED_LOCATIONS = "preferred_locations";
     public static final String ACK_LAST_PROCESSED_MESSAGES = "ackLastProcessedMessages";
     public static final String ACK_LAST_PROCESSED_MESSAGES_DEFAULT = "false";
     public static final String INCLUDE_HEADERS = "includeHeaders";

@@ -10,7 +10,6 @@ import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumer
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 
 import com.solacesystems.jcsmp.*;
-import com.solacesystems.jcsmp.impl.ReplicationGroupMessageIdImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,15 +56,9 @@ public class EventListener implements XMLMessageListener, Serializable {
                         }
                     }
                 }
-//                if(lastKnownMessageIDs.contains(messageID)) {
-//                    log.info("SolaceSparkConnector- Acknowledging message with ID {} as it is present in last known offset and user has set ackLastProcessedMessages to true in configuration", messageID);
-//                    msg.ackMessage();
-//                    log.info("SolaceSparkConnector- Acknowledged message with ID {} present in last known offset", messageID);
-//                }
             } else {
                 this.messages.add(new SolaceMessage(msg));
             }
-//            log.info("Current messages in consumer "+this.id+" is :: " + this.messages.size());
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);
             throw new SolaceConsumerException(e);
@@ -79,7 +72,7 @@ public class EventListener implements XMLMessageListener, Serializable {
             solaceBroker.handleException("SolaceSparkConnector - Consumer received exception", e);
         } else {
             log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
-            throw new RuntimeException(e);
+            throw new SolaceConsumerException(e);
         }
     }
 

@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.solacecoe.connectors</groupId>
   <artifactId>pubsubplus-connector-spark</artifactId>
-  <version>3.0.0-EA</version>
+  <version>3.1.0-BETA-Fix</version>
   <name>pubsubplus-connector-spark</name>
   <description>Solace PubSub+ Connector for Spark streams data from Solace PubSub+ broker to Spark Data Sources.</description>
   <url>https://solace.com/pubsubplus-connector-spark</url>
@@ -34,19 +34,19 @@
     <url>https://github.com/SolaceDev/spark-connector-v2.git/pubsubplus-connector-spark</url>
   </scm>
   <properties>
-    <docs.build.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/generated-docs</docs.build.directory>
+    <docs.build.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/pubsubplus-connector-spark_3.x/target/generated-docs</docs.build.directory>
     <maven.compiler.source>8</maven.compiler.source>
-    <shared-remote-resources.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/shared-remote-resources</shared-remote-resources.directory>
+    <shared-remote-resources.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/pubsubplus-connector-spark_3.x/target/shared-remote-resources</shared-remote-resources.directory>
     <shared-remote-resources.process.asciidoctor-resources.skip>false</shared-remote-resources.process.asciidoctor-resources.skip>
     <release-notes.url>https://solace.com/pubsubplus-connector-spark</release-notes.url>
-    <shared-remote-resources.build.main.processed.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/shared-remote-resources/build/main/processed</shared-remote-resources.build.main.processed.directory>
-    <generated-filtered-resource.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/generated-filtered-resources</generated-filtered-resource.directory>
-    <revision>3.0.0-EA</revision>
+    <shared-remote-resources.build.main.processed.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/pubsubplus-connector-spark_3.x/target/shared-remote-resources/build/main/processed</shared-remote-resources.build.main.processed.directory>
+    <generated-filtered-resource.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/pubsubplus-connector-spark_3.x/target/generated-filtered-resources</generated-filtered-resource.directory>
+    <revision>3.1.0</revision>
     <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
     <sha1></sha1>
     <maven.compiler.target>8</maven.compiler.target>
-    <shared-remote-resources.build.main.raw.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/shared-remote-resources/build/main/raw</shared-remote-resources.build.main.raw.directory>
-    <changelist></changelist>
+    <shared-remote-resources.build.main.raw.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/pubsubplus-connector-spark_3.x/target/shared-remote-resources/build/main/raw</shared-remote-resources.build.main.raw.directory>
+    <changelist>-BETA-Fix</changelist>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
   <dependencyManagement>
@@ -55,6 +55,11 @@
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-compress</artifactId>
         <version>1.26.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-core</artifactId>
+        <version>2.15.0</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -99,6 +104,12 @@
       <groupId>com.nimbusds</groupId>
       <artifactId>oauth2-oidc-sdk</artifactId>
       <version>11.19.1</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>it.unimi.dsi</groupId>
+      <artifactId>fastutil</artifactId>
+      <version>8.5.15</version>
       <scope>compile</scope>
     </dependency>
   </dependencies>

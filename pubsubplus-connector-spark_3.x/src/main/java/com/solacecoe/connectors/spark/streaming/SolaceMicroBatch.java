@@ -8,18 +8,25 @@ import com.solacecoe.connectors.spark.streaming.partitions.SolaceDataSourceReade
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceInputPartition;
 import com.solacecoe.connectors.spark.streaming.solace.LVQEventListener;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.SparkEnv;
+import org.apache.spark.scheduler.ExecutorCacheTaskLocation;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream;
 import org.apache.spark.sql.connector.read.streaming.Offset;
+import org.apache.spark.storage.BlockManager;
+import org.apache.spark.storage.BlockManagerId;
+import org.apache.spark.storage.BlockManagerMaster;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
 public class SolaceMicroBatch implements MicroBatchStream {
     private static final Logger log = LogManager.getLogger(SolaceMicroBatch.class);
@@ -33,6 +40,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
     private String lastKnownMessageIds = "";
+    private String queueName = "";
 
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
         this.properties = properties;
@@ -101,10 +109,10 @@ public class SolaceMicroBatch implements MicroBatchStream {
         String solaceOffsetIndicator = properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT);
         log.info("SolaceSparkConnector - offsetIndicator is set to {}", solaceOffsetIndicator);
 
+        this.queueName = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
         this.solaceBroker = new SolaceBroker(properties, "lvq-consumer");
         LVQEventListener lvqEventListener = new LVQEventListener();
         this.solaceBroker.addLVQReceiver(lvqEventListener);
-        SolaceConnectionManager.addConnection("lvq-"+0, this.solaceBroker);
         log.info("SolaceSparkConnector - Initialization Completed");
     }
 
@@ -122,11 +130,43 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     @Override
     public InputPartition[] planInputPartitions(Offset start, Offset end) {
-        for(int i=0; i<partitions; i++) {
-            inputPartitionsList.put("partition-" + i, new SolaceInputPartition("partition-" + i, latestOffsetId, ""));
+        if(inputPartitionsList.size() < partitions) {
+            for (int i = 0; i < partitions; i++) {
+                inputPartitionsList.put(String.valueOf(queueName.hashCode() + i), new SolaceInputPartition((queueName.hashCode() + i), latestOffsetId, getSortedExecutorList()));
+            }
         }
 
         return inputPartitionsList.values().toArray(new InputPartition[0]);
+    }
+
+    private List<String> getSortedExecutorList() {
+        BlockManager bm = SparkEnv.get().blockManager();
+        BlockManagerMaster master = bm.master();
+
+        // Get the list of peers (executors)
+        Seq<BlockManagerId> peersSeq = master.getPeers(bm.blockManagerId());
+
+        // Convert Scala Seq to a Java List
+        List<BlockManagerId> peers = JavaConverters.seqAsJavaList(peersSeq);
+
+        List<ExecutorCacheTaskLocation> executorList = new ArrayList<>();
+
+        // Convert BlockManagerId to ExecutorCacheTaskLocation
+        for (BlockManagerId x : peers) {
+            executorList.add(new ExecutorCacheTaskLocation(x.host(), x.executorId()));
+        }
+
+        // Sort the list based on the compare logic
+        executorList.sort((a, b) -> {
+            if (a.host().equals(b.host())) {
+                return a.executorId().compareTo(b.executorId());
+            } else {
+                return a.host().compareTo(b.host());
+            }
+        });
+
+        // Map the result to string and return
+        return executorList.stream().map(ExecutorCacheTaskLocation::toString).collect(Collectors.toList());
     }
 
     @Override
@@ -164,7 +204,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public void stop() {
         log.info("SolaceSparkConnector - Closing Spark Connector");
-        SolaceConnectionManager.close();
+        this.solaceBroker.close();
     }
 
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getCheckpoint() {
