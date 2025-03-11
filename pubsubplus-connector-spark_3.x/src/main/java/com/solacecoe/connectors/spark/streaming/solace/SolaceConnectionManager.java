@@ -44,14 +44,13 @@ public class SolaceConnectionManager {
     }
 
     public static void close(String connectionId) {
-        logger.info("SolaceSparkConnector - Closing connection manager for {} brokers sessions", brokerConnections.size());
+        logger.info("SolaceSparkConnector - Closing connection manager for connection {}", connectionId);
         brokerConnections.forEach((id, broker) -> {
             if(id.equals(connectionId)) {
                 logger.info("SolaceSparkConnector - Closing connection for broker session {}", broker.getUniqueName());
                 broker.close();
             }
         });
-        brokerConnections.clear();
-        SolaceMessageTracker.reset();
+        brokerConnections.remove(connectionId);
     }
 }

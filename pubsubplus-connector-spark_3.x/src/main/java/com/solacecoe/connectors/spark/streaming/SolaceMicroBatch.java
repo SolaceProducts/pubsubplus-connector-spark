@@ -36,7 +36,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private final int partitions;
     private final int batchSize;
     private final boolean includeHeaders;
-    private final String checkpointLocation;
+    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
     private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
     private String lastKnownMessageIds = "";
@@ -44,7 +44,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
         this.properties = properties;
-        this.checkpointLocation = checkpointLocation;
+        this.checkpoints = new CopyOnWriteArrayList<>();
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
 
@@ -119,11 +119,13 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public Offset latestOffset() {
         latestOffsetId+=batchSize;
-        CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints = this.getCheckpoint();
+        checkpoints = this.getCheckpoint();
         if(checkpoints != null && !checkpoints.isEmpty()) {
             checkpoints.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
 
             return new SolaceSourceOffset(latestOffsetId, checkpoints);
+        } else {
+            checkpoints = new CopyOnWriteArrayList<>();
         }
         return new SolaceSourceOffset(latestOffsetId, new CopyOnWriteArrayList<>());
     }
@@ -172,16 +174,16 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public PartitionReaderFactory createReaderFactory() {
         log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: {}", this.includeHeaders);
-        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.lastKnownMessageIds, this.properties);
+        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.lastKnownMessageIds, this.properties, this.checkpoints);
     }
 
     @Override
     public Offset initialOffset() {
-        CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints = this.getCheckpoint();
-        if(checkpoints != null && !checkpoints.isEmpty()) {
-            checkpoints.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
+        CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> existingCheckpoints = this.getCheckpoint();
+        if(existingCheckpoints != null && !existingCheckpoints.isEmpty()) {
+            existingCheckpoints.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
 
-            return new SolaceSourceOffset(lastKnownOffsetId, checkpoints);
+            return new SolaceSourceOffset(lastKnownOffsetId, existingCheckpoints);
         }
         return new SolaceSourceOffset(lastKnownOffsetId, new CopyOnWriteArrayList<>());
     }

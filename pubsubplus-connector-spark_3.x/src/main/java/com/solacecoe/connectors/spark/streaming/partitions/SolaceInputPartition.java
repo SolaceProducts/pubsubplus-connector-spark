@@ -17,7 +17,7 @@ public class SolaceInputPartition implements InputPartition, Serializable {
     private final int offsetId;
     public SolaceInputPartition(int partitionHashCode, int offsetId, List<String> executorLocations) {
         this.partitionHashCode = partitionHashCode;
-        this.id = String.valueOf(partitionHashCode);
+        this.id = Integer.toString(partitionHashCode);
         log.info("SolaceSparkConnector - Initializing Solace Input partition with id {}", id);
         this.offsetId = offsetId;
         this.executorLocations = executorLocations;
