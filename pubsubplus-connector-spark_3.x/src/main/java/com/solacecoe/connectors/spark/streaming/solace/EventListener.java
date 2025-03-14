@@ -50,9 +50,8 @@ public class EventListener implements XMLMessageListener, Serializable {
                         ReplicationGroupMessageId currentMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(messageID);
 
                         if (currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) {
-                            log.info("SolaceSparkConnector- Acknowledging message with ID {} as it is present in last known offset and user has set ackLastProcessedMessages to true in configuration", messageID);
                             msg.ackMessage();
-                            log.info("SolaceSparkConnector- Acknowledged message with ID {} present in last known offset", messageID);
+                            log.info("SolaceSparkConnector- Acknowledged message with ID {} present in last known offset as user has set ackLastProcessedMessages to true in configuration", messageID);
                         }
                     }
                 }

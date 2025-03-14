@@ -208,8 +208,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                 SolaceConnectionManager.close(this.solaceInputPartition.getId());
                 SolaceMessageTracker.resetId(uniqueId);
             } else if (context.isCompleted()) {
-                log.info("SolaceSparkConnector - Total time taken by executor is {}ms for Task {}", context.taskMetrics().executorRunTime(),uniqueId);
+                log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(),uniqueId);
+                long startTime = System.currentTimeMillis();
                 SolaceMessageTracker.ackMessages(uniqueId);
+                log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
                 String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(uniqueId);
                 if (processedMessageIDs != null) {
                     SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = this.getCheckpoint(this.solaceInputPartition.getId());
@@ -221,6 +223,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                     }
                     this.updateCheckpoint(solaceSparkPartitionCheckpoint);
                     solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), this.getCheckpoint());
+                    log.trace("SolaceSparkConnector - Published checkpoint to LVQ with payload {} ", this.getCheckpoint());
                     SolaceMessageTracker.removeProcessedMessagesIDs(uniqueId);
                 }
                 if(closeReceiversOnPartitionClose) {
@@ -240,7 +243,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private void createReceiver(String inputPartitionId, boolean ackLastProcessedMessages) {
         EventListener eventListener = new EventListener(inputPartitionId);
         if(ackLastProcessedMessages) {
-            log.info("SolaceSparkConnector - last processed messages for list {}", this.lastKnownOffset);
+            log.info("SolaceSparkConnector - Ack last processed messages is set to true for messages {}", this.lastKnownOffset);
             List<String> messageIDs = Arrays.stream(this.lastKnownOffset.split(",")).collect(Collectors.toList());
             eventListener = new EventListener(inputPartitionId, messageIDs, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
         }

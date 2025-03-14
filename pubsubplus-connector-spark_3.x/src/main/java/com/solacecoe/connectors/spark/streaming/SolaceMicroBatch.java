@@ -41,10 +41,12 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private final SolaceBroker solaceBroker;
     private String lastKnownMessageIds = "";
     private String queueName = "";
+//    private final SolaceSourceInitialOffset solaceSourceInitialOffset;
 
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
         this.properties = properties;
         this.checkpoints = new CopyOnWriteArrayList<>();
+//        solaceSourceInitialOffset = new SolaceSourceInitialOffset(SparkSession.getActiveSession().get(), checkpointLocation, scala.reflect.ClassTag$.MODULE$.apply(SolaceSourceOffset.class));
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
 
@@ -132,11 +134,12 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     @Override
     public InputPartition[] planInputPartitions(Offset start, Offset end) {
-        if(inputPartitionsList.size() < partitions) {
-            for (int i = 0; i < partitions; i++) {
-                inputPartitionsList.put(String.valueOf(queueName.hashCode() + i), new SolaceInputPartition((queueName.hashCode() + i), latestOffsetId, getSortedExecutorList()));
-            }
+//        if(inputPartitionsList.size() < partitions) {
+        for (int i = 0; i < partitions; i++) {
+            int partitionHashCode = (queueName + "-" + i).hashCode();
+            inputPartitionsList.put(String.valueOf(partitionHashCode), new SolaceInputPartition(partitionHashCode, latestOffsetId, getSortedExecutorList()));
         }
+//        }
 
         return inputPartitionsList.values().toArray(new InputPartition[0]);
     }
@@ -157,6 +160,8 @@ public class SolaceMicroBatch implements MicroBatchStream {
         for (BlockManagerId x : peers) {
             executorList.add(new ExecutorCacheTaskLocation(x.host(), x.executorId()));
         }
+
+        log.info("SolaceSparkConnector - Available executor nodes {}", executorList.size());
 
         // Sort the list based on the compare logic
         executorList.sort((a, b) -> {
@@ -185,6 +190,11 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
             return new SolaceSourceOffset(lastKnownOffsetId, existingCheckpoints);
         }
+//        log.info("SolaceSparkConnector - Getting initial offset from checkpoint location");
+//        long batchId = (long) solaceSourceInitialOffset.getLatestBatchId().getOrElse(() -> 0l);
+//        SolaceSourceOffset sourceOffset = (SolaceSourceOffset) solaceSourceInitialOffset.get(batchId).getOrElse(() -> new SolaceSourceOffset(lastKnownOffsetId, new CopyOnWriteArrayList<>()));
+//        log.info("SolaceSparkConnector - initialOffset is set to {}", sourceOffset.json());
+//        return (SolaceSourceOffset) solaceSourceInitialOffset.get(batchId).getOrElse(() -> new SolaceSourceOffset(lastKnownOffsetId, new CopyOnWriteArrayList<>()));
         return new SolaceSourceOffset(lastKnownOffsetId, new CopyOnWriteArrayList<>());
     }
 
@@ -193,6 +203,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         SolaceSourceOffset solaceSourceOffset = new Gson().fromJson(json, SolaceSourceOffset.class);
         if(solaceSourceOffset != null) {
             lastKnownOffsetId = solaceSourceOffset.getOffset();
+            solaceSourceOffset.getCheckpoints().forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
         }
 
         return solaceSourceOffset;
