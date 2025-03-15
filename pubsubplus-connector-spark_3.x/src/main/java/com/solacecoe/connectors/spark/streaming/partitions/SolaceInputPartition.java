@@ -34,7 +34,7 @@ public class SolaceInputPartition implements InputPartition, Serializable {
 
     @Override
     public String[] preferredLocations() {
-        log.info("SolaceSparkConnector - Getting preferred locations");
+        log.info("SolaceSparkConnector - Getting preferred locations for input partition {}", id);
         Optional<String> executorLocation = this.getExecutorLocation(this.executorList, this.partitionHashCode);
         return executorLocation.map(s -> new String[]{s}).orElseGet(() -> new String[]{""});
     }
