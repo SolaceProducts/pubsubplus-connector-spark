@@ -21,6 +21,7 @@ import org.testcontainers.solace.Service;
 import org.testcontainers.solace.SolaceContainer;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -48,7 +49,7 @@ class SolaceSparkStreamingSourceIT {
                 .withShmSize(SHM_SIZE)
                 .withUlimits(ulimitList)
                 .withCpuCount(1l);
-    }).withExposedPorts(8080, 55555);
+    }).withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF).withTopic("solace/spark/connector/offset", Service.SMF);
     private SparkSession sparkSession;
     @BeforeAll
     public void beforeAll() throws ApiException {
@@ -99,7 +100,13 @@ class SolaceSparkStreamingSourceIT {
 
             for (int i = 0; i < 100; i++) {
                 TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-                textMessage.setText("Hello Spark!");
+                if(i <= 90) {
+                    textMessage.setText("Hello Spark!");
+                } else if(i <= 95) {
+                    textMessage.writeAttachment("Hello Spark!".getBytes(StandardCharsets.UTF_8));
+                } else {
+                    textMessage.writeBytes("Hello Spark!".getBytes(StandardCharsets.UTF_8));
+                }
                 textMessage.setPriority(1);
                 textMessage.setDMQEligible(true);
                 SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
@@ -694,6 +701,33 @@ class SolaceSparkStreamingSourceIT {
                     .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
                     .option(SolaceSparkStreamingProperties.BATCH_SIZE, "-1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                System.out.println(dataset1.count());
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    void Should_Fail_IfLVQTopic_Has_No_Permission_To_Publish() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, "invalid/topic")
                     .option("checkpointLocation", path.toAbsolutePath().toString())
                     .format("solace");
             Dataset<Row> dataset = reader.load();

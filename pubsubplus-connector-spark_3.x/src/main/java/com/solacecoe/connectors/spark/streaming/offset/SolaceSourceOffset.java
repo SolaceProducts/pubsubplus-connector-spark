@@ -16,7 +16,7 @@ public class SolaceSourceOffset extends Offset {
         this.offset = offset;
         this.checkpoints = checkpoints;
     }
-    
+
     @Override
     public String json() {
         String checkpointsJson = new Gson().toJson(checkpoints);
@@ -25,10 +25,6 @@ public class SolaceSourceOffset extends Offset {
 
     public int getOffset() {
         return offset;
-    }
-
-    public void setOffset(int offset) {
-        this.offset = offset;
     }
 
     public CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getCheckpoints() {
