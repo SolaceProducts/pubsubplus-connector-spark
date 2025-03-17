@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SolaceSparkStreamingSinkIT {
-    private final SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF)
+    private final SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:10.11.0.132").withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF)
             .withTopic("random/topic", Service.SMF).withTopic("Spark/Topic/0", Service.SMF)
             .withTopic("solace/spark/connector/offset", Service.SMF);
     private SparkSession sparkSession;
