@@ -43,7 +43,13 @@ import static org.testcontainers.shaded.org.hamcrest.Matchers.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SolaceSparkStreamingMessageReplayIT {
-    private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withSharedMemorySize(2147483648l).withExposedPorts(8080, 55555);
+    private static final Long SHM_SIZE = (long) Math.pow(1024, 3);
+    private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withCreateContainerCmdModifier(cmd ->{
+        cmd.getHostConfig()
+                .withShmSize(SHM_SIZE)
+                .withMemorySwap(-1L)
+                .withMemoryReservation(0L);
+    }).withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
     private String replicationGroupMessageId = "";
     private String messageTimestamp = "";

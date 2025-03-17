@@ -36,7 +36,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SolaceSparkStreamingSourceIT {
     private SempV2Api sempV2Api = null;
-    private final SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withSharedMemorySize(2147483648l).withExposedPorts(8080, 55555);
+    private static final Long SHM_SIZE = (long) Math.pow(1024, 3);
+    private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withCreateContainerCmdModifier(cmd ->{
+        cmd.getHostConfig()
+                .withShmSize(SHM_SIZE)
+                .withMemorySwap(-1L)
+                .withMemoryReservation(0L);
+    }).withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
     @BeforeAll
     public void beforeAll() throws ApiException {
