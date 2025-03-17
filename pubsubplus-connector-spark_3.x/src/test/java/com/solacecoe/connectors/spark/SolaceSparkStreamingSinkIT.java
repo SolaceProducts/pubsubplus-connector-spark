@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -36,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class SolaceSparkStreamingSinkIT {
     private final SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF)
             .withTopic("random/topic", Service.SMF).withTopic("Spark/Topic/0", Service.SMF)
-            .withTopic("solace/spark/connector/offset", Service.SMF);
+            .withTopic("solace/spark/connector/offset", Service.SMF).withStartupTimeout(Duration.ofSeconds(120L)).withStartupAttempts(2);
     private SparkSession sparkSession;
     @BeforeAll
     public void beforeAll() throws ApiException {

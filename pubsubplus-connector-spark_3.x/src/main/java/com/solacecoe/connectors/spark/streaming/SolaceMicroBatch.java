@@ -137,7 +137,8 @@ public class SolaceMicroBatch implements MicroBatchStream {
 //        if(inputPartitionsList.size() < partitions) {
         for (int i = 0; i < partitions; i++) {
             int partitionHashCode = (queueName + "-" + i).hashCode();
-            inputPartitionsList.put(String.valueOf(partitionHashCode), new SolaceInputPartition(partitionHashCode, latestOffsetId, getSortedExecutorList()));
+            Optional<String> preferredLocation = getExecutorLocation(getSortedExecutorList(), partitionHashCode);
+            inputPartitionsList.put(String.valueOf(partitionHashCode), new SolaceInputPartition(partitionHashCode, latestOffsetId, preferredLocation.orElse("")));
         }
 //        }
 
@@ -174,6 +175,24 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
         // Map the result to string and return
         return executorList.stream().map(ExecutorCacheTaskLocation::toString).collect(Collectors.toList());
+    }
+
+    // Equivalent of floorMod function
+    private int floorMod(long a, int b) {
+        return (int)((a % b + b) % b);
+    }
+
+    private Optional<String> getExecutorLocation(List<String> executorLocations, int partitionHashCode) {
+        int numExecutors = executorLocations.size();
+
+        if (numExecutors > 0) {
+            int executorIndex = floorMod(partitionHashCode, numExecutors);
+            log.info("SolaceSparkConnector - Preferred location for partition {} is at executor {}", partitionHashCode, executorLocations.get(executorIndex));
+            return Optional.of(executorLocations.get(executorIndex));
+        } else {
+            log.info("SolaceSparkConnector - No Executors present");
+            return Optional.empty();
+        }
     }
 
     @Override
