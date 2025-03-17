@@ -43,7 +43,7 @@ import static org.testcontainers.shaded.org.hamcrest.Matchers.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SolaceSparkStreamingMessageReplayIT {
-    private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withExposedPorts(8080, 55555);
+    private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withSharedMemorySize(2147483648l).withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
     private String replicationGroupMessageId = "";
     private String messageTimestamp = "";
