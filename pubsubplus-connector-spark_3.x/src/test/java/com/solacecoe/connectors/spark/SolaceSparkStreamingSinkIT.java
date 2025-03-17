@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark;
 
+import com.github.dockerjava.api.model.Ulimit;
 import com.solace.semp.v2.config.ApiException;
 import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
@@ -25,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -35,7 +37,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SolaceSparkStreamingSinkIT {
-    private final SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:10.11.0.132").withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF)
+    private static final Long SHM_SIZE = (long) Math.pow(1024, 3);
+    private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withCreateContainerCmdModifier(cmd ->{
+                Ulimit ulimit = new Ulimit("nofile", 2448, 1048576);
+                List<Ulimit> ulimitList = new ArrayList<>();
+                ulimitList.add(ulimit);
+                cmd.getHostConfig()
+                        .withShmSize(SHM_SIZE)
+                        .withUlimits(ulimitList)
+                        .withCpuCount(1l);
+            }).withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF)
             .withTopic("random/topic", Service.SMF).withTopic("Spark/Topic/0", Service.SMF)
             .withTopic("solace/spark/connector/offset", Service.SMF);
     private SparkSession sparkSession;

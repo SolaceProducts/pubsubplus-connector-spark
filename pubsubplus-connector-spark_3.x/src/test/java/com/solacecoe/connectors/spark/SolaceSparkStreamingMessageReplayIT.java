@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark;
 
+import com.github.dockerjava.api.model.Ulimit;
 import com.solace.semp.v2.config.ApiException;
 import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
@@ -30,7 +31,9 @@ import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -45,10 +48,13 @@ import static org.testcontainers.shaded.org.hamcrest.Matchers.*;
 class SolaceSparkStreamingMessageReplayIT {
     private static final Long SHM_SIZE = (long) Math.pow(1024, 3);
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withCreateContainerCmdModifier(cmd ->{
+        Ulimit ulimit = new Ulimit("nofile", 2448, 1048576);
+        List<Ulimit> ulimitList = new ArrayList<>();
+        ulimitList.add(ulimit);
         cmd.getHostConfig()
                 .withShmSize(SHM_SIZE)
-                .withMemorySwap(-1L)
-                .withMemoryReservation(0L);
+                .withUlimits(ulimitList)
+                .withCpuCount(1l);
     }).withExposedPorts(8080, 55555);
     private SparkSession sparkSession;
     private String replicationGroupMessageId = "";
