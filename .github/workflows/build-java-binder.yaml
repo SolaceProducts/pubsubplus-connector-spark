@@ -115,6 +115,8 @@ jobs:
 
       - name: Run Unit/Integration Tests
         run: >-
+          export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
+          export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
           mvn -B clean verify
           jacoco:report 
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
