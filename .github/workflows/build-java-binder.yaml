@@ -114,8 +114,8 @@ jobs:
           java-version: 8
       - name: Set Docker Environment Variables
         run: |
-          export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
-          export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
+          export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
+          export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="/var/run/docker.sock"
       - name: Run Unit/Integration Tests
         run: >-
           mvn -B clean verify
