@@ -16,13 +16,7 @@ public class SolaceSourceOffset extends Offset {
         this.offset = offset;
         this.checkpoints = checkpoints;
     }
-
-    public SolaceSourceOffset(SerializedOffset serializedOffset) {
-        String json = serializedOffset.json();
-        JsonObject jsonObject = new Gson().fromJson(json, JsonObject.class);
-        this.offset = jsonObject.has("offset") ? jsonObject.get("offset").getAsInt() : 0;
-        this.checkpoints = jsonObject.has("checkpoints") ? new Gson().fromJson(jsonObject.get("checkpoints"), new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>(){}.getType()) : new CopyOnWriteArrayList<>();
-    }
+    
     @Override
     public String json() {
         String checkpointsJson = new Gson().toJson(checkpoints);
