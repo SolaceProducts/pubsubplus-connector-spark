@@ -89,6 +89,10 @@ jobs:
           export SKIP_FLAGS_NON_UNIT_TESTS="-Dcheckstyle.skip -Dpmd.skip -Dcpd.skip -Dfindbugs.skip -Dspotbugs.skip"
           echo "SKIP_FLAGS_NON_UNIT_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS" >> $GITHUB_ENV
           echo "SKIP_FLAGS_ALL_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS -DskipTests=true" >> $GITHUB_ENV
+          export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
+          echo "DOCKER_HOST=$DOCKER_HOST" >> $GITHUB_ENV
+          export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="/var/run/docker.sock"
+          echo "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=$TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE" >> $GITHUB_ENV
           if [[ $GITHUB_REF_NAME == "${{ inputs.main_branch }}" ]]; then
             export GITHUB_PACKAGES_DEPLOY=true
             export WHITESOURCE_SCAN=true
@@ -112,10 +116,7 @@ jobs:
         with:
           distribution: zulu
           java-version: 8
-      - name: Set Docker Environment Variables
-        run: |
-          export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
-          export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="/var/run/docker.sock"
+
       - name: Run Unit/Integration Tests
         run: >-
           mvn -B clean verify
