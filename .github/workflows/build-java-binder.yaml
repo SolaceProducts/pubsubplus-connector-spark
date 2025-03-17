@@ -70,8 +70,6 @@ jobs:
             secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
             secret/data/tools/githubactions SONAR_HOST_URL | SONAR_HOST_URL ;
             secret/data/tools/githubactions SONAR_TOKEN | SONAR_TOKEN ;
-            secret/data/tools/githubactions DOCKERHUB_USER | DOCKERHUB_USER ;
-            secret/data/tools/githubactions DOCKERHUB_PASS | DOCKERHUB_PASS ;
             secret/data/tools/githubactions WHITESOURCE_API_KEY | WHITESOURCE_API_KEY ;
 
       - name: Warn of Vault Login Failure

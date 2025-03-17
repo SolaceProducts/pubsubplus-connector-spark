@@ -29,7 +29,40 @@
 						<updatePolicy>always</updatePolicy>
 					</snapshots>
 				</repository>
+				<repository>
+					<id>github</id>
+					<url>https://maven.pkg.github.com/SolaceTechCOE/*</url>
+					<releases>
+						<enabled>true</enabled>
+						<updatePolicy>always</updatePolicy>
+					</releases>
+					<snapshots>
+						<enabled>true</enabled>
+						<updatePolicy>always</updatePolicy>
+					</snapshots>
+				</repository>
 			</repositories>
+			<pluginRepositories>
+				<pluginRepository>
+					<id>central</id>
+					<url>https://repo.maven.apache.org/maven2</url>
+					<snapshots>
+						<enabled>false</enabled>
+					</snapshots>
+				</pluginRepository>
+				<pluginRepository>
+					<id>github-solacedev</id>
+					<url>https://maven.pkg.github.com/SolaceDev/*</url>
+					<releases>
+						<enabled>true</enabled>
+						<updatePolicy>always</updatePolicy>
+					</releases>
+					<snapshots>
+						<enabled>true</enabled>
+						<updatePolicy>always</updatePolicy>
+					</snapshots>
+				</pluginRepository>
+			</pluginRepositories>
 		</profile>
 	</profiles>
 
@@ -41,17 +74,12 @@
 		</server>
 		<server>
 			<id>github</id>
-			<username>${env.GITHUB_ACTOR}</username>
-			<password>${env.GITHUB_TOKEN}</password>
+			<username>${env.PACKAGES_ADMIN_USER}</username>
+			<password>${env.PACKAGES_ADMIN_TOKEN}</password>
 		</server>
 		<server>
 			<id>gpg.passphrase</id>
-			<passphrase>${env.MAVEN_GPG_KEY_PASSPHRASE}</passphrase>
-		</server>
-		<server>
-			<id>ossrh</id>
-			<username>${env.MAVEN_OSSRH_USER}</username>
-			<password>${env.MAVEN_OSSRH_PASS}</password>
+			<passphrase>${env.GPG_PASSPHRASE}</passphrase>
 		</server>
 	</servers>
 </settings>
