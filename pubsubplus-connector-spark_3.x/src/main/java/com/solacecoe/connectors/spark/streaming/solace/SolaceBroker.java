@@ -2,11 +2,11 @@ package com.solacecoe.connectors.spark.streaming.solace;
 
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacesystems.jcsmp.*;
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidAccessTokenException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.*;
 import org.apache.spark.sql.catalyst.expressions.UnsafeMapData;
 import org.apache.spark.sql.types.DataTypes;
 import org.jetbrains.annotations.NotNull;
@@ -16,10 +16,9 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.concurrent.*;
 
 public class SolaceBroker implements Serializable {

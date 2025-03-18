@@ -1,10 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.offset;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
 import org.apache.spark.sql.connector.read.streaming.Offset;
-import org.apache.spark.sql.execution.streaming.SerializedOffset;
 
 import java.util.concurrent.CopyOnWriteArrayList;
 

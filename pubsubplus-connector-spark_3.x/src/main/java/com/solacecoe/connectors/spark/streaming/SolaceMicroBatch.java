@@ -1,11 +1,11 @@
 package com.solacecoe.connectors.spark.streaming;
 
 import com.google.gson.Gson;
-import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSourceOffset;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceDataSourceReaderFactory;
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceInputPartition;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.LVQEventListener;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
@@ -41,12 +41,10 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private final SolaceBroker solaceBroker;
     private String lastKnownMessageIds = "";
     private String queueName = "";
-//    private final SolaceSourceInitialOffset solaceSourceInitialOffset;
 
-    public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
+    public SolaceMicroBatch(Map<String, String> properties) {
         this.properties = properties;
         this.checkpoints = new CopyOnWriteArrayList<>();
-//        solaceSourceInitialOffset = new SolaceSourceInitialOffset(SparkSession.getActiveSession().get(), checkpointLocation, scala.reflect.ClassTag$.MODULE$.apply(SolaceSourceOffset.class));
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
 
@@ -134,13 +132,11 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     @Override
     public InputPartition[] planInputPartitions(Offset start, Offset end) {
-//        if(inputPartitionsList.size() < partitions) {
         for (int i = 0; i < partitions; i++) {
             int partitionHashCode = (queueName + "-" + i).hashCode();
             Optional<String> preferredLocation = getExecutorLocation(getSortedExecutorList(), partitionHashCode);
             inputPartitionsList.put(String.valueOf(partitionHashCode), new SolaceInputPartition(partitionHashCode, latestOffsetId, preferredLocation.orElse("")));
         }
-//        }
 
         return inputPartitionsList.values().toArray(new InputPartition[0]);
     }
@@ -187,7 +183,8 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
         if (numExecutors > 0) {
             int executorIndex = floorMod(partitionHashCode, numExecutors);
-            log.info("SolaceSparkConnector - Preferred location for partition {} is at executor {}", partitionHashCode, executorLocations.get(executorIndex));
+            String executor = executorLocations.get(executorIndex);
+            log.info("SolaceSparkConnector - Preferred location for partition {} is at executor {}", partitionHashCode, executor);
             return Optional.of(executorLocations.get(executorIndex));
         } else {
             log.info("SolaceSparkConnector - No Executors present");
@@ -209,11 +206,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
             return new SolaceSourceOffset(lastKnownOffsetId, existingCheckpoints);
         }
-//        log.info("SolaceSparkConnector - Getting initial offset from checkpoint location");
-//        long batchId = (long) solaceSourceInitialOffset.getLatestBatchId().getOrElse(() -> 0l);
-//        SolaceSourceOffset sourceOffset = (SolaceSourceOffset) solaceSourceInitialOffset.get(batchId).getOrElse(() -> new SolaceSourceOffset(lastKnownOffsetId, new CopyOnWriteArrayList<>()));
-//        log.info("SolaceSparkConnector - initialOffset is set to {}", sourceOffset.json());
-//        return (SolaceSourceOffset) solaceSourceInitialOffset.get(batchId).getOrElse(() -> new SolaceSourceOffset(lastKnownOffsetId, new CopyOnWriteArrayList<>()));
+
         return new SolaceSourceOffset(lastKnownOffsetId, new CopyOnWriteArrayList<>());
     }
 

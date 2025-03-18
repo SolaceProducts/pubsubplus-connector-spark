@@ -1,14 +1,15 @@
 package com.solacecoe.connectors.spark.streaming.solace.utils;
 
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacesystems.jcsmp.BytesXMLMessage;
-import com.solacesystems.jcsmp.SDTException;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaderMeta;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class SolaceUtils {
 

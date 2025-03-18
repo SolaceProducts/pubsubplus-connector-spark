@@ -41,6 +41,6 @@ public class SolaceScan implements Scan {
 
     @Override
     public MicroBatchStream toMicroBatchStream(String checkpointLocation) {
-        return new SolaceMicroBatch(properties, checkpointLocation);
+        return new SolaceMicroBatch(properties);
     }
 }

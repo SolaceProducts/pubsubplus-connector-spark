@@ -1,12 +1,12 @@
 package com.solacecoe.connectors.spark.streaming.partitions;
 
 import com.google.gson.Gson;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaders;
-import com.solacecoe.connectors.spark.streaming.solace.*;
-import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaders;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.EventListener;
+import com.solacecoe.connectors.spark.streaming.solace.*;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumerException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceMessageException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
@@ -30,7 +30,9 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
@@ -48,7 +50,6 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private final String lastKnownOffset;
     private final boolean closeReceiversOnPartitionClose;
     private final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
-//    private String lastProcessedMessageID = "";
     public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, String lastKnownOffset, Map<String, String> properties,
                                       TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints) {
         log.info("SolaceSparkConnector - Initializing Solace Input Partition reader with id {}", inputPartition.getId());
