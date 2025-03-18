@@ -135,7 +135,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         for (int i = 0; i < partitions; i++) {
             int partitionHashCode = (queueName + "-" + i).hashCode();
             Optional<String> preferredLocation = getExecutorLocation(getSortedExecutorList(), partitionHashCode);
-            inputPartitionsList.put(String.valueOf(partitionHashCode), new SolaceInputPartition(partitionHashCode, latestOffsetId, preferredLocation.orElse("")));
+            inputPartitionsList.put(String.valueOf(partitionHashCode), new SolaceInputPartition(partitionHashCode, preferredLocation.orElse("")));
         }
 
         return inputPartitionsList.values().toArray(new InputPartition[0]);

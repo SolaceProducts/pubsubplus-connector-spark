@@ -94,9 +94,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             this.solaceBroker.publishMessage(this.messageId, this.topic,
                     partitionKey, payload, timestamp, headersMap);
         } catch (Exception e) {
-            if(this.solaceBroker != null) {
-                this.solaceBroker.close();
-            }
+            this.solaceBroker.close();
             throw new SolacePublishException(e.getCause());
         }
     }

@@ -54,7 +54,7 @@ public class SolaceInboundMessageMapper implements InboundMessageMapper<SolaceRe
         if(msg.getProperties() != null && msg.getProperties().containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)) {
             partitionKey = msg.getProperties().getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
         }
-        // log.info("SolaceSparkConnector - Received Message ID String in Input partition - " + msg.getMessageId());
+
         return new SolaceRecord(
                 partitionKey,
                 msg.getDestination().getName(),
