@@ -35,7 +35,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final int batchSize;
     private final StructType schema;
     private final Map<String, String> properties;
-    private final SolaceBroker solaceBroker;
+    private SolaceBroker solaceBroker;
     private final transient UnsafeProjection projection;
     private final Map<String, SolaceDataWriterCommitMessage> commitMessages;
     private final Map<String, SolaceAbortMessage> abortedMessages;
@@ -48,8 +48,15 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         this.includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
         this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
-        this.solaceBroker = new SolaceBroker(properties, "producer");
-        this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
+        try {
+            this.solaceBroker = new SolaceBroker(properties, "producer");
+            this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
+        } catch (Exception e) {
+            if(this.solaceBroker != null) {
+                this.solaceBroker.close();
+            }
+            throw new SolacePublishException(e.getCause());
+        }
 
         this.projection = createProjection();
         this.commitMessages = new HashMap<>();
@@ -82,8 +89,15 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         if(projectedRow.getUTF8String(2) != null) {
             partitionKey = projectedRow.getUTF8String(2).toString();
         }
-        this.solaceBroker.publishMessage(this.messageId, this.topic,
-                partitionKey, payload, timestamp, headersMap);
+        try {
+            this.solaceBroker.publishMessage(this.messageId, this.topic,
+                    partitionKey, payload, timestamp, headersMap);
+        } catch (Exception e) {
+            if(this.solaceBroker != null) {
+                this.solaceBroker.close();
+            }
+            throw new SolacePublishException(e.getCause());
+        }
     }
 
     @Override

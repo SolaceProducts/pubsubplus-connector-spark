@@ -7,6 +7,7 @@ import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheck
 import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.EventListener;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumerException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceMessageException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
@@ -235,9 +236,14 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
     private void createNewConnection(String inputPartitionId, boolean ackLastProcessedMessages) {
         log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
-        solaceBroker = new SolaceBroker(properties, "consumer");
-        solaceBroker.initProducer();
-        createReceiver(inputPartitionId, ackLastProcessedMessages);
+        try {
+            solaceBroker = new SolaceBroker(properties, "consumer");
+            solaceBroker.initProducer();
+            createReceiver(inputPartitionId, ackLastProcessedMessages);
+        } catch (Exception e) {
+            solaceBroker.close();
+            throw new SolaceConsumerException(e);
+        }
     }
 
     private void createReceiver(String inputPartitionId, boolean ackLastProcessedMessages) {
