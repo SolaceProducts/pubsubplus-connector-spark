@@ -343,7 +343,7 @@ class SolaceSparkStreamingMessageReplayIT {
                     .format("solace");
             Dataset<Row> dataset = reader.load();
             StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                System.out.println(dataset1.count());
+                System.out.println("Should_Fail_IfReplayStrategyIsInvalid " + dataset1.count());
             }).start();
             streamingQuery.awaitTermination();
         });
@@ -367,7 +367,7 @@ class SolaceSparkStreamingMessageReplayIT {
                     .format("solace");
             Dataset<Row> dataset = reader.load();
             StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                System.out.println(dataset1.count());
+                System.out.println("Should_Fail_IfReplicationGroupMessageIdIsInvalid " + dataset1.count());
             }).start();
             streamingQuery.awaitTermination();
         });
@@ -390,7 +390,7 @@ class SolaceSparkStreamingMessageReplayIT {
                     .format("solace");
             Dataset<Row> dataset = reader.load();
             StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                System.out.println(dataset1.count());
+                System.out.println("Should_Fail_IfReplicationGroupMessageIdIsNull " + dataset1.count());
             }).start();
             streamingQuery.awaitTermination();
         });
@@ -414,7 +414,7 @@ class SolaceSparkStreamingMessageReplayIT {
                     .format("solace");
             Dataset<Row> dataset = reader.load();
             StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                System.out.println(dataset1.count());
+                System.out.println("Should_Fail_IfReplicationGroupMessageIdIsEmpty " + dataset1.count());
             }).start();
             streamingQuery.awaitTermination();
         });
