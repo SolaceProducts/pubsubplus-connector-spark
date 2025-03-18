@@ -83,6 +83,8 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
         }
         if(this.solaceBroker != null && this.solaceBroker.isException()) {
+            this.solaceBroker.close();
+            this.taskContext.markTaskFailed(this.solaceBroker.getException());
             throw new SolaceSessionException(this.solaceBroker.getException());
         }
         log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition {}", inputPartition.getId());
@@ -238,6 +240,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             createReceiver(inputPartitionId, ackLastProcessedMessages);
         } catch (Exception e) {
             solaceBroker.close();
+            this.taskContext.markTaskFailed(e);
             throw new SolaceConsumerException(e);
         }
     }
