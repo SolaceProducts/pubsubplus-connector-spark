@@ -40,7 +40,7 @@ import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.testcontainers.shaded.org.hamcrest.MatcherAssert.assertThat;
-import static org.testcontainers.shaded.org.hamcrest.Matchers.*;
+import static org.testcontainers.shaded.org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)

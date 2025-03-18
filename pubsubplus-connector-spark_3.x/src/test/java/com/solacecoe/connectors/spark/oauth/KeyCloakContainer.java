@@ -5,10 +5,9 @@ import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.MountableFile;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.security.KeyStore;
-import java.security.cert.CertificateFactory;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 public class KeyCloakContainer extends GenericContainer<KeyCloakContainer> {
     public static Network network = Network.SHARED;

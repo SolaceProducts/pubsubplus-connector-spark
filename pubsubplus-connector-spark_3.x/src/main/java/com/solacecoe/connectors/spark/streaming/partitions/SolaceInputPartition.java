@@ -8,7 +8,7 @@ import java.io.Serializable;
 
 public class SolaceInputPartition implements InputPartition, Serializable {
 
-    private final static Logger log = LogManager.getLogger(SolaceInputPartition.class);
+    private static final Logger log = LogManager.getLogger(SolaceInputPartition.class);
     private final String id;
     private final int offsetId;
     private final String preferredLocation;
@@ -22,16 +22,10 @@ public class SolaceInputPartition implements InputPartition, Serializable {
     @Override
     public String[] preferredLocations() {
         log.info("SolaceSparkConnector - Getting preferred locations for input partition {}", id);
-//        Optional<String> executorLocation = this.getExecutorLocation(this.executorList, this.partitionHashCode);
-//        return executorLocation.map(s -> new String[]{s}).orElseGet(() -> new String[]{""});
         return new String[]{preferredLocation};
     }
 
     public String getId() {
         return id;
-    }
-
-    public int getOffsetId() {
-        return offsetId;
     }
 }

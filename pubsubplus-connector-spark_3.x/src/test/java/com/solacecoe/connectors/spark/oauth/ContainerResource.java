@@ -2,7 +2,10 @@ package com.solacecoe.connectors.spark.oauth;
 
 import org.testcontainers.utility.MountableFile;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.security.KeyStore;
 import java.security.KeyStoreException;

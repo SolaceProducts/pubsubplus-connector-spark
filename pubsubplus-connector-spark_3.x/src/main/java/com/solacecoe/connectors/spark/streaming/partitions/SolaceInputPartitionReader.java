@@ -59,7 +59,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         this.properties = properties;
         this.taskContext = taskContext;
         this.checkpoints = checkpoints;
-        this.uniqueId = String.join(",", taskContext.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
+        this.uniqueId = String.join("-", taskContext.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
                 taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
                 Integer.toString(taskContext.stageId()),
                 Integer.toString(taskContext.partitionId()));
@@ -99,14 +99,12 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     public InternalRow get() {
         try {
             SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)).map(solaceMessage.bytesXMLMessage);
-//            log.info("SolaceSparkConnector - Current message {}", solaceRecord.getMessageId());
             long timestamp = solaceRecord.getSenderTimestamp();
             if (solaceRecord.getSenderTimestamp() == 0) {
                 timestamp = System.currentTimeMillis();
             }
             InternalRow row;
             if(this.includeHeaders) {
-//                log.info("SolaceSparkConnector - Adding event headers to Spark row");
                 Map<String, Object> headers = getStringObjectMap(solaceRecord);
                 MapData mapData = new ArrayBasedMapData(new GenericArrayData(headers.keySet().stream().filter(key -> headers.get(key) != null).map(UTF8String::fromString).toArray()), new GenericArrayData(headers.values().stream().filter(Objects::nonNull).map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
                 row = new GenericInternalRow(new Object[]{UTF8String.fromString(solaceRecord.getMessageId()),
@@ -122,9 +120,6 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
             SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
             SolaceMessageTracker.addMessage(this.uniqueId, solaceMessage);
-//            log.info("SolaceSparkConnector - Updated offset manager with offset");
-//            log.info("SolaceSparkConnector - Created Spark row for message with ID {}", solaceRecord.getMessageId());
-//            lastProcessedMessageID = solaceRecord.getMessageId();
             return row;
         } catch (Exception e) {
             log.error("SolaceSparkConnector- Exception while reading message", e);

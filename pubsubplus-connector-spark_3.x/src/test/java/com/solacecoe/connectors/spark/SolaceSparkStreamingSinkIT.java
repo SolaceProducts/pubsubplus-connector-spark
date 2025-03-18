@@ -13,7 +13,9 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.streaming.*;
+import org.apache.spark.sql.streaming.DataStreamReader;
+import org.apache.spark.sql.streaming.StreamingQuery;
+import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
@@ -25,7 +27,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -196,7 +197,7 @@ class SolaceSparkStreamingSinkIT {
 
     @Test
     @Order(2)
-    void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, StreamingQueryException, InterruptedException {
+    void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
         DataStreamReader reader = sparkSession.readStream()
