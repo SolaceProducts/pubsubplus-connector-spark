@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark;
 
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProperties;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import org.apache.spark.sql.connector.catalog.SupportsRead;
 import org.apache.spark.sql.connector.catalog.SupportsWrite;
 import org.apache.spark.sql.connector.catalog.Table;
@@ -8,7 +9,7 @@ import org.apache.spark.sql.connector.catalog.TableCapability;
 import org.apache.spark.sql.connector.read.ScanBuilder;
 import org.apache.spark.sql.connector.write.LogicalWriteInfo;
 import org.apache.spark.sql.connector.write.WriteBuilder;
-import org.apache.spark.sql.types.*;
+import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
 import java.util.HashSet;
@@ -41,7 +42,7 @@ public class SolaceStreamStructure implements SupportsRead, SupportsWrite, Table
 
     @Override
     public StructType schema() {
-        boolean includeHeaders = Boolean.parseBoolean(this.properties.getOrDefault("includeHeaders", "false"));
+        boolean includeHeaders = Boolean.parseBoolean(this.properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         return getSchema(includeHeaders);
     }
 

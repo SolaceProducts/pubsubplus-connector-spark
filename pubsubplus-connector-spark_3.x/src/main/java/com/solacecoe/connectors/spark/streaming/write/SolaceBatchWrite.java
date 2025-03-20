@@ -1,6 +1,5 @@
 package com.solacecoe.connectors.spark.streaming.write;
 
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceWriterCommitMessage;
 import org.apache.spark.sql.connector.write.BatchWrite;
 import org.apache.spark.sql.connector.write.DataWriterFactory;
 import org.apache.spark.sql.connector.write.PhysicalWriteInfo;
@@ -11,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Map;
 
 public class SolaceBatchWrite implements BatchWrite, Serializable {
@@ -63,6 +61,5 @@ public class SolaceBatchWrite implements BatchWrite, Serializable {
 
     @Override
     public void abort(WriterCommitMessage[] writerCommitMessages) {
-//        System.out.println("Test");
     }
 }

@@ -1,7 +1,5 @@
 package com.solacecoe.connectors.spark.base;
 
-import com.solace.semp.v2.config.ApiClient;
-import com.solace.semp.v2.config.client.AllApi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

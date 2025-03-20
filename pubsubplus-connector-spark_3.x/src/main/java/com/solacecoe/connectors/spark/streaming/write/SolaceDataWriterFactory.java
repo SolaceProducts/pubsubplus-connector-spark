@@ -4,7 +4,6 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.write.DataWriter;
 import org.apache.spark.sql.connector.write.DataWriterFactory;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
 import java.io.Serializable;
 import java.util.Map;
@@ -19,6 +18,6 @@ public class SolaceDataWriterFactory implements DataWriterFactory, Serializable 
 
     @Override
     public DataWriter<InternalRow> createWriter(int partitionId, long taskId) {
-        return new SolaceDataWriter(schema, properties, true);
+        return new SolaceDataWriter(schema, properties);
     }
 }

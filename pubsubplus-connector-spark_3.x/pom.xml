@@ -83,11 +83,17 @@
             <artifactId>oauth2-oidc-sdk</artifactId>
             <version>11.19.1</version>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/it.unimi.dsi/fastutil -->
+        <dependency>
+            <groupId>it.unimi.dsi</groupId>
+            <artifactId>fastutil</artifactId>
+            <version>8.5.15</version>
+        </dependency>
         <!-- test dependencies -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>solace</artifactId>
-            <version>1.20.0</version>
+            <version>1.20.6</version>
             <scope>test</scope>
         </dependency>
 
@@ -95,7 +101,7 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>1.20.0</version>
+            <version>1.20.6</version>
             <scope>test</scope>
         </dependency>
         <dependency>

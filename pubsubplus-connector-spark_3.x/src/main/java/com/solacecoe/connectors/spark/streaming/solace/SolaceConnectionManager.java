@@ -1,32 +1,56 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.spark.util.ShutdownHookManager;
+import scala.runtime.BoxedUnit;
 
-import java.io.Serializable;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class SolaceConnectionManager implements Serializable {
-    private static Logger log = LoggerFactory.getLogger(SolaceConnectionManager.class);
-    private final CopyOnWriteArrayList<SolaceBroker> brokerConnections;
+public class SolaceConnectionManager {
+    private static final Logger logger = LogManager.getLogger(SolaceConnectionManager.class);
+    private static final ConcurrentHashMap<String, SolaceBroker> brokerConnections = new ConcurrentHashMap<>();
 
-    public SolaceConnectionManager() {
-        brokerConnections = new CopyOnWriteArrayList<>();
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(SolaceConnectionManager::closeAllConnections));
+        ShutdownHookManager.addShutdownHook(() -> {
+            closeAllConnections();
+            return BoxedUnit.UNIT;
+        });
     }
 
-    public void addConnection(SolaceBroker solaceBroker) {
-        this.brokerConnections.add(solaceBroker);
+    public static void addConnection(String id, SolaceBroker solaceBroker) {
+        brokerConnections.put(id, solaceBroker);
     }
 
-    public SolaceBroker getConnection(int index) {
-        return index < this.brokerConnections.size() ? this.brokerConnections.get(index) : null;
+    public static SolaceBroker getConnection(String id) {
+        return brokerConnections.getOrDefault(id, null);
     }
 
-    public CopyOnWriteArrayList<SolaceBroker> getConnections() {
-        return brokerConnections;
+    public static SolaceBroker getFirstConnection() {
+        return brokerConnections.values().stream().filter(Objects::nonNull).findFirst().orElse(null);
     }
 
-    public void close() {
-        brokerConnections.stream().forEach(brokerConnections -> brokerConnections.close());
+    public static void closeAllConnections() {
+        logger.info("SolaceSparkConnector - Closing connection manager for {} brokers sessions", brokerConnections.size());
+        brokerConnections.forEach((id, broker) -> {
+            logger.info("SolaceSparkConnector - Closing connection for broker session {}", broker.getUniqueName());
+            broker.close();
+        });
+        brokerConnections.clear();
+        SolaceMessageTracker.reset();
+    }
+
+    public static void close(String connectionId) {
+        logger.info("SolaceSparkConnector - Closing connection manager for connection {}", connectionId);
+        brokerConnections.forEach((id, broker) -> {
+            if(id.equals(connectionId)) {
+                logger.info("SolaceSparkConnector - Closing connection for broker session {}", broker.getUniqueName());
+                broker.close();
+            }
+        });
+        brokerConnections.remove(connectionId);
     }
 }

@@ -1,10 +1,10 @@
 package com.solacecoe.connectors.spark.streaming.write;
 
+import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.Expression;
 import org.apache.spark.sql.catalyst.expressions.Literal;
 import org.apache.spark.sql.catalyst.types.DataTypeUtils;
 import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.catalyst.expressions.Attribute;
 import scala.collection.Seq;
 
 import java.util.Locale;

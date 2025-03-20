@@ -5,10 +5,9 @@ import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.MountableFile;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.security.KeyStore;
-import java.security.cert.CertificateFactory;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 public class KeyCloakContainer extends GenericContainer<KeyCloakContainer> {
     public static Network network = Network.SHARED;
@@ -98,48 +97,6 @@ public class KeyCloakContainer extends GenericContainer<KeyCloakContainer> {
          */
         public boolean isSupportSSL() {
             return this.supportSSL;
-        }
-
-        public static void main(String[] args) {
-            File file = new File(KeyCloakContainer.class.getResource("/keycloak.crt").getFile());
-//                createKeyStore(fis.readAllBytes(), null).store(fos, "password".toCharArray());
-
-            try {
-                FileOutputStream fos = new FileOutputStream("target/keycloak.jks");
-                KeyStore keyStore = KeyStore.getInstance("JKS");
-                keyStore.load(null);
-                CertificateFactory cf = CertificateFactory.getInstance("X.509");
-                byte[] bytes = Files.readAllBytes(file.toPath());
-                if (bytes != null && bytes.length > 0) {
-                    keyStore.setCertificateEntry("keycloak", cf.generateCertificate(new ByteArrayInputStream(bytes)));
-                }
-//                    if (serviceCa != null) {
-//                        keyStore.setCertificateEntry("service-ca",
-//                                cf.generateCertificate(new ByteArrayInputStream(serviceCa)));
-//                    }
-                keyStore.store(fos, "password".toCharArray());;
-            } catch (Exception ignored) {
-                System.out.println("Exception");
-            }
-
-            KeyCloakContainer keyCloakContainer = new KeyCloakContainer();
-            keyCloakContainer.start();
-            keyCloakContainer.createHostsFile();
-
-            SolaceOAuthContainer solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:latest");
-            solaceOAuthContainer.withCredentials("user", "pass")
-                    .withClientCert(MountableFile.forClasspathResource("solace.pem"),
-                            MountableFile.forClasspathResource("keycloak.crt"), false)
-                    .withOAuth()
-                    .withExposedPorts(SolaceOAuthContainer.Service.SMF.getPort(), SolaceOAuthContainer.Service.SMF_SSL.getPort(), 1943, 8080)
-                    .withPublishTopic("hello/direct", SolaceOAuthContainer.Service.SMF)
-                    .withPublishTopic("hello/persistent", SolaceOAuthContainer.Service.SMF);
-
-            solaceOAuthContainer.start();
-
-            while(true) {
-
-            }
         }
     }
 }

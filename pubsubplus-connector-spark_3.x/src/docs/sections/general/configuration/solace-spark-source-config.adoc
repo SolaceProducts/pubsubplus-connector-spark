@@ -210,12 +210,24 @@ Note: Default value uses replication group message ID property as offset indicat
 | int
 | any
 | 1
-| Sets the number of consumers for configured queue. Equal number of partitions are created to process data received from consumers.
+| Sets the number of consumers for configured queue. If more the one worker node is present, consumers are split across worker nodes for efficient processing.
 
-| createFlowsOnSameSession
+| createFlowsOnSameSession(deprecated)
 | boolean
 | true or false
 | false
 | If enabled consumer flows are enabled on same session. The number of consumer flows is equal to number of partitions configured. This is helpful when users want to optimize on number of connections created from Spark. By default, the connector creates a new connection for each consumer.
+
+| lvq.name
+| string
+| valid lvq name configured on solace broker
+| empty
+| Set the name of LVQ configured on solace broker. This is required to communicate checkpoint information from worker node to driver node and it also ensures that checkpoint information is present in both LVQ and Spark checkpoint directory
+
+| lvq.topic
+| string
+| valid solace topic
+| empty
+| Set the name of the topic subscribed by LVQ on solace broker. Each worker node publishes checkpoint information to LVQ on this topic.
 
 |===

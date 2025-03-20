@@ -6,7 +6,6 @@ import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
-import java.util.ArrayList;
 import java.util.Map;
 
 public class SolaceBatch implements Batch {
@@ -24,7 +23,6 @@ public class SolaceBatch implements Batch {
         this.properties = properties;
         this.options = options;
         this.filename = options.get("fileName");
-        // System.out.println("**** SolaceBatch Constructor ****");
     }
 
     @Override
