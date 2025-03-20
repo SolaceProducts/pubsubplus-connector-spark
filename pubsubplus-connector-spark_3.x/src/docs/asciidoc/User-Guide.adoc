@@ -45,9 +45,13 @@ In case if you are using Shared compute cluster, make sure your cluster has http
 
 === Checkpointing & Acknowledgement
 
-Solace Spark connector relies on Spark Checkpointing mechanism to resume from last successful message. Connector acknowledges & writes processed message id's to spark checkpoint whenever Spark sends commit signal to connector. Commit signal is an indication by Spark that data has been processed successfully. Starting from version 3.1.0 connector also publishes checkpoint data to Solace Last Value Queue along with Spark checkpoint. In case of recovery, connector first consumes checkpoint data available in LVQ and in case of unavailability it will resume from spark checkpoint location.
+Solace Spark connector relies on Spark Checkpointing mechanism to resume from last successful message. Connector acknowledges & writes processed message id's to spark checkpoint whenever Spark sends commit signal to connector. Commit signal is an indication by Spark that data has been processed successfully.
 
 === Checkpoint Handling
+
+Starting from version 3.1.0 connector, solace connection is now executed on worker node instead of driver node. This give us the ability to utilize cluster resource efficiently and also improves processing performance. The connector uses Solace LVQ to communicate checkpoint information from worker nodes to driver node(commit to checkpoint location) as they run on different JVM's.
+
+NOTE: In case of recovery, connector uses offset state from LVQ to identify last successfully processed messages. Hence, it is recommended not to delete or modify offset state in LVQ.
 
 In some cases, there might be checkpoint failures as spark may fail to write to checkpoint during instance crash or unavailability or other reasons. Though the connector will handle duplicates in most cases, we recommend to keep your downstream systems idempotent.
 

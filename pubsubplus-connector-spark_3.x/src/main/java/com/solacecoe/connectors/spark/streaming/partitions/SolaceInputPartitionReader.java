@@ -207,10 +207,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                 SolaceConnectionManager.close(this.solaceInputPartition.getId());
                 SolaceMessageTracker.resetId(uniqueId);
             } else if (context.isCompleted()) {
-                log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(),uniqueId);
-                long startTime = System.currentTimeMillis();
-                SolaceMessageTracker.ackMessages(uniqueId);
-                log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
+                // publish state to LVQ
                 String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(uniqueId);
                 if (processedMessageIDs != null) {
                     SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = this.getCheckpoint(this.solaceInputPartition.getId());
@@ -225,6 +222,13 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                     log.trace("SolaceSparkConnector - Published checkpoint to LVQ with payload {} ", this.getCheckpoint());
                     SolaceMessageTracker.removeProcessedMessagesIDs(uniqueId);
                 }
+
+                // ack messages
+                log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(),uniqueId);
+                long startTime = System.currentTimeMillis();
+                SolaceMessageTracker.ackMessages(uniqueId);
+                log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
+
                 if(closeReceiversOnPartitionClose) {
                     solaceBroker.closeReceivers();
                 }
