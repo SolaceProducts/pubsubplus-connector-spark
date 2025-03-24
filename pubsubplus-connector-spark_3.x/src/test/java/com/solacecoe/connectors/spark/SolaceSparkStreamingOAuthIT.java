@@ -285,7 +285,7 @@ class SolaceSparkStreamingOAuthIT {
         final Object lock = new Object();
         Dataset<Row> dataset = reader.load();
 
-        SolaceSession session = new SolaceSession(containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL), containerResource.getSolaceOAuthContainer().getVpn(), containerResource.getSolaceOAuthContainer().getUsername(), containerResource.getSolaceOAuthContainer().getPassword());
+        SolaceSession session = new SolaceSession(containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF), containerResource.getSolaceOAuthContainer().getVpn(), containerResource.getSolaceOAuthContainer().getUsername(), containerResource.getSolaceOAuthContainer().getPassword());
         Topic topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
         XMLMessageConsumer messageConsumer = null;
         try {
