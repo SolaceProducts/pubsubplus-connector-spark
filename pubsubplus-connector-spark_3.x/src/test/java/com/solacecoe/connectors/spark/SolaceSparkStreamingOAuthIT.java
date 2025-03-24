@@ -16,6 +16,7 @@ import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
+import org.testcontainers.solace.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -255,6 +256,64 @@ class SolaceSparkStreamingOAuthIT {
                 count[0] = count[0] + dataset1.count();
             }
         }).start();
+
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Thread.sleep(3000); // add timeout to ack messages on queue
+        streamingQuery.stop();
+    }
+
+    @Test
+    @Order(6)
+    void Should_ConnectToInSecureOAuthServer_And_ProcessData_And_PublishToSolace() throws TimeoutException, InterruptedException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
+        DataStreamReader reader = sparkSession.readStream()
+                .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
+                .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)
+                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
+                .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL, "http://localhost:7777/realms/solace/protocol/openid-connect/token")
+                .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID, "solace")
+                .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET, "solace-secret")
+                .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
+                .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
+                .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+                .option("checkpointLocation", path.toAbsolutePath().toString())
+                .format("solace");
+        final long[] count = {0};
+        final Object lock = new Object();
+        Dataset<Row> dataset = reader.load();
+
+        SolaceSession session = new SolaceSession(containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL), containerResource.getSolaceOAuthContainer().getVpn(), containerResource.getSolaceOAuthContainer().getUsername(), containerResource.getSolaceOAuthContainer().getPassword());
+        Topic topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
+        XMLMessageConsumer messageConsumer = null;
+        try {
+            messageConsumer = session.getSession().getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    count[0] = count[0] + 1;
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+                    // Not required for test
+                }
+            });
+            session.getSession().addSubscription(topic);
+            messageConsumer.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
+
+        StreamingQuery streamingQuery = dataset.writeStream().option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
+                .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                .option(SolaceSparkStreamingProperties.USERNAME, containerResource.getSolaceOAuthContainer().getUsername())
+                .option(SolaceSparkStreamingProperties.PASSWORD, containerResource.getSolaceOAuthContainer().getPassword())
+                .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
+                .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
+                .option("checkpointLocation", writePath.toAbsolutePath().toString())
+                .format("solace").start();
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Thread.sleep(3000); // add timeout to ack messages on queue
