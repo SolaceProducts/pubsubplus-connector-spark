@@ -15,6 +15,7 @@ import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
 import org.testcontainers.solace.Service;
 
@@ -80,6 +81,22 @@ class SolaceSparkStreamingOAuthIT {
             session.getSession().closeSession();
         } else {
             throw new RuntimeException("Solace Container is not started yet");
+        }
+    }
+
+    @AfterEach
+    public void afterEach() throws IOException {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        Path path1 = Paths.get("src", "test", "resources", "spark-checkpoint-2");
+        Path path2 = Paths.get("src", "test", "resources", "spark-checkpoint-3");
+        if(Files.exists(path)) {
+            FileUtils.deleteDirectory(path.toAbsolutePath().toFile());
+        }
+        if(Files.exists(path1)) {
+            FileUtils.deleteDirectory(path1.toAbsolutePath().toFile());
+        }
+        if(Files.exists(path2)) {
+            FileUtils.deleteDirectory(path2.toAbsolutePath().toFile());
         }
     }
 
@@ -278,7 +295,7 @@ class SolaceSparkStreamingOAuthIT {
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, "5")
                 .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
                 .option(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, false)
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "100")
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
