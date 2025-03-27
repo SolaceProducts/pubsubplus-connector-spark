@@ -42,7 +42,18 @@ class SolaceSparkStreamingAuthenticationIT {
     }
 
     @AfterAll
-    public void afterAll() {
+    public void afterAll() throws IOException {
+        Path path1 = Paths.get("src", "test", "resources", "solace.jks");
+        Path path2 = Paths.get("src", "test", "resources", "solace_keystore.jks");
+
+        if(Files.exists(path1)) {
+            FileUtils.delete(path1.toAbsolutePath().toFile());
+        }
+
+        if(Files.exists(path2)) {
+            FileUtils.delete(path2.toAbsolutePath().toFile());
+        }
+
         containerResource.stop();
     }
 
@@ -90,14 +101,6 @@ class SolaceSparkStreamingAuthenticationIT {
         }
         if(Files.exists(path2)) {
             FileUtils.deleteDirectory(path2.toAbsolutePath().toFile());
-        }
-
-        if(Files.exists(path3)) {
-            FileUtils.delete(path3.toAbsolutePath().toFile());
-        }
-
-        if(Files.exists(path4)) {
-            FileUtils.delete(path4.toAbsolutePath().toFile());
         }
     }
 
