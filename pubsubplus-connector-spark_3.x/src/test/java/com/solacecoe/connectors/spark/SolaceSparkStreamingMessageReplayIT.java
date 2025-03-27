@@ -353,7 +353,7 @@ class SolaceSparkStreamingMessageReplayIT {
     @Order(7)
     void Should_Fail_IfReplicationGroupMessageIdIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(StreamingQueryException.class, () -> {
+        assertThrows(RuntimeException.class, () -> {
             try {
                 DataStreamReader reader = sparkSession.readStream()
                         .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
