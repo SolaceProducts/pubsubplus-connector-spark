@@ -16,7 +16,6 @@ import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
-import org.testcontainers.solace.Service;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -96,8 +95,6 @@ class SolaceSparkStreamingAuthenticationIT {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path path1 = Paths.get("src", "test", "resources", "spark-checkpoint-2");
         Path path2 = Paths.get("src", "test", "resources", "spark-checkpoint-3");
-        Path path3 = Paths.get("src", "test", "resources", "solace.jks");
-        Path path4 = Paths.get("src", "test", "resources", "solace_keystore.jks");
         if(Files.exists(path)) {
             FileUtils.deleteDirectory(path.toAbsolutePath().toFile());
         }

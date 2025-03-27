@@ -79,7 +79,6 @@ public class CertificateContainerResource {
         File file = new File(absolutePath + "/clientCert1.pem");
         File keyFile = new File(absolutePath + "/client1.key");
         try {
-            String path = absolutePath +"/solace_keystore.jks";
             File yourFile = new File(absolutePath +"/solace_keystore.jks");
             if(!yourFile.exists()) {
                 yourFile.createNewFile();
@@ -87,8 +86,6 @@ public class CertificateContainerResource {
             FileOutputStream fos = new FileOutputStream(yourFile);
             PrivateKey privateKey = loadPrivateKey(keyFile.getAbsolutePath());
             createKeyStore(Files.readAllBytes(file.toPath()), privateKey, null, "solace-client", "jks").store(fos, "password".toCharArray());
-        } catch (IOException | CertificateException | KeyStoreException | NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -99,7 +96,6 @@ public class CertificateContainerResource {
         try (FileReader keyReader = new FileReader(privateKeyPath)) {
             PEMParser pemParser = new PEMParser(keyReader);
             PrivateKeyInfo privateKeyInfo = (PrivateKeyInfo) pemParser.readObject();
-//            PrivateKeyInfo privateKeyInfo = keyPair.getPrivateKeyInfo();
             JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
             return converter.getPrivateKey(privateKeyInfo);
         }

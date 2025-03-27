@@ -25,7 +25,7 @@ import java.util.concurrent.TimeoutException;
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class SolaceSparkStreamingClientCertificateCNIT {
+class SolaceSparkStreamingClientCertificateCNIT {
 
     private SparkSession sparkSession;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(true);
