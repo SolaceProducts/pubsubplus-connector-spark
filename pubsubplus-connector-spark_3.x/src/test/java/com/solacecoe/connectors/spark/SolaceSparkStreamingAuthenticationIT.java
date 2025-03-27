@@ -5,15 +5,18 @@ import com.solacecoe.connectors.spark.oauth.CertificateContainerResource;
 import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacesystems.jcsmp.*;
+import org.apache.spark.api.java.function.VoidFunction2;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.streaming.DataStreamReader;
 import org.apache.spark.sql.streaming.StreamingQuery;
+import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
+import org.testcontainers.solace.Service;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,6 +24,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -105,6 +110,7 @@ class SolaceSparkStreamingAuthenticationIT {
     }
 
     @Test
+    @Order(1)
     void Should_ConnectUsingClientCertificateWithoutPassword() throws TimeoutException, InterruptedException {
         Path resources = Paths.get("src", "test", "resources");
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
@@ -175,6 +181,7 @@ class SolaceSparkStreamingAuthenticationIT {
     }
 
     @Test
+    @Order(2)
     void Should_ConnectUsingClientCertificateWithPassword() throws TimeoutException, InterruptedException {
         Path resources = Paths.get("src", "test", "resources");
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
@@ -244,5 +251,113 @@ class SolaceSparkStreamingAuthenticationIT {
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
+    }
+
+    @Test
+    void Should_Fail_IfMandatoryUsernameIsMissing() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+//                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, containerResource.getSolaceOAuthContainer().getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_BASIC)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                System.out.println(dataset1.count());
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    void Should_Fail_IfMandatoryUsernameIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, "")
+                    .option(SolaceSparkStreamingProperties.PASSWORD, containerResource.getSolaceOAuthContainer().getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_BASIC)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                System.out.println(dataset1.count());
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    void Should_Fail_IfMandatoryPasswordIsMissing() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, containerResource.getSolaceOAuthContainer().getUsername())
+//                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_BASIC)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                System.out.println(dataset1.count());
+            }).start();
+            streamingQuery.awaitTermination();
+        });
+    }
+
+    @Test
+    void Should_Fail_IfMandatoryPasswordIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, containerResource.getSolaceOAuthContainer().getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, "")
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_BASIC)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                System.out.println(dataset1.count());
+            }).start();
+            streamingQuery.awaitTermination();
+        });
     }
 }
