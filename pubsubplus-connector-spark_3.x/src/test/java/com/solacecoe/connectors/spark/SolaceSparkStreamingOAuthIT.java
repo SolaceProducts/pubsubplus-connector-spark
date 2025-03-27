@@ -17,7 +17,6 @@ import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
-import org.testcontainers.solace.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -299,7 +298,6 @@ class SolaceSparkStreamingOAuthIT {
                 .option("checkpointLocation", path.toAbsolutePath().toString())
                 .format("solace");
         final long[] count = {0};
-        final Object lock = new Object();
         Dataset<Row> dataset = reader.load();
 
         SolaceSession session = new SolaceSession(containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF), containerResource.getSolaceOAuthContainer().getVpn(), containerResource.getSolaceOAuthContainer().getUsername(), containerResource.getSolaceOAuthContainer().getPassword());

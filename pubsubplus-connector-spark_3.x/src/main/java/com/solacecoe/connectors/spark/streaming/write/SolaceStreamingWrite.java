@@ -1,9 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.write;
 
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
-import com.solacesystems.jcsmp.JCSMPProperties;
 import org.apache.spark.sql.connector.write.PhysicalWriteInfo;
 import org.apache.spark.sql.connector.write.WriterCommitMessage;
 import org.apache.spark.sql.connector.write.streaming.StreamingDataWriterFactory;

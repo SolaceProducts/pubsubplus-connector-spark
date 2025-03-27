@@ -45,6 +45,7 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
     private boolean withClientCert;
     private boolean withOAuth;
     private boolean clientCertificateAuthority;
+    private boolean withCNAsUsernameSource;
 
     /**
      * Create a new solace container with the specified image name.
@@ -145,6 +146,25 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
         updateConfigScript(scriptBuilder, "no shutdown");
         updateConfigScript(scriptBuilder, "exit");
 
+        updateConfigScript(scriptBuilder, "create client-username certificate-user message-vpn " + vpn);
+        updateConfigScript(scriptBuilder, "acl-profile default");
+        updateConfigScript(scriptBuilder, "client-profile default");
+        updateConfigScript(scriptBuilder, "no shutdown");
+        updateConfigScript(scriptBuilder, "exit");
+
+        updateConfigScript(scriptBuilder, "create client-username certificate-user-with-password message-vpn " + vpn);
+        updateConfigScript(scriptBuilder, "password certificate-user-with-password");
+        updateConfigScript(scriptBuilder, "acl-profile default");
+        updateConfigScript(scriptBuilder, "client-profile default");
+        updateConfigScript(scriptBuilder, "no shutdown");
+        updateConfigScript(scriptBuilder, "exit");
+
+        updateConfigScript(scriptBuilder, "create client-username localhost message-vpn " + vpn);
+        updateConfigScript(scriptBuilder, "acl-profile default");
+        updateConfigScript(scriptBuilder, "client-profile default");
+        updateConfigScript(scriptBuilder, "no shutdown");
+        updateConfigScript(scriptBuilder, "exit");
+
         if (withClientCert) {
             if (clientCertificateAuthority) {
                 updateConfigScript(scriptBuilder, "configure");
@@ -152,14 +172,16 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
                 updateConfigScript(scriptBuilder, "authentication");
                 updateConfigScript(scriptBuilder, "create client-certificate-authority RootCA");
                 updateConfigScript(scriptBuilder, "certificate file rootCA.crt");
-                updateConfigScript(scriptBuilder, "show client-certificate-authority ca-name *");
+                updateConfigScript(scriptBuilder, "show client-certificate-authority RootCA *");
                 updateConfigScript(scriptBuilder, "end");
 
                 updateConfigScript(scriptBuilder, "configure");
                 updateConfigScript(scriptBuilder, "message-vpn " + vpn);
                 // Enable client certificate authentication
                 updateConfigScript(scriptBuilder, "authentication client-certificate");
-                updateConfigScript(scriptBuilder, "allow-api-provided-username");
+                if(!withCNAsUsernameSource) {
+                    updateConfigScript(scriptBuilder, "allow-api-provided-username");
+                }
                 updateConfigScript(scriptBuilder, "no shutdown");
                 updateConfigScript(scriptBuilder, "end");
             } else {
@@ -168,7 +190,7 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
                 updateConfigScript(scriptBuilder, "ssl");
                 updateConfigScript(scriptBuilder, "create domain-certificate-authority RootCA");
                 updateConfigScript(scriptBuilder, "certificate file rootCA.crt");
-                updateConfigScript(scriptBuilder, "show domain-certificate-authority ca-name *");
+                updateConfigScript(scriptBuilder, "show domain-certificate-authority RootCA *");
                 updateConfigScript(scriptBuilder, "end");
             }
 
@@ -403,6 +425,14 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
      */
     public SolaceOAuthContainer withOAuth() {
         this.withOAuth = true;
+        return this;
+    }
+
+    /**
+     * Sets Common Name as username source
+     */
+    public SolaceOAuthContainer withCNAsUsernameSource() {
+        this.withCNAsUsernameSource = true;
         return this;
     }
 
