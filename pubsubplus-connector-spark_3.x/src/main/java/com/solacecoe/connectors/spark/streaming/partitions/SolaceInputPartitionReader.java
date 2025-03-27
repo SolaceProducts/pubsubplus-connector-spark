@@ -93,6 +93,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
     @Override
     public boolean next() {
+        if(this.solaceBroker != null && this.solaceBroker.isException()) {
+            throw new SolaceSessionException(this.solaceBroker.getException());
+        }
         solaceMessage = getNextMessage();
         return solaceMessage != null;
     }
