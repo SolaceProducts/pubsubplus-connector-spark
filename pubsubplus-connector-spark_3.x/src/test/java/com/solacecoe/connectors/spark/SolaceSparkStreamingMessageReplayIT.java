@@ -353,27 +353,23 @@ class SolaceSparkStreamingMessageReplayIT {
     @Order(7)
     void Should_Fail_IfReplicationGroupMessageIdIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(RuntimeException.class, () -> {
-            try {
-                DataStreamReader reader = sparkSession.readStream()
-                        .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                        .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                        .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                        .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                        .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
-                        .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, "invalid-id")
-                        .option("checkpointLocation", path.toAbsolutePath().toString())
-                        .format("solace");
-                Dataset<Row> dataset = reader.load();
-                StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                    System.out.println("Should_Fail_IfReplicationGroupMessageIdIsInvalid " + dataset1.count());
-                }).start();
-                streamingQuery.awaitTermination();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+        assertThrows(StreamingQueryException.class, () -> {
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+                    .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
+                    .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, "invalid-id")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                System.out.println("Should_Fail_IfReplicationGroupMessageIdIsInvalid " + dataset1.count());
+            }).start();
+            streamingQuery.awaitTermination();
         });
     }
 
