@@ -44,6 +44,7 @@ class SolaceSparkStreamingOAuthIT {
                     .appName("data_source_test")
                     .master("local[*]")
                     .getOrCreate();
+            sparkSession.sparkContext().setLogLevel("TRACE");
         } else {
             throw new RuntimeException("Solace Container is not started yet");
         }
