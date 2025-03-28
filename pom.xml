@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
     <name>PubSubPlus Connector Spark - Parent</name>
     <description>Solace PubSub+ Connector for Spark streams data from Solace PubSub+ broker to Spark Data Sources.</description>
-    <url>https://solace.com</url>
+    <url>https://solace.com/integration-hub/apache-spark/</url>
 
     <modules>
         <module>pubsubplus-connector-spark_3.x</module>

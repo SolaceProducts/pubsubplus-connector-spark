@@ -32,7 +32,8 @@ public class ContainerResource {
                         MountableFile.forClasspathResource("keycloak.crt"), false)
                 .withOAuth()
                 .withExposedPorts(SolaceOAuthContainer.Service.SMF.getPort(), SolaceOAuthContainer.Service.SMF_SSL.getPort(), 1943, 8080)
-                .withPublishTopic(SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION, SolaceOAuthContainer.Service.SMF);
+                .withPublishTopic(SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION, SolaceOAuthContainer.Service.SMF)
+                .withPublishTopic("random/topic", SolaceOAuthContainer.Service.SMF);
 
         solaceOAuthContainer.start();
         await().until(() -> solaceOAuthContainer.isRunning());

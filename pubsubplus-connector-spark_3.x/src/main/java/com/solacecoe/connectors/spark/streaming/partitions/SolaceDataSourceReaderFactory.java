@@ -31,11 +31,15 @@ public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
 
     @Override
     public PartitionReader<InternalRow> createReader(InputPartition partition) {
-        TaskContext taskCtx = TaskContext.get();
-        String queryId = taskCtx.getLocalProperty(StreamExecution.QUERY_ID_KEY());
-        String batchId = taskCtx.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
-        SolaceInputPartition solaceInputPartition = (SolaceInputPartition) partition;
-        log.info("SolaceSparkConnector - Creating reader for input partition reader factory with query id {}, batch id {}, task id {} and partition id {}", queryId, batchId, taskCtx.taskAttemptId(), taskCtx.partitionId());
-        return new SolaceInputPartitionReader(solaceInputPartition, includeHeaders, lastKnownOffset, properties, taskCtx, checkpoints);
+        try {
+            TaskContext taskCtx = TaskContext.get();
+            String queryId = taskCtx.getLocalProperty(StreamExecution.QUERY_ID_KEY());
+            String batchId = taskCtx.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
+            SolaceInputPartition solaceInputPartition = (SolaceInputPartition) partition;
+            log.info("SolaceSparkConnector - Creating reader for input partition reader factory with query id {}, batch id {}, task id {} and partition id {}", queryId, batchId, taskCtx.taskAttemptId(), taskCtx.partitionId());
+            return new SolaceInputPartitionReader(solaceInputPartition, includeHeaders, lastKnownOffset, properties, taskCtx, checkpoints);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
