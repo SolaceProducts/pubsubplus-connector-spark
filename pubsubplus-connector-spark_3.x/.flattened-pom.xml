@@ -4,10 +4,10 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.solacecoe.connectors</groupId>
   <artifactId>pubsubplus-connector-spark</artifactId>
-  <version>3.1.0</version>
+  <version>3.1.1</version>
   <name>pubsubplus-connector-spark</name>
   <description>Solace PubSub+ Connector for Spark streams data from Solace PubSub+ broker to Spark Data Sources.</description>
-  <url>https://solace.com/pubsubplus-connector-spark</url>
+  <url>https://solace.com/integration-hub/apache-spark/pubsubplus-connector-spark/</url>
   <inceptionYear>2022</inceptionYear>
   <organization>
     <name>Solace Corporation</name>
@@ -38,10 +38,10 @@
     <maven.compiler.source>8</maven.compiler.source>
     <shared-remote-resources.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/shared-remote-resources</shared-remote-resources.directory>
     <shared-remote-resources.process.asciidoctor-resources.skip>false</shared-remote-resources.process.asciidoctor-resources.skip>
-    <release-notes.url>https://solace.com/pubsubplus-connector-spark</release-notes.url>
+    <release-notes.url>https://solace.com/integration-hub/apache-spark/pubsubplus-connector-spark/</release-notes.url>
     <shared-remote-resources.build.main.processed.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/shared-remote-resources/build/main/processed</shared-remote-resources.build.main.processed.directory>
     <generated-filtered-resource.directory>/home/runner/work/spark-connector-v2/spark-connector-v2/pubsubplus-connector-spark_3.x/target/generated-filtered-resources</generated-filtered-resource.directory>
-    <revision>3.1.0</revision>
+    <revision>3.1.1</revision>
     <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
     <sha1></sha1>
     <maven.compiler.target>8</maven.compiler.target>
