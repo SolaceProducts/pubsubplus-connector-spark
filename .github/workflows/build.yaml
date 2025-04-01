@@ -25,7 +25,4 @@ jobs:
     with:
       unit_integration_test_reports: "**/target/failsafe-reports/**/TEST*.xml"
     secrets: inherit
-    permissions:
-      actions: read
-      contents: read
       
