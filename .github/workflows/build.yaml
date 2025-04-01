@@ -27,7 +27,5 @@ jobs:
     secrets: inherit
     permissions:
       actions: read
-      checks: write
       contents: read
-      id-token: write
       
