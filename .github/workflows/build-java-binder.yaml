@@ -46,8 +46,7 @@ jobs:
       statuses: write
       checks: write
       id-token: write
-    env:
-      VAULT_ADDR: https://vault.maas-vault-prod.solace.cloud:8200
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -60,7 +59,7 @@ jobs:
         uses: hashicorp/vault-action@v3
         continue-on-error: true
         with:
-          url: "https://vault.maas-vault-prod.solace.cloud:8200"
+          url: "${{ secrets.VAULT_ADDR }}"
           role: "cicd-workflows-secret-read-role"
           method: jwt
           path: jwt-github
