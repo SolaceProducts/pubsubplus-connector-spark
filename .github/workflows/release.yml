@@ -43,8 +43,7 @@ jobs:
       contents: write
       packages: write
       id-token: write
-    env:
-      VAULT_ADDR: "${{ secrets.VAULT_ADDR }}"
+
     steps:
       - uses: actions/checkout@v4
         with:
