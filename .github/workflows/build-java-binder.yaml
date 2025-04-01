@@ -46,6 +46,8 @@ jobs:
       statuses: write
       checks: write
       id-token: write
+    env:
+      VAULT_ADDR: "${{ secrets.VAULT_ADDR }}"
 
     steps:
       - name: Checkout repo
