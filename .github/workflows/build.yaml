@@ -24,4 +24,10 @@ jobs:
     uses: ./.github/workflows/build-java-binder.yaml
     with:
       unit_integration_test_reports: "**/target/failsafe-reports/**/TEST*.xml"
+    secrets: inherit
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+      id-token: write
       
