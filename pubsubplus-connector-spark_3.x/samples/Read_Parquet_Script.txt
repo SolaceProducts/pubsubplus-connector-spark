@@ -1,5 +1,0 @@
-import org.apache.spark.sql.functions._
-val streamName = "test-solace-spark-connector" // this should be equal to stream name variable provided in Solace_Read_Stream_Script.txt 
-val df = spark.read.format("parquet").load(s"/solace_output/$streamName/")
-
-println("Count of records " + df.count)
