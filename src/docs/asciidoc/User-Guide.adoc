@@ -89,6 +89,40 @@ If rotating access token is present in file accessible by connector use below op
 
 NOTE: When access token is read from file, it may lose some of it's expiry time by the time it is accessed by connector. It is recommended to have minimal time difference between writing to file and access by the connector so that a valid new token is updated in solace session before expiry of old token.
 
+==== Using Databricks Secret Management
+
+If Solace Spark Connector is deployed in Databricks, it is recommended to use Databricks secrets to store sensitive credentials.
+
+To configure secrets refer to the https://docs.databricks.com/aws/en/security/secrets/[Databricks documentation].
+
+You can reference those secrets in your Spark cluster using the same Spark config options:
+
+Below is an example on how to retrieve username and password from Databricks secrets and connect to Solace.
+[source,scala]
+----
+    spark.readStream.format("solace").option("host", "")
+    .option("vpn", "default")
+    .option("username", dbutils.secrets.get(scope = "solace-dev-credentials", key = "username"))
+    .option("password", dbutils.secrets.get(scope = "solace-dev-credentials", key = "password"))
+----
+
+OAuth based authentication to Solace using Databricks secrets
+
+[source,scala]
+----
+    spark.readStream.format("solace").option("host", "")
+    .option("vpn", "default")
+    .option("solace.apiProperties.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_OAUTH2")
+    .option("solace.oauth.client.auth-server-url", "")
+    .option("solace.oauth.client.client-id", dbutils.secrets.get(scope = "solace-dev-credentials", key = "client-id"))
+    .option("solace.oauth.client.credentials.client-secret", dbutils.secrets.get(scope = "solace-dev-credentials", key = "client-secret"))
+    .option("solace.oauth.client.auth-server.client-certificate.file", "")
+    .option("solace.oauth.client.auth-server.truststore.file", "")
+    .option("solace.oauth.client.auth-server.truststore.password", dbutils.secrets.get(scope = "solace-dev-credentials", key = "truststore-password"))
+    .option("solace.oauth.client.auth-server.ssl.validate-certificate", false)
+    .option("solace.oauth.client.token.refresh.interval", 110)
+----
+
 === Message Replay
 
 Solace Spark Connector can replay messages using Solace Replay Log. Connector can replay all messages or after specific replication group message id or after specific timestamp. Please refer to https://docs.solace.com/Features/Replay/Msg-Replay-Concepts-Config.htm[Message Replay Configuration] to enable replay log in Solace PubSub+ broker.
