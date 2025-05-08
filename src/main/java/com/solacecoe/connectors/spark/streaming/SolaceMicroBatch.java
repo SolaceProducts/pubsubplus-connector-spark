@@ -33,7 +33,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private int lastKnownOffsetId = 0;
     private int latestOffsetId = 0;
     private final Map<String, SolaceInputPartition> inputPartitionsList = new HashMap<>();
-    private final int partitions;
+    private int partitions;
     private final int batchSize;
     private final boolean includeHeaders;
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
@@ -91,6 +91,9 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     @Override
     public InputPartition[] planInputPartitions(Offset start, Offset end) {
+        if(partitions == 0) {
+            partitions = getTotalExecutors();
+        }
         for (int i = 0; i < partitions; i++) {
             int partitionHashCode = (queueName + "-" + i).hashCode();
             Optional<String> preferredLocation = getExecutorLocation(getSortedExecutorList(), partitionHashCode);
@@ -100,7 +103,11 @@ public class SolaceMicroBatch implements MicroBatchStream {
         return inputPartitionsList.values().toArray(new InputPartition[0]);
     }
 
-    private List<String> getSortedExecutorList() {
+    private int getTotalExecutors() {
+        return getExecutorList().size();
+    }
+
+    private List<ExecutorCacheTaskLocation> getExecutorList() {
         BlockManager bm = SparkEnv.get().blockManager();
         BlockManagerMaster master = bm.master();
 
@@ -116,6 +123,12 @@ public class SolaceMicroBatch implements MicroBatchStream {
         for (BlockManagerId x : peers) {
             executorList.add(new ExecutorCacheTaskLocation(x.host(), x.executorId()));
         }
+
+        return executorList;
+    }
+
+    private List<String> getSortedExecutorList() {
+        List<ExecutorCacheTaskLocation> executorList = getExecutorList();
 
         log.info("SolaceSparkConnector - Available executor nodes {}", executorList.size());
 

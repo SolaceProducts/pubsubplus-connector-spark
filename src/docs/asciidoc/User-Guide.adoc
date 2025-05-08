@@ -26,18 +26,24 @@ endif::[]
 
 == Getting Started
 
-This guide assumes you are familiar with Spark set up and Spark Structured Streaming concepts. In the following sections we will show how to set up Solace Spark Connector to stream data from Solace to Spark.
+This guide assumes you are familiar with Spark set up and Spark Structured Streaming concepts. In the following sections we will show how to set up Solace Spark Connector to stream data from Solace to Spark and publish events from Spark to Solace.
 
 === Prerequisites
 
 * https://solace.com/products/event-broker/[Solace PubSub+ Event Broker]
-* Apache Spark 3.5.1, Scala 2.12
+* Apache Spark 3.5.1 and Scala 2.12
+
+=== Supported Platforms
+
+The connector is built on the Spark Structured Streaming API and has been tested on Azure Databricks. Since the Databricks runtime is consistent across all supported cloud platforms(AWS & Google Cloud), it is expected to behave similarly in other Databricks environments. Additionally, the connector has been validated on vanilla Apache Spark, ensuring compatibility with any platform that supports standard Spark deployments.
 
 === Quick Start common steps
 
 include::{docdir}/../sections/general/quick-start/quick-start.adoc[leveloffset=+2]
 
 NOTE: Above sample code used parquet as example data source. You can configure your required data source to write data.
+
+NOTE: In case of databricks deployment, it is recommended to store and retrieve sensitive credentials from Databricks secrets. Please refer to <<Using Databricks Secret Management>> on how to configure secrets and use them in notebook.
 
 === Databricks Considerations
 
@@ -57,7 +63,7 @@ In some cases, there might be checkpoint failures as spark may fail to write to 
 
 === User Authentication
 
-Solace Spark Connector supports Basic and OAuth authentication to Solace. Client Credentials flow is supported when connecting using OAuth.
+Solace Spark Connector supports Basic, Client Certificate and OAuth authentication to Solace. Client Credentials flow is supported when connecting using OAuth.
 
 If OAuth server is available use below options to fetch access token from endpoint. For property description please refer to <<Configuration>> section.
 
@@ -81,13 +87,66 @@ If rotating access token is present in file accessible by connector use below op
 [source,scala]
 ----
     spark.readStream.format("solace").option("host", "")
-    .option("vpn", "default")
+    .option("vpn", "")
     .option("solace.apiProperties.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_OAUTH2")
     .option("solace.oauth.client.access-token", "<absolute-path-to-token-file>")
     .option("solace.oauth.client.token.refresh.interval", 110)
 ----
 
 NOTE: When access token is read from file, it may lose some of it's expiry time by the time it is accessed by connector. It is recommended to have minimal time difference between writing to file and access by the connector so that a valid new token is updated in solace session before expiry of old token.
+
+Below is an example on how to use client certificate authentication when connecting to Solace.
+
+[source,scala]
+----
+    sparkSession.readStream().format("solace")
+    .option("host", "")
+    .option("vpn", "default")
+    .option("username", "")
+    .option("solace.apiProperties.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_CLIENT_CERTIFICATE")
+    .option("solace.apiProperties.SSL_TRUST_STORE", "<path-to-jks-file>")
+    .option("solace.apiProperties.SSL_TRUST_STORE_FORMAT", "jks")
+    .option("solace.apiProperties.SSL_TRUST_STORE_PASSWORD", "")
+    .option("solace.apiProperties.SSL_KEY_STORE", "<path-to-jks-file>")
+    .option("solace.apiProperties.SSL_KEY_STORE_FORMAT", "jks")
+    .option("solace.apiProperties.SSL_KEY_STORE_PASSWORD", "")
+----
+
+For more properties please refer to https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.JCSMPProperties[Solace Java API documentation for com.solacesystems.jcsmp.JCSMPProperties]
+
+==== Using Databricks Secret Management
+
+If Solace Spark Connector is deployed in Databricks, it is recommended to use Databricks secrets to store sensitive credentials.
+
+To configure secrets refer to the https://docs.databricks.com/aws/en/security/secrets/[Databricks documentation].
+
+You can reference those secrets in your Spark cluster using the same Spark config options:
+
+Below is an example on how to retrieve username and password from Databricks secrets and connect to Solace.
+[source,scala]
+----
+    spark.readStream.format("solace").option("host", dbutils.secrets.get(scope = "solace-dev-credentials", key = "host"))
+    .option("vpn", "default")
+    .option("username", dbutils.secrets.get(scope = "solace-dev-credentials", key = "username"))
+    .option("password", dbutils.secrets.get(scope = "solace-dev-credentials", key = "password"))
+----
+
+OAuth based authentication to Solace using Databricks secrets. The certificates can be stored in cloud object storage, and you can restrict access to the certificates only to cluster that can access Solace. See https://docs.databricks.com/aws/en/data-governance/[Data governance with Unity Catalog].
+
+[source,scala]
+----
+    spark.readStream.format("solace").option("host", dbutils.secrets.get(scope = "solace-dev-credentials", key = "host"))
+    .option("vpn", "default")
+    .option("solace.apiProperties.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_OAUTH2")
+    .option("solace.oauth.client.auth-server-url", "")
+    .option("solace.oauth.client.client-id", dbutils.secrets.get(scope = "solace-dev-credentials", key = "client-id"))
+    .option("solace.oauth.client.credentials.client-secret", dbutils.secrets.get(scope = "solace-dev-credentials", key = "client-secret"))
+    .option("solace.oauth.client.auth-server.client-certificate.file", "")
+    .option("solace.oauth.client.auth-server.truststore.file", "")
+    .option("solace.oauth.client.auth-server.truststore.password", dbutils.secrets.get(scope = "solace-dev-credentials", key = "truststore-password"))
+    .option("solace.oauth.client.auth-server.ssl.validate-certificate", false)
+    .option("solace.oauth.client.token.refresh.interval", 110)
+----
 
 === Message Replay
 
@@ -169,7 +228,7 @@ include::{docdir}/../sections/general/configuration/solace-spark-source-config.a
 
 include::{docdir}/../sections/general/configuration/solace-spark-sink-config.adoc[leveloffset=+2]
 
-NOTE: This connector is tested on Databricks environment with Cluster Version 14.3 LTS (includes Apache Spark 3.5.0, Scala 2.12)
+NOTE: This connector is tested on Databricks Cluster Version 15.4 LTS (includes Apache Spark 3.5.0, Scala 2.12) with photon acceleration disabled.
 
 == License
 

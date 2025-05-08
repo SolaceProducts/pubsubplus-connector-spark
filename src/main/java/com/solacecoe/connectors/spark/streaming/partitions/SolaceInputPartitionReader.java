@@ -122,8 +122,11 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp))
                 });
             }
-
-            SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
+            if(solaceRecord.getPartitionKey() != null && !solaceRecord.getPartitionKey().isEmpty()) {
+                SolaceMessageTracker.addMessageID(solaceRecord.getPartitionKey(), solaceRecord.getMessageId());
+            } else {
+                SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
+            }
             SolaceMessageTracker.addMessage(this.uniqueId, solaceMessage);
             return row;
         } catch (Exception e) {
@@ -210,20 +213,26 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                 SolaceConnectionManager.close(this.solaceInputPartition.getId());
                 SolaceMessageTracker.resetId(uniqueId);
             } else if (context.isCompleted()) {
-                // publish state to LVQ
-                String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(uniqueId);
-                if (processedMessageIDs != null) {
-                    SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = this.getCheckpoint(this.solaceInputPartition.getId());
-                    if(solaceSparkPartitionCheckpoint != null) {
-                        solaceSparkPartitionCheckpoint.setMessageIDs(processedMessageIDs);
-                        solaceSparkPartitionCheckpoint.setPartitionId(this.solaceInputPartition.getId());
-                    } else {
-                        solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(processedMessageIDs, this.solaceInputPartition.getId());
+                List<String> ids = SolaceMessageTracker.getIds();
+                for(String id : ids) {
+                    String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(id);
+                    if (processedMessageIDs != null) {
+                        SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = this.getCheckpoint(this.solaceInputPartition.getId());
+                        if(solaceSparkPartitionCheckpoint != null) {
+                            solaceSparkPartitionCheckpoint.setMessageIDs(processedMessageIDs);
+                            solaceSparkPartitionCheckpoint.setPartitionId(this.solaceInputPartition.getId());
+                        } else {
+                            solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(processedMessageIDs, this.solaceInputPartition.getId());
+                        }
+                        this.updateCheckpoint(solaceSparkPartitionCheckpoint);
                     }
-                    this.updateCheckpoint(solaceSparkPartitionCheckpoint);
-                    solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), this.getCheckpoint());
-                    log.trace("SolaceSparkConnector - Published checkpoint to LVQ with payload {} ", this.getCheckpoint());
-                    SolaceMessageTracker.removeProcessedMessagesIDs(uniqueId);
+                }
+
+                // publish state to LVQ
+                solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), this.getCheckpoint());
+                log.trace("SolaceSparkConnector - Published checkpoint to LVQ with payload {} ", this.getCheckpoint());
+                for(String id : ids) {
+                    SolaceMessageTracker.removeProcessedMessagesIDs(id);
                 }
 
                 // ack messages
