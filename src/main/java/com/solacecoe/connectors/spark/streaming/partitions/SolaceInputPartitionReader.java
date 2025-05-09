@@ -225,14 +225,12 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                             solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(processedMessageIDs, this.solaceInputPartition.getId());
                         }
                         this.updateCheckpoint(solaceSparkPartitionCheckpoint);
-                    }
-                }
 
-                // publish state to LVQ
-                solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), this.getCheckpoint());
-                log.trace("SolaceSparkConnector - Published checkpoint to LVQ with payload {} ", this.getCheckpoint());
-                for(String id : ids) {
-                    SolaceMessageTracker.removeProcessedMessagesIDs(id);
+                        // publish state to LVQ
+                        solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), this.getCheckpoint());
+                        log.trace("SolaceSparkConnector - Published checkpoint to LVQ with payload {} ", this.getCheckpoint());
+                        SolaceMessageTracker.removeProcessedMessagesIDs(id);
+                    }
                 }
 
                 // ack messages
