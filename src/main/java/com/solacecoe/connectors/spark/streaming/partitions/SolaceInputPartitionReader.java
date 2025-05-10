@@ -263,8 +263,8 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         EventListener eventListener = new EventListener(inputPartitionId);
         if(ackLastProcessedMessages) {
             log.info("SolaceSparkConnector - Ack last processed messages is set to true for messages {}", this.lastKnownOffset);
-            List<String> messageIDs = Arrays.stream(this.lastKnownOffset.split(",")).collect(Collectors.toList());
-            eventListener = new EventListener(inputPartitionId, messageIDs, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
+//            List<String> messageIDs = Arrays.stream(this.lastKnownOffset.split(",")).collect(Collectors.toList());
+            eventListener = new EventListener(inputPartitionId, this.checkpoints, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
         }
         // Initialize connection to Solace Broker
         solaceBroker.addReceiver(eventListener);

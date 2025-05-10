@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
+import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumerException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
@@ -9,15 +10,19 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.Collectors;
 
 
 public class EventListener implements XMLMessageListener, Serializable {
     private static Logger log = LoggerFactory.getLogger(EventListener.class);
     private final LinkedBlockingQueue<SolaceMessage> messages;
     private final String id;
-    private List<String> lastKnownMessageIDs = new ArrayList<>();
+    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints = new CopyOnWriteArrayList<>();
     private String offsetIndicator = SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT;
     private SolaceBroker solaceBroker;
     public EventListener(String id) {
@@ -26,10 +31,10 @@ public class EventListener implements XMLMessageListener, Serializable {
         log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
     }
 
-    public EventListener(String id, List<String> messageIDs, String offsetIndicator) {
+    public EventListener(String id, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String offsetIndicator) {
         this.id = id;
         this.messages = new LinkedBlockingQueue<>();
-        this.lastKnownMessageIDs = messageIDs;
+        this.checkpoints = checkpoints;
         this.offsetIndicator = offsetIndicator;
         log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
     }
@@ -41,16 +46,50 @@ public class EventListener implements XMLMessageListener, Serializable {
     @Override
     public void onReceive(BytesXMLMessage msg) {
         try {
-            if(!lastKnownMessageIDs.isEmpty()) {
+            if(!this.checkpoints.isEmpty()) {
+                List<String> lastKnownMessageIDs = new ArrayList<>();
                 String messageID = SolaceUtils.getMessageID(msg, this.offsetIndicator);
-                for(String msgID : lastKnownMessageIDs) {
-                    if(msgID != null && !msgID.isEmpty()) {
-                        ReplicationGroupMessageId checkpointMsgId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(msgID);
-                        ReplicationGroupMessageId currentMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(messageID);
+                if(!msg.getProperties().containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY) &&
+                (msg.getProperties().get(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY) == null || msg.getProperties().get(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY).toString().isEmpty())) {
+                    for(SolaceSparkPartitionCheckpoint checkpoint : this.checkpoints) {
+                        lastKnownMessageIDs.addAll(Arrays.stream(checkpoint.getMessageIDs().split(",")).collect(Collectors.toList()));
+                    };
 
-                        if (currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) {
-                            msg.ackMessage();
-                            log.info("SolaceSparkConnector- Acknowledged message with ID {} present in last known offset as user has set ackLastProcessedMessages to true in configuration", messageID);
+                    lastKnownMessageIDs.sort((o1, o2) -> {
+                        try {
+                            return JCSMPFactory.onlyInstance().createReplicationGroupMessageId(o1).compare(JCSMPFactory.onlyInstance().createReplicationGroupMessageId(o2));
+                        } catch (JCSMPNotComparableException | InvalidPropertiesException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+
+                    compareMessageIds(lastKnownMessageIDs, messageID, msg);
+//                    for(String msgID : lastKnownMessageIDs) {
+//                        if(msgID != null && !msgID.isEmpty()) {
+//                            ReplicationGroupMessageId checkpointMsgId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(msgID);
+//                            ReplicationGroupMessageId currentMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(messageID);
+//
+//                            if (currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) {
+//                                msg.ackMessage();
+//                                log.info("SolaceSparkConnector - Acknowledged message with ID {} present in last known offset as user has set ackLastProcessedMessages to true in configuration", messageID);
+//                            } else {
+//                                this.messages.add(new SolaceMessage(msg));
+//                                if(lastKnownMessageIDs.size() > 1) {
+//                                    log.warn("SolaceSparkConnector - Message ID {} not acknowledged as it may be a previously failed message received before newer checkpointed ones. The connector will not check against checkpointed message IDs. It will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", messageID);
+//                                    break;
+//                                }
+//                            }
+//                        }
+//                    }
+                } else {
+                    String partitionKey = msg.getProperties().getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
+                    if(partitionKey != null && !partitionKey.isEmpty()) {
+                        SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = this.checkpoints.stream().filter(checkpoint -> checkpoint.getPartitionId().equals(partitionKey)).findFirst().orElse(null);
+                        if(solaceSparkPartitionCheckpoint != null) {
+                            lastKnownMessageIDs = Arrays.stream(solaceSparkPartitionCheckpoint.getMessageIDs().split(",")).collect(Collectors.toList());
+                            compareMessageIds(lastKnownMessageIDs, messageID, msg);
+                        } else {
+                            log.warn("SolaceSparkConnector - No checkpoint found for partition key {}. Message will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", partitionKey);
                         }
                     }
                 }
@@ -62,6 +101,24 @@ public class EventListener implements XMLMessageListener, Serializable {
             throw new SolaceConsumerException(e);
         }
 
+    }
+
+    private void compareMessageIds(List<String> lastKnownMessageIDs, String messageID, BytesXMLMessage msg) throws JCSMPException {
+        for(String msgID : lastKnownMessageIDs) {
+            ReplicationGroupMessageId checkpointMsgId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(msgID);
+            ReplicationGroupMessageId currentMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(messageID);
+
+            if (currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) {
+                msg.ackMessage();
+                log.info("SolaceSparkConnector - Acknowledged message with ID {} present in last known offset as user has set ackLastProcessedMessages to true in configuration", messageID);
+            } else {
+                this.messages.add(new SolaceMessage(msg));
+                if (lastKnownMessageIDs.size() > 1) {
+                    log.warn("SolaceSparkConnector - Message ID {} not acknowledged as it may be a previously failed message received before newer checkpointed ones. The connector will not check against checkpointed message IDs. It will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", messageID);
+                    break;
+                }
+            }
+        }
     }
 
     @Override

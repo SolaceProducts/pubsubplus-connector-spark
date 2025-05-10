@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark.streaming;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSourceOffset;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceDataSourceReaderFactory;
@@ -184,13 +185,35 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     @Override
     public Offset deserializeOffset(String json) {
-        SolaceSourceOffset solaceSourceOffset = new Gson().fromJson(json, SolaceSourceOffset.class);
+        SolaceSourceOffset solaceSourceOffset = getDeserializedOffset(json);
         if(solaceSourceOffset != null) {
             lastKnownOffsetId = solaceSourceOffset.getOffset();
             solaceSourceOffset.getCheckpoints().forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
         }
 
         return solaceSourceOffset;
+    }
+
+    private SolaceSourceOffset getDeserializedOffset(String json) {
+        try {
+            return new Gson().fromJson(json, SolaceSourceOffset.class);
+        } catch (Exception e) {
+            log.warn("SolaceSparkConnector - Exception when deserializing offset. May be due incompatible formats. Connector will try to migrate to latest offset format.");
+            try {
+                JsonObject jsonObject = new Gson().fromJson(json, JsonObject.class);
+                if (jsonObject.has("messageIDs")) {
+                    SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(jsonObject.get("messageIDs").getAsString(), "old-checkpoint");
+                    CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints = new CopyOnWriteArrayList<>();
+                    checkpoints.add(solaceSparkPartitionCheckpoint);
+                    return new SolaceSourceOffset(jsonObject.get("offset").getAsInt(), checkpoints);
+                }
+            } catch (Exception e2) {
+                log.error("SolaceSparkConnector - Exception when migrating offset to latest format.");
+                throw new RuntimeException("SolaceSparkConnector - Exception when migrating offset to latest format.", e);
+            }
+        }
+
+        return null;
     }
 
     @Override
