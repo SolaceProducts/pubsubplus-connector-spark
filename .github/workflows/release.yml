@@ -59,15 +59,6 @@ jobs:
       if: steps.secrets.outcome != 'success'
       run: echo "Could not (${{steps.secrets.outcome}}) log into vault using cicd-workflows-secret-read-role. Has this repo been onboarded in maas-vault-configuration?"; exit 1
 
-    - name: Checkout SolaceDev/maas-build-actions
-      uses: actions/checkout@v4
-      with:
-        repository: SolaceDev/maas-build-actions
-        ref: refs/heads/master
-        token: ${{ steps.secrets.outputs.PACKAGES_ADMIN_TOKEN }}
-        persist-credentials: false
-        path: maas-build-actions
-
     # Setup all secrets and env needed for the build
     - name: Set up JDK ${{ inputs.jre_version }} (${{inputs.java_environment}})
       uses: actions/setup-java@v4
