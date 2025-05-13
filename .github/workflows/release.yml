@@ -20,86 +20,164 @@ on:
         type: choice
         required: true
         default: "GA"
-        options: 
+        options:
         - Beta
         - EA
         - GA
 jobs:
   release_binder:
-    uses: SolaceDev/maas-build-actions/.github/workflows/release-binders-external.yaml@master
-    with:
-      main_branch: "${{ github.event.inputs.release_branch}}"
-      push_external: ${{ github.event.inputs.release_central == 'true'}}
-      release_version: "${{ github.event.inputs.release_version}}"
-      whitesource_product_name: 'techCoE-micro-integrations'
-      upload_artifacts: true
-    secrets:
-      COMMIT_KEY: ${{ secrets.COMMIT_KEY }}
-
-  push_to_products_solace:
-    runs-on: ubuntu-22.04
-    needs: release_binder
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
       id-token: write
-
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.release_branch }}
-          fetch-depth: 0
-          ssh-key: ${{ secrets.COMMIT_KEY }}
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.release_branch }}
+        fetch-depth: 0
+        ssh-key: ${{ secrets.COMMIT_KEY }}
+    - name: Retrieve secrets from Vault
+      id: secrets
+      uses: hashicorp/vault-action@v3
+      continue-on-error: true
+      with:
+        url: "${{ secrets.VAULT_ADDR }}"
+        role: "cicd-workflows-secret-read-role"
+        method: jwt
+        path: jwt-github
+        jwtGithubAudience: https://github.com/${{ github.repository_owner }}
+        exportToken: true
+        secrets: secret/data/tools/githubactions PACKAGES_ADMIN_USER | PACKAGES_ADMIN_USER ;
+          secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
+          secret/data/tools/githubactions MAVEN_GPG_KEY_PASSPHRASE | MAVEN_GPG_KEY_PASSPHRASE ;
+          secret/data/tools/githubactions MAVEN_GPG_KEY | MAVEN_GPG_KEY ;
+          secret/data/tools/githubactions MAVEN_OSSRH_USER | MAVEN_OSSRH_USER ;
+          secret/data/tools/githubactions MAVEN_OSSRH_PASS | MAVEN_OSSRH_PASS ;
 
-      - name: Retrieve secrets from Vault
-        id: secrets
-        uses: hashicorp/vault-action@v3
-        continue-on-error: true
-        with:
-          url: "${{ secrets.VAULT_ADDR }}"
-          role: "cicd-workflows-secret-read-role"
-          method: jwt
-          path: jwt-github
-          jwtGithubAudience: https://github.com/SolaceDev
-          exportToken: true
-          secrets: secret/data/tools/githubactions PACKAGES_ADMIN_USER | PACKAGES_ADMIN_USER ;
-            secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
+    - name: Warn of Vault Login Failure
+      if: steps.secrets.outcome != 'success'
+      run: echo "Could not (${{steps.secrets.outcome}}) log into vault using cicd-workflows-secret-read-role. Has this repo been onboarded in maas-vault-configuration?"; exit 1
 
-      - name: Checkout SolaceDev/maas-build-actions
-        uses: actions/checkout@v4
-        with:
-          repository: SolaceDev/maas-build-actions
-          ref: refs/heads/master
-          token: ${{ steps.secrets.outputs.PACKAGES_ADMIN_TOKEN }}
-          persist-credentials: false
-          path: maas-build-actions
+    - name: Checkout SolaceDev/maas-build-actions
+      uses: actions/checkout@v4
+      with:
+        repository: SolaceDev/maas-build-actions
+        ref: refs/heads/master
+        token: ${{ steps.secrets.outputs.PACKAGES_ADMIN_TOKEN }}
+        persist-credentials: false
+        path: maas-build-actions
 
-      - name: Get Artifact ID
-        run: |
-          cd pubsubplus-connector-spark_3.x
-          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout --settings "../maven/settings.xml")
-          echo "ARTIFACT_ID=$ARTIFACT_ID" >> $GITHUB_ENV
+    # Setup all secrets and env needed for the build
+    - name: Set up JDK ${{ inputs.jre_version }} (${{inputs.java_environment}})
+      uses: actions/setup-java@v4
+      with:
+        distribution: ${{ inputs.java_environment }}
+        java-version: ${{ inputs.jre_version }}
+        cache: 'maven'
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-          path: ./downloaded_artifacts
+    - name: Import GPG key
+      uses: crazy-max/ghaction-import-gpg@01dd5d3ca463c7f10f7f4f7b4f177225ac661ee4 #v6.1.0 
+      with:
+        gpg_private_key: ${{ steps.secrets.outputs.MAVEN_GPG_KEY }}
+        passphrase: ${{ steps.secrets.outputs.MAVEN_GPG_KEY_PASSPHRASE }}
 
-      - name: Copy JAR and User Guide to release_artifacts
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/release_artifacts
-          cp downloaded_artifacts/pubsubplus-connector-spark_3.x/target/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}.jar $GITHUB_WORKSPACE/release_artifacts/
-          cp downloaded_artifacts/pubsubplus-connector-spark_3.x/target/generated-docs/User-Guide.pdf $GITHUB_WORKSPACE/release_artifacts/${{ env.ARTIFACT_ID }}-${{ github.event.inputs.release_version }}-User-Guide.pdf
-          ls -l $GITHUB_WORKSPACE/release_artifacts
+    - name: Add SSH Key for write access for commits
+      uses: kielabokkie/ssh-key-and-known-hosts-action@v1
+      with:
+        ssh-private-key: ${{ secrets.COMMIT_KEY }}
+        ssh-host: github.com
 
-      - name: Push Artifacts to products.solace.com
-        uses: SolaceDev/maas-build-actions/.github/actions/transfer-files-products-solace@master
-        with:
-          artifact_directory: "${{ github.workspace }}/release_artifacts"
-          version: ${{ github.event.inputs.release_version }}
-          project_name: "Spark"
-          artifact_id: ${{ env.ARTIFACT_ID }}
-          release_notes_product: "spark"
-          symlink_name: "SPARK"
-          release_type:  ${{ github.event.inputs.release_type }}
+    - name: Configure Git author
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+
+    - name: Pre-Release Check - Version
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh api --method GET /repos/${{github.repository}}/releases -f sort=updated -f direction=asc > releases.json
+        release_version_exists=$(jq -r --arg RELEASE_VERSION ${{ inputs.release_version }} '.[].name|select(.|test($RELEASE_VERSION))'  releases.json)
+        if [[ ! -z "$release_version_exists" ]]; then
+              echo "Version ${{ inputs.release_version }} has been previously released. Please change release version."
+              exit 1
+        else
+              echo "New version: ${{ inputs.release_version }} going to be released!"
+        fi
+    - name: Set Build Params
+      run: |
+        if echo "${{inputs.release_version}}" | grep -iP 'ea|rc'; then
+          NEXT_DEV_REVISION="\${parsedVersion.majorVersion}.\${parsedVersion.minorVersion}.\${parsedVersion.incrementalVersion}"
+        else
+          NEXT_DEV_REVISION="\${next-revision}"
+        fi
+        export SKIP_FLAGS_NON_UNIT_TESTS="-Dcheckstyle.skip -Dpmd.skip -Dcpd.skip -Dfindbugs.skip -Dspotbugs.skip"
+        echo "Calculated Params"
+        echo "NEXT_DEV_REVISION=$NEXT_DEV_REVISION"
+        echo "SKIP_FLAGS_NON_UNIT_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS" >> $GITHUB_ENV
+        echo "NEXT_DEV_REVISION=$NEXT_DEV_REVISION" >> $GITHUB_ENV
+        echo "SKIP_FLAGS_ALL_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS -DskipTests=true" >> $GITHUB_ENV
+
+    - name: Release Version - Prepare
+      run: >-
+        mvn -B -U validate
+        versions:set-property
+        -Dproperty=revision
+        -DnewVersion="${{ inputs.release_version }}" &&
+        mvn validate
+        versions:set-property
+        -Dproperty=changelist
+        -DnewVersion=""
+
+    - name: Deploy Artifacts (GH Packages)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: >-
+        mvn deploy -B -DreleaseTarget=github  -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
+
+    - name: Deploy Artifacts (Maven Central)
+      if: ${{ inputs.push_external }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: >-
+        mvn deploy -B -DreleaseTarget=central -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
+
+    - name: Release Version - Checkin
+      run: >-
+        mvn validate
+        scm:checkin -B
+        -DscmVersion=${{ inputs.main_branch }}
+        -DscmVersionType=branch
+        -Dmessage="[ci skip] prepare release ${{ inputs.release_version }}" &&
+        mvn scm:tag -B -Dtag=${{ inputs.release_version }}
+
+    - name: Create GitHub Release
+      uses: ncipollo/release-action@v1.14.0
+      with:
+        tag: "${{ inputs.release_version }}"
+        generateReleaseNotes: true
+        makeLatest: true
+        artifacts: "**/target/*.jar"
+
+    - name: Next Development Version - Prepare and Checkin
+      run: >-
+        mvn -B -U validate build-helper:parse-version versions:set-property
+        -Dproperty=revision
+        -DnewVersion='${{ env.NEXT_DEV_REVISION}}' &&
+        mvn validate
+        versions:set-property
+        -Dproperty=changelist
+        -DnewVersion="-SNAPSHOT" &&
+        mvn validate scm:checkin -B
+        -DscmVersion=${{ inputs.main_branch }}
+        -DscmVersionType=branch
+        -Dmessage="[ci skip] prepare for next development iteration"
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: |
+          **/target/*.jar
+          **/target/generated-docs/User-Guide.pdf
