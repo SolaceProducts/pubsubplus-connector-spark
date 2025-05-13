@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -64,23 +63,6 @@ public class EventListener implements XMLMessageListener, Serializable {
                     });
 
                     compareMessageIds(lastKnownMessageIDs, messageID, msg);
-//                    for(String msgID : lastKnownMessageIDs) {
-//                        if(msgID != null && !msgID.isEmpty()) {
-//                            ReplicationGroupMessageId checkpointMsgId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(msgID);
-//                            ReplicationGroupMessageId currentMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(messageID);
-//
-//                            if (currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) {
-//                                msg.ackMessage();
-//                                log.info("SolaceSparkConnector - Acknowledged message with ID {} present in last known offset as user has set ackLastProcessedMessages to true in configuration", messageID);
-//                            } else {
-//                                this.messages.add(new SolaceMessage(msg));
-//                                if(lastKnownMessageIDs.size() > 1) {
-//                                    log.warn("SolaceSparkConnector - Message ID {} not acknowledged as it may be a previously failed message received before newer checkpointed ones. The connector will not check against checkpointed message IDs. It will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", messageID);
-//                                    break;
-//                                }
-//                            }
-//                        }
-//                    }
                 } else {
                     String partitionKey = msg.getProperties().getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
                     if(partitionKey != null && !partitionKey.isEmpty()) {
@@ -108,13 +90,13 @@ public class EventListener implements XMLMessageListener, Serializable {
             ReplicationGroupMessageId checkpointMsgId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(msgID);
             ReplicationGroupMessageId currentMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(messageID);
 
-            if (currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) {
+            if ((currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) && lastKnownMessageIDs.size() == 1) {
                 msg.ackMessage();
                 log.info("SolaceSparkConnector - Acknowledged message with ID {} present in last known offset as user has set ackLastProcessedMessages to true in configuration", messageID);
             } else {
                 this.messages.add(new SolaceMessage(msg));
                 if (lastKnownMessageIDs.size() > 1) {
-                    log.warn("SolaceSparkConnector - Message ID {} not acknowledged as it may be a previously failed message received before newer checkpointed ones. The connector will not check against checkpointed message IDs. It will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", messageID);
+                    log.warn("SolaceSparkConnector - Message ID {} not acknowledged as it may be a previously failed message received before newer checkpointed ones(parallel consumers). The connector will not check against checkpointed message IDs. It will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", messageID);
                     break;
                 }
             }

@@ -26,8 +26,17 @@ import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
 import org.apache.spark.sql.execution.streaming.StreamExecution;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.sql.Timestamp;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -45,28 +54,33 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private final int batchSize;
     private int messages = 0;
     private final String uniqueId;
+    private final String checkpointLocation;
     private final long receiveWaitTimeout;
     private final TaskContext taskContext;
-    private final String lastKnownOffset;
     private final boolean closeReceiversOnPartitionClose;
     private final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
-    public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, String lastKnownOffset, Map<String, String> properties,
-                                      TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints) {
+    public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, Map<String, String> properties,
+                                      TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation) {
         log.info("SolaceSparkConnector - Initializing Solace Input Partition reader with id {}", inputPartition.getId());
         this.solaceInputPartition = inputPartition;
         this.includeHeaders = includeHeaders;
-        this.lastKnownOffset = lastKnownOffset;
         this.properties = properties;
         this.taskContext = taskContext;
         this.checkpoints = checkpoints;
-        this.uniqueId = String.join("-", taskContext.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
-                taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
-                Integer.toString(taskContext.stageId()),
-                Integer.toString(taskContext.partitionId()));
+        this.checkpointLocation = checkpointLocation;
+        this.uniqueId = this.solaceInputPartition.getId();
         this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
         this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT, SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT));
         this.closeReceiversOnPartitionClose = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE, SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT));
         boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
+
+        // Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
+        // If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
+        log.info("SolaceSparkConnector - Acknowledging messages to Solace as commit is successful");
+        long startTime = System.currentTimeMillis();
+        SolaceMessageTracker.ackMessages(uniqueId);
+        log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
+
         log.info("SolaceSparkConnector - Checking for connection {}", inputPartition.getId());
 
         if (SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
@@ -214,30 +228,41 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                 SolaceMessageTracker.resetId(uniqueId);
             } else if (context.isCompleted()) {
                 List<String> ids = SolaceMessageTracker.getIds();
-                for(String id : ids) {
-                    String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(id);
-                    if (processedMessageIDs != null) {
-                        SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = this.getCheckpoint(this.solaceInputPartition.getId());
-                        if(solaceSparkPartitionCheckpoint != null) {
-                            solaceSparkPartitionCheckpoint.setMessageIDs(processedMessageIDs);
-                            solaceSparkPartitionCheckpoint.setPartitionId(this.solaceInputPartition.getId());
-                        } else {
-                            solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(processedMessageIDs, this.solaceInputPartition.getId());
-                        }
-                        this.updateCheckpoint(solaceSparkPartitionCheckpoint);
-
-                        // publish state to LVQ
-                        solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), this.getCheckpoint());
-                        log.trace("SolaceSparkConnector - Published checkpoint to LVQ with payload {} ", this.getCheckpoint());
-                        SolaceMessageTracker.removeProcessedMessagesIDs(id);
+                try {
+                    Path path = Paths.get(this.checkpointLocation + "/" + this.solaceInputPartition.getId() + ".txt");
+                    log.trace("SolaceSparkConnector - File path {} to store checkpoint processed in worker node {}", path.toString(), this.solaceInputPartition.getPreferredLocation());
+                    Path parentDir = path.getParent();
+                    if (parentDir != null) {
+                        // Create the directory and all nonexistent parent directories
+                        Files.createDirectories(parentDir);
+                        log.trace("SolaceSparkConnector - Created parent directory {} for file path {}", parentDir.toString(), path.toString());
                     }
+
+                    try(BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE,
+                            StandardOpenOption.TRUNCATE_EXISTING)) {
+                        for (String id : ids) {
+                            String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(id);
+                            if (processedMessageIDs != null) {
+                                SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(processedMessageIDs, id);
+                                CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> solaceSparkPartitionCheckpoints = new CopyOnWriteArrayList<>();
+                                solaceSparkPartitionCheckpoints.add(solaceSparkPartitionCheckpoint);
+                                // publish state to checkpoint. On commit the state is published to Solace LVQ.
+                                writer.write(new Gson().toJson(solaceSparkPartitionCheckpoints));
+                                writer.newLine();
+                                log.trace("SolaceSparkConnector - Checkpoint {} stored in file path {}", new Gson().toJson(solaceSparkPartitionCheckpoints), path.toString());
+                                SolaceMessageTracker.removeProcessedMessagesIDs(id);
+                            }
+                        }
+                    }
+                } catch (IOException e) {
+                    log.error("SolaceSparkConnector - Exception when writing checkpoint to path {}", this.checkpointLocation, e);
+                    this.solaceBroker.close();
+                    throw new RuntimeException(e);
                 }
+
 
                 // ack messages
                 log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(),uniqueId);
-                long startTime = System.currentTimeMillis();
-                SolaceMessageTracker.ackMessages(uniqueId);
-                log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
 
                 if(closeReceiversOnPartitionClose) {
                     solaceBroker.closeReceivers();
@@ -262,38 +287,12 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private void createReceiver(String inputPartitionId, boolean ackLastProcessedMessages) {
         EventListener eventListener = new EventListener(inputPartitionId);
         if(ackLastProcessedMessages) {
-            log.info("SolaceSparkConnector - Ack last processed messages is set to true for messages {}", this.lastKnownOffset);
+            log.info("SolaceSparkConnector - Ack last processed messages is set to true, connector will match incoming messages with checkpoint and auto acknowledge");
 //            List<String> messageIDs = Arrays.stream(this.lastKnownOffset.split(",")).collect(Collectors.toList());
             eventListener = new EventListener(inputPartitionId, this.checkpoints, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
         }
         // Initialize connection to Solace Broker
         solaceBroker.addReceiver(eventListener);
         SolaceConnectionManager.addConnection(inputPartitionId, solaceBroker);
-    }
-
-    private void updateCheckpoint(SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint) {
-        if(!this.checkpoints.isEmpty()) {
-            boolean checkpointExists = false;
-            for(SolaceSparkPartitionCheckpoint existingCheckpoint: this.checkpoints) {
-                if(existingCheckpoint.getPartitionId().equals(solaceSparkPartitionCheckpoint.getPartitionId())) {
-                    existingCheckpoint.setMessageIDs(solaceSparkPartitionCheckpoint.getMessageIDs());
-                    checkpointExists = true;
-                }
-            }
-
-            if(!checkpointExists) {
-                this.checkpoints.add(solaceSparkPartitionCheckpoint);
-            }
-        } else {
-            this.checkpoints.add(solaceSparkPartitionCheckpoint);
-        }
-    }
-
-    private SolaceSparkPartitionCheckpoint getCheckpoint(String partitionId) {
-        return this.checkpoints.stream().filter(entry -> entry.getPartitionId().equals(partitionId)).findFirst().orElse(null);
-    }
-
-    private String getCheckpoint() {
-        return new Gson().toJson(this.checkpoints);
     }
 }
