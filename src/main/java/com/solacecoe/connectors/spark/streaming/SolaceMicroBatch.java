@@ -213,16 +213,23 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     private SolaceSourceOffset getDeserializedOffset(String json) {
         try {
-            return new Gson().fromJson(json, SolaceSourceOffset.class);
+            SolaceSourceOffset solaceSourceOffset = new Gson().fromJson(json, SolaceSourceOffset.class);
+            if(solaceSourceOffset.getCheckpoints() == null) {
+                JsonObject jsonObject = new Gson().fromJson(json, JsonObject.class);
+                if (jsonObject.has("messageIDs")) {
+                    return migrate(solaceSourceOffset.getOffset(), jsonObject.get("messageIDs").getAsString());
+                } else {
+                    return migrate(solaceSourceOffset.getOffset(), "");
+                }
+            }
         } catch (Exception e) {
             log.warn("SolaceSparkConnector - Exception when deserializing offset. May be due incompatible formats. Connector will try to migrate to latest offset format.");
             try {
                 JsonObject jsonObject = new Gson().fromJson(json, JsonObject.class);
                 if (jsonObject.has("messageIDs")) {
-                    SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(jsonObject.get("messageIDs").getAsString(), "old-checkpoint");
-                    CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints = new CopyOnWriteArrayList<>();
-                    checkpoints.add(solaceSparkPartitionCheckpoint);
-                    return new SolaceSourceOffset(jsonObject.get("offset").getAsInt(), checkpoints);
+                    return migrate(jsonObject.get("offset").getAsInt(), jsonObject.get("messageIDs").getAsString());
+                } else {
+                    return migrate(jsonObject.get("offset").getAsInt(), "");
                 }
             } catch (Exception e2) {
                 log.error("SolaceSparkConnector - Exception when migrating offset to latest format.");
@@ -231,6 +238,13 @@ public class SolaceMicroBatch implements MicroBatchStream {
         }
 
         return null;
+    }
+
+    private SolaceSourceOffset migrate(int offset, String messageIds) {
+        SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(messageIds, "old-checkpoint");
+        CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints = new CopyOnWriteArrayList<>();
+        checkpoints.add(solaceSparkPartitionCheckpoint);
+        return new SolaceSourceOffset(offset, checkpoints);
     }
 
     @Override
