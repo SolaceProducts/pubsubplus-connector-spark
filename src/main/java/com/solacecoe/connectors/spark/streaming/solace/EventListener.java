@@ -48,21 +48,28 @@ public class EventListener implements XMLMessageListener, Serializable {
             if(!this.checkpoints.isEmpty()) {
                 List<String> lastKnownMessageIDs = new ArrayList<>();
                 String messageID = SolaceUtils.getMessageID(msg, this.offsetIndicator);
-                if(!msg.getProperties().containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY) &&
-                (msg.getProperties().get(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY) == null || msg.getProperties().get(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY).toString().isEmpty())) {
+                boolean hasPartitionKey = false;
+                if(msg.getProperties() != null && msg.getProperties().containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)) {
+                    hasPartitionKey = true;
+                }
+                if(!hasPartitionKey) {
                     for(SolaceSparkPartitionCheckpoint checkpoint : this.checkpoints) {
                         lastKnownMessageIDs.addAll(Arrays.stream(checkpoint.getMessageIDs().split(",")).collect(Collectors.toList()));
                     };
 
-                    lastKnownMessageIDs.sort((o1, o2) -> {
-                        try {
-                            return JCSMPFactory.onlyInstance().createReplicationGroupMessageId(o1).compare(JCSMPFactory.onlyInstance().createReplicationGroupMessageId(o2));
-                        } catch (JCSMPNotComparableException | InvalidPropertiesException e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
-
-                    compareMessageIds(lastKnownMessageIDs, messageID, msg);
+                    if(lastKnownMessageIDs.isEmpty()) {
+                        log.warn("SolaceSparkConnector - No checkpoint found. Message will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.");
+                        this.messages.add(new SolaceMessage(msg));
+                    } else {
+                        lastKnownMessageIDs.sort((o1, o2) -> {
+                            try {
+                                return JCSMPFactory.onlyInstance().createReplicationGroupMessageId(o1).compare(JCSMPFactory.onlyInstance().createReplicationGroupMessageId(o2));
+                            } catch (JCSMPNotComparableException | InvalidPropertiesException e) {
+                                throw new RuntimeException(e);
+                            }
+                        });
+                        compareMessageIds(lastKnownMessageIDs, messageID, msg);
+                    }
                 } else {
                     String partitionKey = msg.getProperties().getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
                     if(partitionKey != null && !partitionKey.isEmpty()) {
@@ -72,7 +79,11 @@ public class EventListener implements XMLMessageListener, Serializable {
                             compareMessageIds(lastKnownMessageIDs, messageID, msg);
                         } else {
                             log.warn("SolaceSparkConnector - No checkpoint found for partition key {}. Message will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", partitionKey);
+                            this.messages.add(new SolaceMessage(msg));
                         }
+                    } else {
+                        log.warn("SolaceSparkConnector - Incoming message has no partition key but messages in checkpoint has partition id's. Message will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.");
+                        this.messages.add(new SolaceMessage(msg));
                     }
                 }
             } else {

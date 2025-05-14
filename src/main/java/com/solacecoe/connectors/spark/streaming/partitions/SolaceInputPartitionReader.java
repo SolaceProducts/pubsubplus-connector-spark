@@ -76,7 +76,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
         // Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
         // If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
-        log.info("SolaceSparkConnector - Acknowledging messages to Solace as commit is successful");
+        log.info("SolaceSparkConnector - Acknowledging any processed messages to Solace as commit is successful");
         long startTime = System.currentTimeMillis();
         SolaceMessageTracker.ackMessages(uniqueId);
         log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));

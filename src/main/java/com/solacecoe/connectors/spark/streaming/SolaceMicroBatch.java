@@ -185,6 +185,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public PartitionReaderFactory createReaderFactory() {
         log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: {}", this.includeHeaders);
+        this.checkpoints = this.getCheckpoint();
         return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, this.checkpoints, this.checkpointLocation);
     }
 
