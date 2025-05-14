@@ -73,7 +73,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT, SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT));
         this.closeReceiversOnPartitionClose = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE, SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT));
         boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
-
+        String replayStrategy = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY ,null);
+        if(replayStrategy == null || replayStrategy.isEmpty()) {
+            ackLastProcessedMessages = false;
+        }
         // Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
         // If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
         log.info("SolaceSparkConnector - Acknowledging any processed messages to Solace as commit is successful");
