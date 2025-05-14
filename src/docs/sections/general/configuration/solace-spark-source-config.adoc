@@ -210,7 +210,7 @@ Note: Default value uses replication group message ID property as offset indicat
 | int
 | any
 | 1
-| Sets the number of consumers for configured queue. If more the one worker node is present, consumers are split across worker nodes for efficient processing.
+| Sets the number of consumers for configured queue. If more the one worker node is present, consumers are split across worker nodes for efficient processing. If set to 0 the connector will create consumers equal to number of worker nodes and will scale if more worker nodes are added.
 
 | createFlowsOnSameSession(deprecated)
 | boolean
