@@ -1,4 +1,4 @@
-name: Build, Test and Analyze Binder Jar
+name: Build, Integration Test
 on:
   workflow_call:
     inputs:
