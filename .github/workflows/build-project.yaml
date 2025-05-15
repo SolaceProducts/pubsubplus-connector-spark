@@ -1,4 +1,4 @@
-name: Build, Test Project
+name: Run Tests
 on:
   workflow_call:
     inputs:
@@ -48,6 +48,12 @@ jobs:
       id-token: write
 
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
       - name: Set up JDK ${{ inputs.jre_version }} (${{inputs.java_environment}})
         uses: actions/setup-java@v4
         with:
@@ -72,9 +78,6 @@ jobs:
           # Adding parameters/variable to GITHUB_ENV
           echo "GITHUB_PACKAGES_DEPLOY=$GITHUB_PACKAGES_DEPLOY" >> $GITHUB_ENV
 
-      - name: Static Code Analysis
-        run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
-
       - name: Unit/Integration Tests JDK 8 (zulu)
         uses: actions/setup-java@v4
         with:
@@ -97,9 +100,3 @@ jobs:
           java-version: ${{ inputs.jre_version }}
           overwrite-settings: false
           cache: 'maven'
-
-      - name: Build
-        run: >-
-          mvn -B -DskipTests verify 
-          antrun:run@generate-license-disclosure-stub 
-          --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
