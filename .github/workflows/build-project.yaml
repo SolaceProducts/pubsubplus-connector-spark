@@ -1,0 +1,105 @@
+name: Build, Test Project
+on:
+  workflow_call:
+    inputs:
+      java_environment:
+        required: false
+        type: string
+        default: zulu
+      jre_version:
+        required: false
+        type: string
+        default: 17
+      runner_label:
+        required: false
+        type: string
+        default: 'ubuntu-22.04'
+      unit_integration_test_reports:
+        required: false
+        type: string
+        default: "**/target/failsafe-reports/**/TEST*.xml,**/surefire-reports/**/TEST*.xml"
+      github_advanced_security_scanning_enabled:
+        required: false
+        type: boolean
+        default: false
+      main_branch:
+        required: false
+        type: string
+        default: 'main'
+      whitesource_product_name:
+        required: false
+        type: string
+        default: 'techCoE-micro-integrations'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', inputs.main_branch) }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 60
+    permissions:
+      packages: write
+      contents: read
+      statuses: write
+      checks: write
+      id-token: write
+
+    steps:
+      - name: Set up JDK ${{ inputs.jre_version }} (${{inputs.java_environment}})
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java_environment }}
+          java-version: ${{ inputs.jre_version }}
+          overwrite-settings: false
+          cache: 'maven'
+
+      - name: Set Build Params
+        run: |
+          export SKIP_FLAGS_NON_UNIT_TESTS="-Dcheckstyle.skip -Dpmd.skip -Dcpd.skip -Dfindbugs.skip -Dspotbugs.skip"
+          echo "SKIP_FLAGS_NON_UNIT_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS" >> $GITHUB_ENV
+          echo "SKIP_FLAGS_ALL_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS -DskipTests=true" >> $GITHUB_ENV
+          if [[ $GITHUB_REF_NAME == "${{ inputs.main_branch }}" ]]; then
+            export GITHUB_PACKAGES_DEPLOY=true
+          else
+            export GITHUB_PACKAGES_DEPLOY=false
+          fi
+          echo "Configured build parameters are :"
+          echo "GITHUB_PACKAGES_DEPLOY=$GITHUB_PACKAGES_DEPLOY"
+          
+          # Adding parameters/variable to GITHUB_ENV
+          echo "GITHUB_PACKAGES_DEPLOY=$GITHUB_PACKAGES_DEPLOY" >> $GITHUB_ENV
+
+      - name: Static Code Analysis
+        run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
+
+      - name: Unit/Integration Tests JDK 8 (zulu)
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 8
+
+      - name: Check Docker status
+        run: docker info
+
+      - name: Run Unit/Integration Tests
+        run: >-
+          mvn -B clean verify
+          jacoco:report 
+          --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
+
+      - name: Reset JDK to ${{ inputs.jre_version }} (${{inputs.java_environment}})
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java_environment }}
+          java-version: ${{ inputs.jre_version }}
+          overwrite-settings: false
+          cache: 'maven'
+
+      - name: Build
+        run: >-
+          mvn -B -DskipTests verify 
+          antrun:run@generate-license-disclosure-stub 
+          --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
