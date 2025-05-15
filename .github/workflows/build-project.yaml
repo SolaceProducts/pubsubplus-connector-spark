@@ -48,12 +48,6 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-
       - name: Set up JDK ${{ inputs.jre_version }} (${{inputs.java_environment}})
         uses: actions/setup-java@v4
         with:
