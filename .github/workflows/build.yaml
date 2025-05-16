@@ -21,7 +21,7 @@ permissions:
 jobs:
   build_jar:
     name: Build / Test / Analyze
-    uses: ./.github/workflows/build-java-binder.yaml
+    uses: ./.github/workflows/build-integrationtest.yaml
     with:
       unit_integration_test_reports: "**/target/failsafe-reports/**/TEST*.xml"
     secrets: inherit
