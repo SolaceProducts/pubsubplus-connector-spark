@@ -1,0 +1,197 @@
+name: Run Spotbugs & Integration Test
+on:
+  workflow_call:
+    inputs:
+      java_environment:
+        required: false
+        type: string
+        default: zulu
+      jre_version:
+        required: false
+        type: string
+        default: 17
+      runner_label:
+        required: false
+        type: string
+        default: 'ubuntu-22.04'
+      unit_integration_test_reports:
+        required: false
+        type: string
+        default: "**/target/failsafe-reports/**/TEST*.xml,**/surefire-reports/**/TEST*.xml"
+      github_advanced_security_scanning_enabled:
+        required: false
+        type: boolean
+        default: false
+      main_branch:
+        required: false
+        type: string
+        default: 'main'
+      whitesource_product_name:
+        required: false
+        type: string
+        default: 'techCoE-micro-integrations'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', inputs.main_branch) }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 60
+    permissions:
+      packages: write
+      contents: read
+      statuses: write
+      checks: write
+      id-token: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Retrieve secrets from Vault
+        id: secrets
+        uses: hashicorp/vault-action@v3
+        continue-on-error: true
+        with:
+          url: "${{ secrets.VAULT_ADDR }}"
+          role: "cicd-workflows-secret-read-role"
+          method: jwt
+          path: jwt-github
+          jwtGithubAudience: https://github.com/${{ github.repository_owner }}
+          exportToken: true
+          secrets: secret/data/tools/githubactions PACKAGES_ADMIN_USER | PACKAGES_ADMIN_USER ;
+            secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
+
+      - name: Warn of Vault Login Failure
+        if: steps.secrets.outcome != 'success'
+        run: echo "Could not (${{steps.secrets.outcome}}) log into vault using cicd-workflows-secret-read-role. Has this repo been onboarded in maas-vault-configuration?"; exit 1
+
+      - name: Set up JDK ${{ inputs.jre_version }} (${{inputs.java_environment}})
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java_environment }}
+          java-version: ${{ inputs.jre_version }}
+          overwrite-settings: false
+          cache: 'maven'
+
+      - name: Set Build Params
+        run: |
+          export SKIP_FLAGS_NON_UNIT_TESTS="-Dcheckstyle.skip -Dpmd.skip -Dcpd.skip -Dfindbugs.skip -Dspotbugs.skip"
+          echo "SKIP_FLAGS_NON_UNIT_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS" >> $GITHUB_ENV
+          echo "SKIP_FLAGS_ALL_TESTS=$SKIP_FLAGS_NON_UNIT_TESTS -DskipTests=true" >> $GITHUB_ENV
+          if [[ $GITHUB_REF_NAME == "${{ inputs.main_branch }}" ]]; then
+            export GITHUB_PACKAGES_DEPLOY=true
+          else
+            export GITHUB_PACKAGES_DEPLOY=false
+          fi
+          echo "Configured build parameters are :" 
+          echo "GITHUB_PACKAGES_DEPLOY=$GITHUB_PACKAGES_DEPLOY"
+          
+          # Adding parameters/variable to GITHUB_ENV
+          echo "GITHUB_PACKAGES_DEPLOY=$GITHUB_PACKAGES_DEPLOY" >> $GITHUB_ENV
+
+      - name: Static Code Analysis
+        run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
+
+      - name: Unit/Integration Tests JDK 8 (zulu)
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 8
+
+      - name: Check Docker status
+        run: docker info
+
+      - name: Run Unit/Integration Tests
+        run: >-
+          mvn -B clean verify
+          jacoco:report 
+          --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
+
+      - name: Reset JDK to ${{ inputs.jre_version }} (${{inputs.java_environment}})
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java_environment }}
+          java-version: ${{ inputs.jre_version }}
+          overwrite-settings: false
+          cache: 'maven'
+
+      - name: Uploading Artifacts - PMD
+        if: always()
+        uses: actions/upload-artifact@v4.3.1
+        with:
+          name: Code Analysis Results - PMD
+          path: |
+            ${{ github.workspace }}/**/target/pmd.xml
+            ${{ github.workspace }}/**/target/pmd.sarif.json
+            ${{ github.workspace }}/**/target/pmd/
+            ${{ github.workspace }}/**/target/site/
+
+      - name: Publishing Test Results - PMD
+        if: always()
+        uses: jwgmeligmeyling/pmd-github-action@master
+        with:
+          path: '**/pmd.xml'
+
+      - name: Uploading SARIF file - PMD
+        if: ${{ !cancelled() && inputs.github_advanced_security_scanning_enabled == 'true' }}
+        continue-on-error: true # Likely failed because repo doesn't have GitHub Enhanced Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: ${{ github.workspace }}/target/pmd.sarif.json
+
+      - name: Uploading Artifacts - SpotBugs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Code Analysis Results - SpotBugs
+          path: |
+            ${{ github.workspace }}/**/target/spotbugs.xml
+            ${{ github.workspace }}/**/target/spotbugsSarif.json
+            ${{ github.workspace }}/**/target/spotbugsXml.xml
+
+      - name: Uploading SARIF file - SpotBugs
+        if: ${{ !cancelled() && inputs.github_advanced_security_scanning_enabled == 'true'}}
+        continue-on-error: true # Likely failed because repo doesn't have GitHub Enhanced Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: ${{ github.workspace }}/**/target/spotbugsSarif.json
+
+      - name: Publishing Test Results - SpotBugs
+        if: always()
+        uses: jwgmeligmeyling/spotbugs-github-action@master
+        with:
+          path: '**/spotbugsXml.xml'
+
+      - name: Uploading Artifacts - Unit/Integration Tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Results - Unit-Integration Tests
+          path: |
+            **/target/failsafe-reports/*.xml
+            **/target/surefire-reports/*.xml
+            **/target/jacoco.exec
+            **/target/site/jacoco
+
+      - name: Publishing Test Results - Unit/Integration Tests Pre-Condition
+        if: ${{ always() && inputs.unit_integration_test_reports != '' }}
+        id: unit_integration_test_report_exists
+        uses: andstor/file-existence-action@v2
+        with:
+          files: "${{inputs.unit_integration_test_reports}}"
+
+      - name: Publishing Test Results - Unit/Integration Tests
+        uses: dorny/test-reporter@v1.7.0
+        if: ${{ always() && inputs.unit_integration_test_reports != '' && steps.unit_integration_test_report_exists.outputs.files_exists == 'true' }}
+        with:
+          name: Unit-Integration Tests
+          path: "${{inputs.unit_integration_test_reports}}"
+          reporter: java-junit
+          only-summary: 'true'
