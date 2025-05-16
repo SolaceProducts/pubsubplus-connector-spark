@@ -104,6 +104,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
         }
         if(this.solaceBroker != null && this.solaceBroker.isException()) {
+            log.error("SolaceSparkConnector - Exception encountered, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
             this.solaceBroker.close();
             this.taskContext.markTaskFailed(this.solaceBroker.getException());
             throw new SolaceSessionException(this.solaceBroker.getException());
@@ -115,6 +116,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     @Override
     public boolean next() {
         if(this.solaceBroker != null && this.solaceBroker.isException()) {
+            log.error("SolaceSparkConnector - Exception encountered when checking for next message, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
+            this.solaceBroker.close();
+            this.taskContext.markTaskFailed(this.solaceBroker.getException());
             throw new SolaceSessionException(this.solaceBroker.getException());
         }
         solaceMessage = getNextMessage();
@@ -285,6 +289,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             solaceBroker.initProducer();
             createReceiver(inputPartitionId, ackLastProcessedMessages);
         } catch (Exception e) {
+            log.error("SolaceSparkConnector - Exception Initializing Solace Broker", e);
             solaceBroker.close();
             this.taskContext.markTaskFailed(e);
             throw new SolaceConsumerException(e);
