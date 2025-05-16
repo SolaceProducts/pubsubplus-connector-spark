@@ -67,6 +67,7 @@ class SolaceSparkStreamingMessageReplayIT {
             sparkSession = SparkSession.builder()
                     .appName("data_source_test")
                     .master("local[*]")
+                    .config("spark.task.maxFailures", 1)
                     .getOrCreate();
             SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
