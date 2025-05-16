@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class SolaceSparkStreamingAuthenticationIT {
+class SolaceSparkStreamingTLSUsernameAuthenticationIT {
     private SparkSession sparkSession;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(false);
     @BeforeAll
@@ -157,79 +157,6 @@ class SolaceSparkStreamingAuthenticationIT {
         StreamingQuery streamingQuery = dataset.writeStream().option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
                 .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
                 .option(SolaceSparkStreamingProperties.USERNAME, "certificate-user")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_CLIENT_CERTIFICATE)
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_TRUST_STORE, resources.toAbsolutePath() + "/solace.jks")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_TRUST_STORE_FORMAT, "jks")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_TRUST_STORE_PASSWORD, "password")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_KEY_STORE, resources.toAbsolutePath() + "/solace_keystore.jks")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_KEY_STORE_FORMAT, "jks")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_KEY_STORE_PASSWORD, "password")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE_HOST, false)
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE_DATE, false)
-                .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
-                .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
-                .option("checkpointLocation", writePath.toAbsolutePath().toString())
-                .format("solace").start();
-
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
-    }
-
-    @Test
-    @Order(2)
-    void Should_ConnectUsingClientCertificateWithPassword() throws TimeoutException, InterruptedException {
-        Path resources = Paths.get("src", "test", "resources");
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
-                .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, "certificate-user-with-password")
-                .option(SolaceSparkStreamingProperties.PASSWORD, "certificate-user-with-password")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_CLIENT_CERTIFICATE)
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_TRUST_STORE, resources.toAbsolutePath() + "/solace.jks")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_TRUST_STORE_FORMAT, "jks")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_TRUST_STORE_PASSWORD, "password")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_KEY_STORE, resources.toAbsolutePath() + "/solace_keystore.jks")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_KEY_STORE_FORMAT, "jks")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_KEY_STORE_PASSWORD, "password")
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false)
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE_HOST, false)
-                .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_VALIDATE_CERTIFICATE_DATE, false)
-                .option(SolaceSparkStreamingProperties.QUEUE, SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME)
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "100")
-                .option("checkpointLocation", path.toAbsolutePath().toString())
-                .format("solace");
-        final long[] count = {0};
-        Dataset<Row> dataset = reader.load();
-
-        SolaceSession session = new SolaceSession(containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF), containerResource.getSolaceOAuthContainer().getVpn(), containerResource.getSolaceOAuthContainer().getUsername(), containerResource.getSolaceOAuthContainer().getPassword());
-        Topic topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
-        XMLMessageConsumer messageConsumer = null;
-        try {
-            messageConsumer = session.getSession().getMessageConsumer(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    count[0] = count[0] + 1;
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-                    // Not required for test
-                }
-            });
-            session.getSession().addSubscription(topic);
-            messageConsumer.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
-
-        StreamingQuery streamingQuery = dataset.writeStream().option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
-                .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, "certificate-user-with-password")
-                .option(SolaceSparkStreamingProperties.PASSWORD, "certificate-user-with-password")
                 .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, JCSMPProperties.AUTHENTICATION_SCHEME_CLIENT_CERTIFICATE)
                 .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_TRUST_STORE, resources.toAbsolutePath() + "/solace.jks")
                 .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.SSL_TRUST_STORE_FORMAT, "jks")

@@ -430,6 +430,7 @@ public class SolaceBroker implements Serializable {
             close();
             this.isException = true;
             this.exception = e;
+            scheduledExecutorService.shutdown();
             throw new SolaceInvalidAccessTokenException(e);
         }
     }
