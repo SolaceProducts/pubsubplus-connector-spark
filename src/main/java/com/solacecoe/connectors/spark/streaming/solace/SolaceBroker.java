@@ -440,7 +440,11 @@ public class SolaceBroker implements Serializable {
             log.error(message, e);
             this.isException = true;
             this.exception = e;
-            throw new SolaceSessionException(e);
+            if(e == null) {
+                throw new SolaceSessionException(message);
+            } else {
+                throw new SolaceSessionException(e);
+            }
         }
     }
 
