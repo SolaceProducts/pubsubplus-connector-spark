@@ -25,6 +25,7 @@ import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
 import org.apache.spark.sql.execution.streaming.StreamExecution;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.apache.spark.util.TaskFailureListener;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -118,6 +119,13 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             log.error("SolaceSparkConnector - Exception encountered when checking for next message, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
             this.solaceBroker.close();
             throw new SolaceSessionException(this.solaceBroker.getException());
+        }
+
+        if (TaskContext.get() != null && TaskContext.get().isInterrupted()) {
+            log.info("SolaceSparkConnector - Interrupted while waiting for next message");
+            SolaceConnectionManager.close(this.solaceInputPartition.getId());
+            SolaceMessageTracker.resetId(uniqueId);
+            throw new RuntimeException("Task was interrupted.");
         }
         solaceMessage = getNextMessage();
         return solaceMessage != null;
@@ -225,16 +233,24 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         }
     }
 
+    private void logShutdownMessage(TaskContext context) {
+        log.info("SolaceSparkConnector - Closing connections to Solace as task {} is interrupted or failed", String.join(",", context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
+                context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
+                Integer.toString(context.stageId()),
+                Integer.toString(context.partitionId())));
+        SolaceConnectionManager.close(this.solaceInputPartition.getId());
+        SolaceMessageTracker.resetId(uniqueId);
+    }
+
     private void registerTaskListener() {
+        this.taskContext.addTaskFailureListener((context, error) -> {
+            log.error("SolaceSparkConnector - Input Partition {} failed with error", this.solaceInputPartition.getId(), error);
+            logShutdownMessage(context);
+        });
         this.taskContext.addTaskCompletionListener(context -> {
             log.info("SolaceSparkConnector - Task {} state is completed :: {}, failed :: {}, interrupted :: {}", uniqueId, context.isCompleted(), context.isFailed(), context.isInterrupted());
             if(context.isInterrupted() || context.isFailed()) {
-                log.info("SolaceSparkConnector - Closing connections to Solace as task {} is interrupted or failed", String.join(",", context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
-                        context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
-                        Integer.toString(context.stageId()),
-                        Integer.toString(context.partitionId())));
-                SolaceConnectionManager.close(this.solaceInputPartition.getId());
-                SolaceMessageTracker.resetId(uniqueId);
+                logShutdownMessage(context);
             } else if (context.isCompleted()) {
                 List<String> ids = SolaceMessageTracker.getIds();
                 try {

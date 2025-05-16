@@ -76,7 +76,12 @@ public class EventListener implements XMLMessageListener, Serializable {
                         SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = this.checkpoints.stream().filter(checkpoint -> checkpoint.getPartitionId().equals(partitionKey)).findFirst().orElse(null);
                         if(solaceSparkPartitionCheckpoint != null) {
                             lastKnownMessageIDs = Arrays.stream(solaceSparkPartitionCheckpoint.getMessageIDs().split(",")).collect(Collectors.toList());
-                            compareMessageIds(lastKnownMessageIDs, messageID, msg);
+                            if(lastKnownMessageIDs.isEmpty()) {
+                                log.warn("SolaceSparkConnector - No checkpoint found. Message will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.");
+                                this.messages.add(new SolaceMessage(msg));
+                            } else {
+                                compareMessageIds(lastKnownMessageIDs, messageID, msg);
+                            }
                         } else {
                             log.warn("SolaceSparkConnector - No checkpoint found for partition key {}. Message will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", partitionKey);
                             this.messages.add(new SolaceMessage(msg));
