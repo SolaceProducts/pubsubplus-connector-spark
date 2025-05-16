@@ -31,7 +31,7 @@ This guide assumes you are familiar with Spark set up and Spark Structured Strea
 === Prerequisites
 
 * https://solace.com/products/event-broker/[Solace PubSub+ Event Broker]
-* Apache Spark 3.5.1 and Scala 2.12
+* Apache Spark 3.5.2 and Scala 2.12
 
 === Supported Platforms
 
