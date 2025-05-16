@@ -152,7 +152,7 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | int
 | any
 | 1
-| Set number of messages to be processed in batch. The connector can stream data in batches to Spark based on configured size. For efficient processing by Spark set Maximum Delivered Unacknowledged Messages per Flow property on Queue is twice the batch size.
+| Set number of messages to be processed in batch. The connector can stream data in batches to Spark based on configured size. For efficient processing by Spark set Maximum Delivered Unacknowledged Messages per Flow property on Queue to twice the batch size.
 
 | replayStrategy
 | string
