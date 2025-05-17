@@ -8,6 +8,7 @@ import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishA
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAckInterruptedException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceAbortMessage;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceConnectionPool;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolacePublishStatus;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
@@ -33,6 +34,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
     private String topic;
     private String messageId;
+    private final String partitionId;
     private final int batchSize;
     private final StructType schema;
     private final Map<String, String> properties;
@@ -42,7 +44,8 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final Map<String, SolaceAbortMessage> abortedMessages;
     private Exception exception;
     private final boolean includeHeaders;
-    public SolaceDataWriter(StructType schema, Map<String, String> properties) {
+    public SolaceDataWriter(int id, StructType schema, Map<String, String> properties) {
+        this.partitionId = Integer.toString(id);
         this.schema = schema;
         this.properties = properties;
         this.batchSize = Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
@@ -50,12 +53,10 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
         this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
         try {
-            this.solaceBroker = new SolaceBroker(properties, "producer");
+            createOrGetConnection(this.partitionId);
             this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
         } catch (Exception e) {
-            if(this.solaceBroker != null) {
-                this.solaceBroker.close();
-            }
+            this.invalidateObject();
             throw new SolacePublishException(e.getCause());
         }
 
@@ -94,7 +95,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             this.solaceBroker.publishMessage(this.messageId, this.topic,
                     partitionKey, payload, timestamp, headersMap);
         } catch (Exception e) {
-            this.solaceBroker.close();
+            this.invalidateObject();
             throw new SolacePublishException(e.getCause());
         }
     }
@@ -151,7 +152,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         log.info("SolaceSparkConnector - SolaceDataWriter Closed");
         commitMessages.clear();
         abortedMessages.clear();
-        this.solaceBroker.close();
+        this.invalidateObject();
     }
 
     private UnsafeProjection createProjection() {
@@ -217,6 +218,21 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
             String exMessage = gson.toJson(abortedMessages, Map.class);
             abortedMessages.clear();
             throw new SolacePublishException(exMessage);
+        }
+    }
+
+    private void createOrGetConnection(String id) throws Exception {
+        log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
+        solaceBroker = SolaceConnectionPool.getInstance(this.properties, "producer").borrowObject(id);
+    }
+
+    private void invalidateObject() {
+        try {
+            if(this.solaceBroker != null) {
+                SolaceConnectionPool.getInstance(this.properties, "producer").invalidateObject(this.partitionId, this.solaceBroker);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 }

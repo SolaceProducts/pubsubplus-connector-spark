@@ -283,7 +283,7 @@ class SolaceSparkStreamingOAuthIT {
     void Should_ConnectToInSecureOAuthServer_And_ProcessData_And_PublishToSolace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
-        sparkSession.sparkContext().setLogLevel("TRACE");
+//        sparkSession.sparkContext().setLogLevel("TRACE");
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
                 .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())

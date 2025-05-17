@@ -5,6 +5,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -13,6 +15,9 @@ public final class SolaceMessageTracker implements Serializable {
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<SolaceMessage>> messages = new ConcurrentHashMap<>();
     private static ConcurrentHashMap<String, String> lastProcessedMessageId = new ConcurrentHashMap<>();
 
+    public static List<String> getIds() {
+        return Collections.list(lastProcessedMessageId.keys());
+    }
     public static String getProcessedMessagesIDs(String uniqueId) {
         if(lastProcessedMessageId.containsKey(uniqueId)) {
             return lastProcessedMessageId.get(uniqueId);
@@ -33,10 +38,14 @@ public final class SolaceMessageTracker implements Serializable {
         messages.put(uniqueId, messageList);
     }
 
+    public static boolean hasId(String uniqueId) {
+        return messages.containsKey(uniqueId);
+    }
+
     public static void ackMessages(String uniqueId) {
         if(messages.containsKey(uniqueId)) {
-            logger.trace("SolaceSparkConnector - Acknowledging {} messages ", messages.get(uniqueId).size());
             messages.get(uniqueId).forEach(message -> message.bytesXMLMessage.ackMessage());
+            logger.trace("SolaceSparkConnector - Acknowledged {} messages ", messages.get(uniqueId).size());
             messages.remove(uniqueId);
         }
     }

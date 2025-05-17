@@ -67,6 +67,7 @@ class SolaceSparkStreamingMessageReplayIT {
             sparkSession = SparkSession.builder()
                     .appName("data_source_test")
                     .master("local[*]")
+                    .config("spark.task.maxFailures", 1)
                     .getOrCreate();
             SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
@@ -354,6 +355,7 @@ class SolaceSparkStreamingMessageReplayIT {
     void Should_Fail_IfReplicationGroupMessageIdIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         assertThrows(StreamingQueryException.class, () -> {
+//            sparkSession.sparkContext().setLogLevel("TRACE");
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())

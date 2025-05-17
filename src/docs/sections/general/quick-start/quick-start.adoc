@@ -58,6 +58,7 @@ NOTE: Before installing latest version of connector make sure earlier versions o
 
     query.awaitTermination()
 ----
+TIP: For optimal throughput, configure the Solace queue's 'Maximum Delivered Unacknowledged Messages per Flow' property to a value equal to twice the batch size.
 .. Finally, let's read data from the parquet file from the location configured above
 +
 [source,scala]
