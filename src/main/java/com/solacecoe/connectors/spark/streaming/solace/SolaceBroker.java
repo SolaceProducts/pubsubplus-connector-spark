@@ -7,6 +7,10 @@ import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionE
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.*;
+import org.apache.commons.pool2.BaseKeyedPooledObjectFactory;
+import org.apache.commons.pool2.DestroyMode;
+import org.apache.commons.pool2.PooledObject;
+import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.spark.sql.catalyst.expressions.UnsafeMapData;
 import org.apache.spark.sql.types.DataTypes;
 import org.jetbrains.annotations.NotNull;
@@ -21,11 +25,12 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class SolaceBroker implements Serializable {
+public class SolaceBroker extends BaseKeyedPooledObjectFactory<String, SolaceBroker> implements Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceBroker.class);
     private final String queue;
     private final String lvqName;
     private final String lvqTopic;
+    private final String clientType;
     private String uniqueName = "";
     private OAuthClient oAuthClient;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
@@ -38,7 +43,7 @@ public class SolaceBroker implements Serializable {
     private boolean isAccessTokenSourceModified = true;
     private boolean isOAuth = false;
     private final Map<String, String> properties;
-    private final JCSMPSession session;
+    private JCSMPSession session;
     private XMLMessageProducer producer;
 
     public SolaceBroker(Map<String, String> properties, String clientType) {
@@ -49,64 +54,7 @@ public class SolaceBroker implements Serializable {
         this.lvqName = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME);
         this.lvqTopic = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC);
         this.queue = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
-        try {
-            JCSMPProperties jcsmpProperties = new JCSMPProperties();
-            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
-            // get api properties
-            Properties props = getProperties(properties);
-            if(!props.isEmpty()) {
-                jcsmpProperties = JCSMPProperties.fromProperties(props);
-            }
-
-            jcsmpProperties.setProperty(JCSMPProperties.HOST, properties.get(SolaceSparkStreamingProperties.HOST));            // host:port
-            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, properties.get(SolaceSparkStreamingProperties.VPN));    // message-vpn
-
-            String authenticationScheme = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, null);
-            if(authenticationScheme != null && authenticationScheme.equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
-                isOAuth = true;
-                int interval = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT));
-                // if access token is configured, read it directly from source
-                if(properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN)) {
-                    String accessTokenSourceType = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE, SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE_DEFAULT);
-                    // default file source is currently supported
-                    if(accessTokenSourceType.equals(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE_DEFAULT)) {
-                        String accessTokenSource = properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN);
-                        String accessToken = readAccessTokenFromFile(accessTokenSource);
-                        jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, accessToken);
-                        scheduleOAuthRefresh(accessTokenSource, interval);
-                    }
-                } else {
-                    int fetchTimeout = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT));
-                    boolean validateSSLCertificate = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, "true"));
-                    String trustStoreFilePath = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_FILE, null);
-                    String trustStoreFilePassword = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD, null);
-                    String trustStoreType = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_TYPE, SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_TYPE_DEFAULT);
-                    String tlsVersion = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TLS_VERSION, SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TLS_VERSION_DEFAULT);
-
-                    oAuthClient = new OAuthClient(properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL), properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID),
-                            properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET));
-                    oAuthClient.buildRequest(fetchTimeout, properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE, null), trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate);
-
-                    jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken().getValue());
-                    scheduleOAuthRefresh(interval);
-                }
-            } else {
-                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, properties.getOrDefault(SolaceSparkStreamingProperties.USERNAME, "")); // client-username
-                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, properties.getOrDefault(SolaceSparkStreamingProperties.PASSWORD, "")); // client-password
-            }
-
-            this.uniqueName = JCSMPFactory.onlyInstance().createUniqueName("solace/spark/connector/"+clientType);
-            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_NAME, uniqueName);
-            addChannelProperties(jcsmpProperties);
-            session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
-            session.connect();
-        } catch (Exception ex) {
-            log.error("SolaceSparkConnector - Exception connecting to Solace ", ex);
-            close();
-            this.isException = true;
-            this.exception = ex;
-            throw new SolaceSessionException(ex);
-        }
+        this.clientType = clientType;
     }
 
     private void addChannelProperties(JCSMPProperties jcsmpProperties) {
@@ -455,5 +403,79 @@ public class SolaceBroker implements Serializable {
 
     public Exception getException() {
         return exception;
+    }
+
+    @Override
+    public SolaceBroker create(String o) throws Exception {
+        try {
+            JCSMPProperties jcsmpProperties = new JCSMPProperties();
+            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
+            // get api properties
+            Properties props = getProperties(properties);
+            if(!props.isEmpty()) {
+                jcsmpProperties = JCSMPProperties.fromProperties(props);
+            }
+
+            jcsmpProperties.setProperty(JCSMPProperties.HOST, properties.get(SolaceSparkStreamingProperties.HOST));            // host:port
+            jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, properties.get(SolaceSparkStreamingProperties.VPN));    // message-vpn
+
+            String authenticationScheme = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, null);
+            if(authenticationScheme != null && authenticationScheme.equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
+                isOAuth = true;
+                int interval = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT));
+                // if access token is configured, read it directly from source
+                if(properties.containsKey(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN)) {
+                    String accessTokenSourceType = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE, SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE_DEFAULT);
+                    // default file source is currently supported
+                    if(accessTokenSourceType.equals(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN_SOURCE_DEFAULT)) {
+                        String accessTokenSource = properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_ACCESSTOKEN);
+                        String accessToken = readAccessTokenFromFile(accessTokenSource);
+                        jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, accessToken);
+                        scheduleOAuthRefresh(accessTokenSource, interval);
+                    }
+                } else {
+                    int fetchTimeout = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT, SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT));
+                    boolean validateSSLCertificate = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_SSL_VALIDATE_CERTIFICATE, "true"));
+                    String trustStoreFilePath = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_FILE, null);
+                    String trustStoreFilePassword = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_PASSWORD, null);
+                    String trustStoreType = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_TYPE, SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TRUSTSTORE_TYPE_DEFAULT);
+                    String tlsVersion = properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TLS_VERSION, SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_TLS_VERSION_DEFAULT);
+
+                    oAuthClient = new OAuthClient(properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_URL), properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CLIENT_ID),
+                            properties.get(SolaceSparkStreamingProperties.OAUTH_CLIENT_CREDENTIALS_CLIENTSECRET));
+                    oAuthClient.buildRequest(fetchTimeout, properties.getOrDefault(SolaceSparkStreamingProperties.OAUTH_CLIENT_AUTHSERVER_CLIENT_CERTIFICATE, null), trustStoreFilePath, trustStoreFilePassword, tlsVersion, trustStoreType, validateSSLCertificate);
+
+                    jcsmpProperties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oAuthClient.getAccessToken().getValue());
+                    scheduleOAuthRefresh(interval);
+                }
+            } else {
+                jcsmpProperties.setProperty(JCSMPProperties.USERNAME, properties.getOrDefault(SolaceSparkStreamingProperties.USERNAME, "")); // client-username
+                jcsmpProperties.setProperty(JCSMPProperties.PASSWORD, properties.getOrDefault(SolaceSparkStreamingProperties.PASSWORD, "")); // client-password
+            }
+
+            this.uniqueName = JCSMPFactory.onlyInstance().createUniqueName("solace/spark/connector/"+clientType);
+            jcsmpProperties.setProperty(JCSMPProperties.CLIENT_NAME, uniqueName);
+            addChannelProperties(jcsmpProperties);
+            session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
+            session.connect();
+        } catch (Exception ex) {
+            log.error("SolaceSparkConnector - Exception connecting to Solace ", ex);
+            close();
+            this.isException = true;
+            this.exception = ex;
+            throw new SolaceSessionException(ex);
+        }
+        return this;
+    }
+
+    @Override
+    public PooledObject<SolaceBroker> wrap(SolaceBroker solaceBroker) {
+        return new DefaultPooledObject<>(this);
+    }
+
+    @Override
+    public void destroyObject(String key, PooledObject<SolaceBroker> p, DestroyMode destroyMode) {
+        log.info("SolaceSparkConnector - Input partition {} requested to close connection for broker session {}", key, p.getObject().getUniqueName());
+        p.getObject().close();
     }
 }

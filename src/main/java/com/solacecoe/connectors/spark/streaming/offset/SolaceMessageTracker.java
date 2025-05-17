@@ -38,6 +38,10 @@ public final class SolaceMessageTracker implements Serializable {
         messages.put(uniqueId, messageList);
     }
 
+    public static boolean hasId(String uniqueId) {
+        return messages.containsKey(uniqueId);
+    }
+
     public static void ackMessages(String uniqueId) {
         if(messages.containsKey(uniqueId)) {
             messages.get(uniqueId).forEach(message -> message.bytesXMLMessage.ackMessage());
