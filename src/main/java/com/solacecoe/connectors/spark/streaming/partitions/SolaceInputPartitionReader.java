@@ -237,11 +237,11 @@ public class SolaceInputPartitionReader extends SolaceSparkExecutor implements P
         if(this.solaceBroker != null && this.solaceBroker.isException()) {
             throw new SolaceSessionException(this.solaceBroker.getException());
         }
-        if(this.solaceBroker != null) {
-            if(SolaceConnectionPool.isKeyPresent(this.uniqueId)) {
-                SolaceConnectionPool.getInstance(this.properties, "consumer").returnObject(this.uniqueId, this.solaceBroker);
-            }
-        }
+//        if(this.solaceBroker != null) {
+//            if(SolaceConnectionPool.isKeyPresent(this.uniqueId)) {
+//                SolaceConnectionPool.getInstance(this.properties, "consumer").returnObject(this.uniqueId, this.solaceBroker);
+//            }
+//        }
     }
 
     private void logShutdownMessage(TaskContext context) {
