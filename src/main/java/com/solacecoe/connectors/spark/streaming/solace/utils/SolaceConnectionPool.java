@@ -11,6 +11,9 @@ public class SolaceConnectionPool {
         if (pool == null) {
             try {
                 pool = new GenericKeyedObjectPool<>(new SolaceBroker(props, clientType));
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    reset();
+                }));
             } catch (Exception e) {
                 throw new RuntimeException("Failed to initialize Solace pool", e);
             }
@@ -27,6 +30,13 @@ public class SolaceConnectionPool {
             if(isKeyPresent(key)) {
                 pool.clear(key);
             }
+        }
+    }
+
+    public static synchronized void reset() {
+        if (pool != null) {
+            pool.close();
+            pool = null;
         }
     }
 }

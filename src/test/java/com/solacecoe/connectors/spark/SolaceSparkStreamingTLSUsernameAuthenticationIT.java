@@ -4,6 +4,7 @@ import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.oauth.CertificateContainerResource;
 import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceConnectionPool;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.api.java.function.VoidFunction2;
 import org.apache.spark.sql.Dataset;
@@ -104,6 +105,8 @@ class SolaceSparkStreamingTLSUsernameAuthenticationIT {
         if(Files.exists(path2)) {
             FileUtils.deleteDirectory(path2.toAbsolutePath().toFile());
         }
+
+        SolaceConnectionPool.reset();
     }
 
     @Test

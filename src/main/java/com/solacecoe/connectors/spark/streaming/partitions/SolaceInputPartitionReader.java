@@ -98,11 +98,13 @@ public class SolaceInputPartitionReader extends SolaceSparkExecutor implements P
                     }
                 } else {
                     log.warn("SolaceSparkConnector - Existing Solace connection not available for partition {}. Creating new connection", inputPartition.getId());
+                    SolaceConnectionPool.invalidateKey(this.uniqueId);
                     createOrGetConnection(this.uniqueId);
                     solaceBroker.initProducer();
                     createReceiver(this.uniqueId, ackLastProcessedMessages);
                 }
             } else {
+                SolaceConnectionPool.invalidateKey(this.uniqueId);
                 createOrGetConnection(inputPartition.getId());
                 solaceBroker.initProducer();
                 createReceiver(this.uniqueId, ackLastProcessedMessages);

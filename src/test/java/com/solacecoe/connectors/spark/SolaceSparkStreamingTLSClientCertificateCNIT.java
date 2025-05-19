@@ -4,6 +4,7 @@ import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.oauth.CertificateContainerResource;
 import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceConnectionPool;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -100,6 +101,8 @@ class SolaceSparkStreamingTLSClientCertificateCNIT {
         if(Files.exists(path4)) {
             FileUtils.delete(path4.toAbsolutePath().toFile());
         }
+
+        SolaceConnectionPool.reset();
     }
 
     @Test
