@@ -5,10 +5,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.plugin.ExecutorPlugin;
 
-public class SolaceSparkExecutor implements ExecutorPlugin {
-    private final transient Logger log = LogManager.getLogger(SolaceSparkExecutor.class);
-    private final String key;
+import java.io.Serializable;
 
+public class SolaceSparkExecutor implements ExecutorPlugin, Serializable {
+    private final transient Logger log = LogManager.getLogger(SolaceSparkExecutor.class);
+    private String key;
+
+    public SolaceSparkExecutor() {
+        // No-arg constructor
+    }
     public SolaceSparkExecutor(String key) {
         this.key = key;
     }
