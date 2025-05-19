@@ -6,6 +6,7 @@ import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
 import com.solacecoe.connectors.spark.base.SempV2Api;
 import com.solacecoe.connectors.spark.base.SolaceSession;
+import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceConnectionPool;
 import com.solacesystems.jcsmp.*;
@@ -137,6 +138,7 @@ class SolaceSparkStreamingSinkIT {
             FileUtils.deleteDirectory(path2.toAbsolutePath().toFile());
         }
         SolaceConnectionPool.reset();
+        SolaceMessageTracker.reset();
     }
 
     @Test

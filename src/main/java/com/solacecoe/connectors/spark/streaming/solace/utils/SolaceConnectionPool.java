@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.solace.utils;
 
+import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 
@@ -13,6 +14,7 @@ public class SolaceConnectionPool {
                 pool = new GenericKeyedObjectPool<>(new SolaceBroker(props, clientType));
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                     reset();
+                    SolaceMessageTracker.reset();
                 }));
             } catch (Exception e) {
                 throw new RuntimeException("Failed to initialize Solace pool", e);
