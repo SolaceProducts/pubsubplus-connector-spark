@@ -11,6 +11,7 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingP
 import com.solacecoe.connectors.spark.streaming.solace.LVQEventListener;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceConnectionPool;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -53,6 +54,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> lastKnownOffset = new CopyOnWriteArrayList<>();
     private final String checkpointLocation;
     private final List<String> partitionIds = new ArrayList<>();
+    private final String lvqHashCode;
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
         this.properties = properties;
 
@@ -83,11 +85,18 @@ public class SolaceMicroBatch implements MicroBatchStream {
         log.info("SolaceSparkConnector - offsetIndicator is set to {}", solaceOffsetIndicator);
 
         this.queueName = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
-        this.solaceBroker = new SolaceBroker(properties, "lvq-consumer");
-        LVQEventListener lvqEventListener = new LVQEventListener();
-        this.solaceBroker.addLVQReceiver(lvqEventListener);
-        this.solaceBroker.initProducer();
-        log.info("SolaceSparkConnector - Initialization Completed");
+        String lvqName = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME);
+        lvqHashCode = Integer.toString((lvqName).hashCode());
+        try {
+            this.solaceBroker = SolaceConnectionPool.getInstance(properties, "lvq-consumer").borrowObject(lvqHashCode);
+            //        this.solaceBroker = new SolaceBroker(properties, "lvq-consumer");
+            LVQEventListener lvqEventListener = new LVQEventListener();
+            this.solaceBroker.addLVQReceiver(lvqEventListener);
+            this.solaceBroker.initProducer();
+            log.info("SolaceSparkConnector - Initialization Completed");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -284,7 +293,13 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public void stop() {
         log.info("SolaceSparkConnector - Closing Spark Connector");
-        this.solaceBroker.close();
+        if(this.solaceBroker != null) {
+            try {
+                SolaceConnectionPool.getInstance(properties, "lvq-consumer").invalidateObject(lvqHashCode, this.solaceBroker);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getCheckpoint() {

@@ -7,7 +7,6 @@ import java.util.Map;
 
 public class SolaceConnectionPool {
     private static GenericKeyedObjectPool<String, SolaceBroker> pool;
-
     public static synchronized GenericKeyedObjectPool<String, SolaceBroker> getInstance(Map<String, String> props, String clientType) {
         if (pool == null) {
             try {
@@ -17,5 +16,17 @@ public class SolaceConnectionPool {
             }
         }
         return pool;
+    }
+
+    public static boolean isKeyPresent(String key) {
+        return pool != null && pool.getKeys().contains(key);
+    }
+
+    public static void invalidateKey(String key) {
+        if(pool != null) {
+            if(isKeyPresent(key)) {
+                pool.clear(key);
+            }
+        }
     }
 }

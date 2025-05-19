@@ -229,7 +229,9 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private void invalidateObject() {
         try {
             if(this.solaceBroker != null) {
-                SolaceConnectionPool.getInstance(this.properties, "producer").invalidateObject(this.partitionId, this.solaceBroker);
+                if(SolaceConnectionPool.isKeyPresent(this.partitionId)) {
+                    SolaceConnectionPool.getInstance(this.properties, "producer").invalidateObject(this.partitionId, this.solaceBroker);
+                }
             }
         } catch (Exception e) {
             throw new RuntimeException(e);

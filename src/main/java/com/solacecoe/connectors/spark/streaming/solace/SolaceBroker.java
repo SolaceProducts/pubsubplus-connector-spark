@@ -478,4 +478,9 @@ public class SolaceBroker extends BaseKeyedPooledObjectFactory<String, SolaceBro
         log.info("SolaceSparkConnector - Input partition {} requested to close connection for broker session {}", key, p.getObject().getUniqueName());
         p.getObject().close();
     }
+
+    @Override
+    public boolean validateObject(String key, PooledObject<SolaceBroker> p) {
+        return !p.getObject().session.isClosed();
+    }
 }
