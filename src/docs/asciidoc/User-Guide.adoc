@@ -35,7 +35,7 @@ This guide assumes you are familiar with Spark set up and Spark Structured Strea
 
 === Supported Platforms
 
-The connector is built on the Spark Structured Streaming API and has been tested on Azure Databricks(16.4 LTS (includes Apache Spark 3.5.2, Scala 2.12) with photon acceleration disabled). Since the Databricks runtime is consistent across all supported cloud platforms(AWS & Google Cloud), it is expected to behave similarly in other Databricks environments. Additionally, the connector has been validated on vanilla Apache Spark, ensuring compatibility with any platform that supports standard Spark deployments.
+The connector is built on the Spark Structured Streaming API and has been tested on Azure Databricks(15.4 LTS (includes Apache Spark 3.5.0, Scala 2.12) with photon acceleration disabled). Since the Databricks runtime is consistent across all supported cloud platforms(AWS & Google Cloud), it is expected to behave similarly in other Databricks environments. Additionally, the connector has been validated on vanilla Apache Spark, ensuring compatibility with any platform that supports standard Spark deployments.
 
 === Quick Start common steps
 

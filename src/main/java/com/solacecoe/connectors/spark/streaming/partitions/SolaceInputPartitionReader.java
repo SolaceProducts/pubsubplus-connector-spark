@@ -25,14 +25,10 @@ import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
 import org.apache.spark.sql.execution.streaming.StreamExecution;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.apache.spark.util.TaskFailureListener;
 
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,10 +36,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import java.util.concurrent.*;
 
 public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
     private final transient Logger log = LogManager.getLogger(SolaceInputPartitionReader.class);
@@ -54,6 +47,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private SolaceBroker solaceBroker;
     private final int batchSize;
     private int messages = 0;
+    private final long taskId;
     private final String uniqueId;
     private final String checkpointLocation;
     private final long receiveWaitTimeout;
@@ -68,8 +62,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         this.solaceInputPartition = inputPartition;
         this.uniqueId = this.solaceInputPartition.getId();
 
-        // Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
-        // If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
+        /* Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
+        * If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
+        * Solace connection is always active and acknowledgements should be successful. It might throw exception if connection is lost
+        * */
         log.info("SolaceSparkConnector - Acknowledging any processed messages to Solace as commit is successful");
         long startTime = System.currentTimeMillis();
         SolaceMessageTracker.ackMessages(uniqueId);
@@ -78,6 +74,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         this.includeHeaders = includeHeaders;
         this.properties = properties;
         this.taskContext = taskContext;
+        this.taskId = taskContext.taskAttemptId();
         this.checkpoints = checkpoints;
         this.checkpointLocation = checkpointLocation;
         this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
@@ -91,15 +88,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
         log.info("SolaceSparkConnector - Checking for connection {}", inputPartition.getId());
 
+        // Get existing connection if a new task is scheduled on executor or create a new one
         if (SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
-            solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
-            if (solaceBroker != null) {
-                if (closeReceiversOnPartitionClose) {
-                    createReceiver(inputPartition.getId(), ackLastProcessedMessages);
-                }
-            } else {
-                log.warn("SolaceSparkConnector - Existing Solace connection not available for partition {}. Creating new connection", inputPartition.getId());
-                createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
+            if (closeReceiversOnPartitionClose) {
+                createReceiver(inputPartition.getId(), ackLastProcessedMessages);
             }
         } else {
             createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
@@ -262,7 +254,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         Files.createDirectories(parentDir);
                         log.trace("SolaceSparkConnector - Created parent directory {} for file path {}", parentDir.toString(), path.toString());
                     }
-
+                    // overwrite checkpoint to preserve latest value
                     try(BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE,
                             StandardOpenOption.TRUNCATE_EXISTING)) {
                         for (String id : ids) {
@@ -271,7 +263,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                                 SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(processedMessageIDs, id);
                                 CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> solaceSparkPartitionCheckpoints = new CopyOnWriteArrayList<>();
                                 solaceSparkPartitionCheckpoints.add(solaceSparkPartitionCheckpoint);
-                                // publish state to checkpoint. On commit the state is published to Solace LVQ.
+                                // Publish state to checkpoint. On commit the state is published to Solace LVQ.
                                 writer.write(new Gson().toJson(solaceSparkPartitionCheckpoints));
                                 writer.newLine();
                                 log.trace("SolaceSparkConnector - Checkpoint {} stored in file path {}", new Gson().toJson(solaceSparkPartitionCheckpoints), path.toString());
@@ -285,8 +277,6 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                     throw new RuntimeException(e);
                 }
 
-
-                // ack messages
                 log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(),uniqueId);
 
                 if(closeReceiversOnPartitionClose) {
