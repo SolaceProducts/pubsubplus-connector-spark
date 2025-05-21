@@ -90,6 +90,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
         // Get existing connection if a new task is scheduled on executor or create a new one
         if (SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
+            solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
             if (closeReceiversOnPartitionClose) {
                 createReceiver(inputPartition.getId(), ackLastProcessedMessages);
             }
