@@ -26,4 +26,8 @@ public class SolaceInputPartition implements InputPartition, Serializable {
     public String getId() {
         return id;
     }
+
+    public String getPreferredLocation() {
+        return preferredLocation;
+    }
 }
