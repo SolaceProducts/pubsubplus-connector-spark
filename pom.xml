@@ -68,6 +68,13 @@
         </developer>
     </developers>
 
+    <distributionManagement>
+        <site>
+            <id>solace-pubsubplus-spark-connector-site</id>
+            <url>https://solace.com/integration-hub/apache-spark</url>
+        </site>
+    </distributionManagement>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
