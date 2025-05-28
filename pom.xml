@@ -53,9 +53,9 @@
     </organization>
 
     <scm>
-        <url>https://github.com/SolaceDev/spark-connector-v2.git</url>
-        <connection>scm:git:git@github.com:SolaceDev/spark-connector-v2.git</connection>
-        <developerConnection>scm:git:git@github.com:SolaceDev/spark-connector-v2.git</developerConnection>
+        <url>https://github.com/SolaceProducts/pubsubplus-connector-spark.git</url>
+        <connection>scm:git:git@github.com:SolaceProducts/pubsubplus-connector-spark.git</connection>
+        <developerConnection>scm:git:git@github.com:SolaceProducts/pubsubplus-connector-spark.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
 
