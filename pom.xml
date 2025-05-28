@@ -629,8 +629,8 @@
             <distributionManagement>
                 <repository>
                     <id>github</id>
-                    <name>GitHub SolaceDev Maven Packages - Binder</name>
-                    <url>https://maven.pkg.github.com/SolaceDev/spark-connector-v2</url>
+                    <name>GitHub SolaceProducts Maven Packages - Binder</name>
+                    <url>https://maven.pkg.github.com/SolaceProducts/pubsubplus-connector-spark</url>
                 </repository>
             </distributionManagement>
         </profile>
