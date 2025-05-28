@@ -27,6 +27,9 @@ on:
 jobs:
   release_binder:
     runs-on: ubuntu-latest
+    env:
+      java_environment: zulu
+      jre_version: 17
     permissions:
       contents: write
       packages: write
@@ -60,11 +63,11 @@ jobs:
       run: echo "Could not (${{steps.secrets.outcome}}) log into vault using cicd-workflows-secret-read-role. Has this repo been onboarded in maas-vault-configuration?"; exit 1
 
     # Setup all secrets and env needed for the build
-    - name: Set up JDK ${{ inputs.jre_version }} (${{inputs.java_environment}})
+    - name: Set up JDK ${{ env.jre_version }} (${{env.java_environment}})
       uses: actions/setup-java@v4
       with:
-        distribution: ${{ inputs.java_environment }}
-        java-version: ${{ inputs.jre_version }}
+        distribution: ${{ env.java_environment }}
+        java-version: ${{ env.jre_version }}
         cache: 'maven'
 
     - name: Import GPG key
@@ -128,7 +131,6 @@ jobs:
         mvn deploy -B -DreleaseTarget=github  -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
 
     - name: Deploy Artifacts (Maven Central)
-      if: ${{ inputs.push_external }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: >-
@@ -138,7 +140,7 @@ jobs:
       run: >-
         mvn validate
         scm:checkin -B
-        -DscmVersion=${{ inputs.main_branch }}
+        -DscmVersion=${{ inputs.release_branch }}
         -DscmVersionType=branch
         -Dmessage="[ci skip] prepare release ${{ inputs.release_version }}" &&
         mvn scm:tag -B -Dtag=${{ inputs.release_version }}
@@ -161,7 +163,7 @@ jobs:
         -Dproperty=changelist
         -DnewVersion="-SNAPSHOT" &&
         mvn validate scm:checkin -B
-        -DscmVersion=${{ inputs.main_branch }}
+        -DscmVersion=${{ inputs.release_branch }}
         -DscmVersionType=branch
         -Dmessage="[ci skip] prepare for next development iteration"
 
