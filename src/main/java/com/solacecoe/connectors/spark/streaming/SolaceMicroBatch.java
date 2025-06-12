@@ -53,7 +53,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> lastKnownOffset = new CopyOnWriteArrayList<>();
     private final String checkpointLocation;
     private final List<String> partitionIds = new ArrayList<>();
-
+    private List<String> executorList = new ArrayList<>();
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
         this.properties = properties;
 
@@ -116,6 +116,22 @@ public class SolaceMicroBatch implements MicroBatchStream {
             if(!partitionIds.contains(Integer.toString(partitionHashCode))) {
                 partitionIds.add(Integer.toString(partitionHashCode));
             }
+            List<String> currentExecutorList = getSortedExecutorList();
+            if(!executorList.isEmpty()) {
+                executorList.forEach(executor -> {
+                    if(!currentExecutorList.contains(executor)) {
+                        for (String id : inputPartitionsList.keySet()) {
+                            if (id.equals(executor)) {
+                                if (inputPartitionsList.get(id).getPreferredLocation().contains(executor)) {
+                                    inputPartitionsList.remove(id);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            executorList = currentExecutorList;
             Optional<String> preferredLocation = getExecutorLocation(getSortedExecutorList(), partitionHashCode);
             if(!inputPartitionsList.containsKey(String.valueOf(partitionHashCode))) {
                 inputPartitionsList.put(String.valueOf(partitionHashCode), new SolaceInputPartition(partitionHashCode, preferredLocation.orElse("")));
