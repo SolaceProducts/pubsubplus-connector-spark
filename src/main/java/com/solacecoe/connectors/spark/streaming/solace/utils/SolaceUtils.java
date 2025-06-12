@@ -181,8 +181,9 @@ public class SolaceUtils {
                 throw new RuntimeException(msg, e);
             }
         }
-
-        xmlMessage.setProperties(metadata);
+        if(!metadata.isEmpty()) {
+            xmlMessage.setProperties(metadata);
+        }
         return xmlMessage;
     }
 
@@ -194,9 +195,9 @@ public class SolaceUtils {
 //                    SolaceHeaderMeta.META.containsKey(header.getKey()) || SolaceSparkHeadersMeta.META.containsKey(header.getKey())) {
 //                continue;
 //            }
-//            if (excludedHeaders != null && excludedHeaders.contains(header.getKey())) {
-//                continue;
-//            }
+            if (excludedHeaders != null && excludedHeaders.contains(header.getKey())) {
+                continue;
+            }
 
             addSDTMapObject(metadata, serializedHeaders, header.getKey(), header.getValue(),
                     convertNonSerializableHeadersToString);

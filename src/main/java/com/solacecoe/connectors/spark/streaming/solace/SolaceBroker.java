@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaderMeta;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidAccessTokenException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
@@ -40,7 +41,7 @@ public class SolaceBroker implements Serializable {
     private final Map<String, String> properties;
     private final JCSMPSession session;
     private XMLMessageProducer producer;
-
+    private long executorLastActivityTime = 0l;
     public SolaceBroker(Map<String, String> properties, String clientType) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
@@ -100,6 +101,7 @@ public class SolaceBroker implements Serializable {
             addChannelProperties(jcsmpProperties);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
+//            checkIfExecutorIsIdle();
         } catch (Exception ex) {
             log.error("SolaceSparkConnector - Exception connecting to Solace ", ex);
             close();
@@ -107,6 +109,21 @@ public class SolaceBroker implements Serializable {
             this.exception = ex;
             throw new SolaceSessionException(ex);
         }
+    }
+
+    private void checkIfExecutorIsIdle() {
+        ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+        scheduledExecutorService.scheduleAtFixedRate(() -> {
+            if(executorLastActivityTime > 0) {
+                long executorIdleDuration = System.currentTimeMillis() - executorLastActivityTime;
+                if (executorIdleDuration > 30_000) { // 30 seconds of inactivity
+                    log.info("SolaceSparkConnector - Solace Session {} appears to be idle for {} ms", uniqueName, executorIdleDuration);
+                    log.info("SolaceSparkConnector - This might indicate the driver is shutdown and executor is idle. Closing Solace Session {}", uniqueName);
+                    close();
+                    scheduledExecutorService.shutdown();
+                }
+            }
+        }, 0, 10, TimeUnit.SECONDS);
     }
 
     private void addChannelProperties(JCSMPProperties jcsmpProperties) {
@@ -297,7 +314,7 @@ public class SolaceBroker implements Serializable {
 
         XMLMessage xmlMessage = null;
         try {
-            xmlMessage = SolaceUtils.map(msg, headers, applicationMessageId, new ArrayList<>(), false);
+            xmlMessage = SolaceUtils.map(msg, headers, applicationMessageId, SolaceHeaderMeta.META.keySet(), false);
         } catch (SDTException e) {
             throw new RuntimeException(e);
         }
@@ -455,5 +472,9 @@ public class SolaceBroker implements Serializable {
 
     public Exception getException() {
         return exception;
+    }
+
+    public void setExecutorLastActivityTime(long executorLastActivityTime) {
+        this.executorLastActivityTime = executorLastActivityTime;
     }
 }
