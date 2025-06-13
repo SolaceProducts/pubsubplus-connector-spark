@@ -116,26 +116,10 @@ public class SolaceMicroBatch implements MicroBatchStream {
             if(!partitionIds.contains(Integer.toString(partitionHashCode))) {
                 partitionIds.add(Integer.toString(partitionHashCode));
             }
-            List<String> currentExecutorList = getSortedExecutorList();
-            if(!executorList.isEmpty()) {
-                executorList.forEach(executor -> {
-                    if(!currentExecutorList.contains(executor)) {
-                        for (String id : inputPartitionsList.keySet()) {
-                            if (id.equals(executor)) {
-                                if (inputPartitionsList.get(id).getPreferredLocation().contains(executor)) {
-                                    inputPartitionsList.remove(id);
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            executorList = currentExecutorList;
             Optional<String> preferredLocation = getExecutorLocation(getSortedExecutorList(), partitionHashCode);
-            if(!inputPartitionsList.containsKey(String.valueOf(partitionHashCode))) {
+//            if(!inputPartitionsList.containsKey(String.valueOf(partitionHashCode))) {
                 inputPartitionsList.put(String.valueOf(partitionHashCode), new SolaceInputPartition(partitionHashCode, preferredLocation.orElse("")));
-            }
+//            }
         }
 
         return inputPartitionsList.values().toArray(new InputPartition[0]);

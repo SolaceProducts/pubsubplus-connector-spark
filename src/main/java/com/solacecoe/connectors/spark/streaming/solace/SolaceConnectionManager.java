@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SolaceConnectionManager {
     private static final Logger logger = LogManager.getLogger(SolaceConnectionManager.class);
     private static final ConcurrentHashMap<String, SolaceBroker> brokerConnections = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, String> partitionInfo = new ConcurrentHashMap<>();
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(SolaceConnectionManager::closeAllConnections));
@@ -25,8 +26,16 @@ public class SolaceConnectionManager {
         brokerConnections.put(id, solaceBroker);
     }
 
+    public static void addPartition(String id, String preferredLocation) {
+        partitionInfo.put(id, preferredLocation);
+    }
+
     public static SolaceBroker getConnection(String id) {
         return brokerConnections.getOrDefault(id, null);
+    }
+
+    public static String getPartition(String id) {
+        return partitionInfo.getOrDefault(id, null);
     }
 
     public static SolaceBroker getFirstConnection() {

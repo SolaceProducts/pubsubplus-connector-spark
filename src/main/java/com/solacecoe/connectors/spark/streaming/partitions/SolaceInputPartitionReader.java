@@ -83,23 +83,27 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
         this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT, SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT));
         this.closeReceiversOnPartitionClose = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE, SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT));
-        boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
-        String replayStrategy = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY ,null);
-        if(replayStrategy == null || replayStrategy.isEmpty()) {
-            ackLastProcessedMessages = false;
-        }
+//        boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
+//        String replayStrategy = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY ,null);
+//        if(replayStrategy == null || replayStrategy.isEmpty()) {
+//            ackLastProcessedMessages = false;
+//        }
+
+        registerTaskListener();
 
         log.info("SolaceSparkConnector - Checking for connection {}", inputPartition.getId());
 
         // Get existing connection if a new task is scheduled on executor or create a new one
-        if (SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
-            solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
-            if (closeReceiversOnPartitionClose) {
-                createReceiver(inputPartition.getId(), ackLastProcessedMessages);
-            }
-        } else {
-            createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
-        }
+//        if (SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
+//            solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
+////            initProducerAndConsumer(this.solaceInputPartition.getId(), ackLastProcessedMessages);
+////            if (closeReceiversOnPartitionClose) {
+////                createReceiver(inputPartition.getId(), ackLastProcessedMessages);
+////            }
+//        } else {
+//            createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
+//        }
+        solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
         if(this.solaceBroker != null && this.solaceBroker.isException()) {
             log.error("SolaceSparkConnector - Exception encountered, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
             this.solaceBroker.close();
@@ -109,21 +113,22 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             this.solaceBroker.setExecutorLastActivityTime(System.currentTimeMillis());
         }
         log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition {}", inputPartition.getId());
-        registerTaskListener();
     }
 
     @Override
     public boolean next() {
-        if (taskContext != null && !taskContext.getKillReason().isEmpty()) {
-            log.info("SolaceSparkConnector - Executor Kill detected: {}", taskContext.getKillReason().get());
-            logShutdownMessage(taskContext);
-            return false;
+        if(this.solaceBroker != null) {
+            this.solaceBroker.setExecutorLastActivityTime(System.currentTimeMillis());
         }
+//        if (taskContext != null && !taskContext.getKillReason().isEmpty()) {
+//            log.info("SolaceSparkConnector - Executor Kill detected: {}", taskContext.getKillReason().get());
+//            logShutdownMessage(taskContext);
+//            return false;
+//        }
 
         if (TaskContext.get() != null && TaskContext.get().isInterrupted()) {
             log.info("SolaceSparkConnector - Interrupted while waiting for next message");
-            SolaceConnectionManager.close(this.solaceInputPartition.getId());
-            SolaceMessageTracker.resetId(uniqueId);
+            logShutdownMessage(TaskContext.get());
             throw new RuntimeException("Task was interrupted.");
         }
 
@@ -234,19 +239,23 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     @Override
     public void close() {
         log.info("SolaceSparkConnector - Input partition reader with ID {} with task {} is closed", this.solaceInputPartition.getId(), this.uniqueId);
+
+//        if (taskContext != null && !taskContext.getKillReason().isEmpty()) {
+//            log.info("SolaceSparkConnector - Executor Kill detected: {}", taskContext.getKillReason().get());
+//            logShutdownMessage(taskContext);
+//        }
+
+        if (TaskContext.get() != null && (TaskContext.get().isFailed() || TaskContext.get().isInterrupted())) {
+            log.info("SolaceSparkConnector - Executor is Interrupted");
+            logShutdownMessage(TaskContext.get());
+        }
+
         if(this.solaceBroker != null && this.solaceBroker.isException()) {
             throw new SolaceSessionException(this.solaceBroker.getException());
         }
 
-        if (taskContext != null && !taskContext.getKillReason().isEmpty()) {
-            log.info("SolaceSparkConnector - Executor Kill detected: {}", taskContext.getKillReason().get());
-            logShutdownMessage(taskContext);
-        }
-
-        if (TaskContext.get() != null && (TaskContext.get().isFailed() || TaskContext.get().isInterrupted())) {
-            log.info("SolaceSparkConnector - Interrupted while waiting for next message");
-            SolaceConnectionManager.close(this.solaceInputPartition.getId());
-            SolaceMessageTracker.resetId(uniqueId);
+        if(this.solaceBroker != null) {
+            this.solaceBroker.setExecutorLastActivityTime(0l);
         }
     }
 
@@ -315,13 +324,17 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         log.info("SolaceSparkConnector - Solace Connection Details Host : {}, VPN : {}, Username : {}", properties.get(SolaceSparkStreamingProperties.HOST), properties.get(SolaceSparkStreamingProperties.VPN), properties.get(SolaceSparkStreamingProperties.USERNAME));
         try {
             solaceBroker = new SolaceBroker(properties, "consumer");
-            solaceBroker.initProducer();
-            createReceiver(inputPartitionId, ackLastProcessedMessages);
+            initProducerAndConsumer(inputPartitionId, ackLastProcessedMessages);
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Exception Initializing Solace Broker", this.solaceBroker.getException() != null ? this.solaceBroker.getException() : e);
             solaceBroker.close();
             throw new SolaceConsumerException(e);
         }
+    }
+
+    private void initProducerAndConsumer(String inputPartitionId, boolean ackLastProcessedMessages) {
+        solaceBroker.initProducer();
+        createReceiver(inputPartitionId, ackLastProcessedMessages);
     }
 
     private void createReceiver(String inputPartitionId, boolean ackLastProcessedMessages) {
@@ -333,6 +346,5 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         }
         // Initialize connection to Solace Broker
         solaceBroker.addReceiver(eventListener);
-        SolaceConnectionManager.addConnection(inputPartitionId, solaceBroker);
     }
 }
