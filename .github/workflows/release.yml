@@ -57,8 +57,8 @@ jobs:
             secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
             secret/data/tools/githubactions MAVEN_GPG_KEY_PASSPHRASE | MAVEN_GPG_KEY_PASSPHRASE ;
             secret/data/tools/githubactions MAVEN_GPG_KEY | MAVEN_GPG_KEY ;
-            secret/data/tools/githubactions MAVEN_OSSRH_USER | MAVEN_OSSRH_USER ;
-            secret/data/tools/githubactions MAVEN_OSSRH_PASS | MAVEN_OSSRH_PASS ;
+            secret/data/tools/githubactions MAVEN_USERNAME | MAVEN_USERNAME ;
+            secret/data/tools/githubactions MAVEN_PASSWORD | MAVEN_PASSWORD ;
 
       - name: Warn of Vault Login Failure
         if: steps.secrets.outcome != 'success'
@@ -71,6 +71,9 @@ jobs:
           distribution: ${{ env.java_environment }}
           java-version: ${{ env.jre_version }}
           cache: "maven"
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
 
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@01dd5d3ca463c7f10f7f4f7b4f177225ac661ee4 #v6.1.0
@@ -135,6 +138,8 @@ jobs:
       - name: Deploy Artifacts (Maven Central)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAVEN_USERNAME: ${{ steps.secrets.outputs.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ steps.secrets.outputs.MAVEN_PASSWORD }}
         run: >-
           mvn deploy -B -DreleaseTarget=central -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
 
