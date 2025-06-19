@@ -577,6 +577,12 @@
             <properties>
                 <gpg.executable>gpg2</gpg.executable>
             </properties>
+            <distributionManagement>
+                <snapshotRepository>
+                    <id>central</id>
+                    <url>https://central.sonatype.com/repository/maven-snapshots</url>
+                </snapshotRepository>
+            </distributionManagement>
             <build>
                 <plugins>
                     <plugin>
