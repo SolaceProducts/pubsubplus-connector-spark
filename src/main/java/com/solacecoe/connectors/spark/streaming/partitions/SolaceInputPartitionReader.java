@@ -152,6 +152,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                 SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
             }
             SolaceMessageTracker.addMessage(this.uniqueId, solaceMessage);
+            solaceBroker.setLastMessageTimestamp(System.currentTimeMillis());
             return row;
         } catch (Exception e) {
             log.error("SolaceSparkConnector- Exception while reading message", e);

@@ -40,7 +40,8 @@ public class SolaceBroker implements Serializable {
     private final Map<String, String> properties;
     private final JCSMPSession session;
     private XMLMessageProducer producer;
-
+    private long lastMessageTimestamp = 0;
+    private boolean isShuttingDown = false;
     public SolaceBroker(Map<String, String> properties, String clientType) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
@@ -100,6 +101,7 @@ public class SolaceBroker implements Serializable {
             addChannelProperties(jcsmpProperties);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
+            startWatchdog();
         } catch (Exception ex) {
             log.error("SolaceSparkConnector - Exception connecting to Solace ", ex);
             close();
@@ -342,17 +344,25 @@ public class SolaceBroker implements Serializable {
     }
 
     public void close() {
-        closeProducer();
-        closeReceivers();
-        log.info("Closing Solace Session");
-        if(session != null && !session.isClosed()) {
-            session.closeSession();
-            log.info("SolaceSparkConnector - Closed Solace session");
-        }
+        isShuttingDown = true;
+        try {
+            closeProducer();
+            closeReceivers();
 
-        if(scheduledExecutorService != null) {
-            scheduledExecutorService.shutdownNow();
-            log.info("SolaceSparkConnector - OAuth token refresh thread is now shutdown");
+            log.info("Closing Solace Session");
+            if(session != null && !session.isClosed()) {
+                session.closeSession();
+                log.info("SolaceSparkConnector - Closed Solace session");
+            }
+
+            if(scheduledExecutorService != null) {
+                scheduledExecutorService.shutdownNow();
+                log.info("SolaceSparkConnector - OAuth token refresh thread is now shutdown");
+            }
+
+        } catch (Exception e) {
+            log.error("SolaceSparkConnector - Graceful shutdown failed", e);
+            throw e;
         }
     }
 
@@ -455,5 +465,32 @@ public class SolaceBroker implements Serializable {
 
     public Exception getException() {
         return exception;
+    }
+
+    private void startWatchdog() {
+        long timeout = Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT, SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT_DEFAULT));
+        long interval = Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT_CHECK, SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT_CHECK_DEFAULT));
+
+        if(timeout > 0 && interval > 0) {
+            ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+            scheduler.scheduleAtFixedRate(() -> {
+                if (isShuttingDown) {
+                    scheduler.shutdown();
+                    return;
+                }
+
+                if (lastMessageTimestamp > 0 && (System.currentTimeMillis() - lastMessageTimestamp) > timeout) {
+                    log.info("SolaceSparkConnector - Inactivity timeout. Last message processed at {} Shutting down Solace Session.", lastMessageTimestamp);
+                    close();
+                    scheduler.shutdown();
+                } else {
+                    log.info("SolaceSparkConnector - No messages are processed yet, skipping idle timeout check.");
+                }
+            }, interval, interval, TimeUnit.MILLISECONDS); // initial delay, then interval
+        }
+    }
+
+    public void setLastMessageTimestamp(long lastMessageTimestamp) {
+        this.lastMessageTimestamp = lastMessageTimestamp;
     }
 }

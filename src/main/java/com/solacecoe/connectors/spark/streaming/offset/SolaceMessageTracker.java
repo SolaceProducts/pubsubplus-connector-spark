@@ -41,7 +41,7 @@ public final class SolaceMessageTracker implements Serializable {
     public static void ackMessages(String uniqueId) {
         if(messages.containsKey(uniqueId)) {
             messages.get(uniqueId).forEach(message -> message.bytesXMLMessage.ackMessage());
-            logger.trace("SolaceSparkConnector - Acknowledged {} messages ", messages.get(uniqueId).size());
+            logger.info("SolaceSparkConnector - Acknowledged {} messages ", messages.get(uniqueId).size());
             messages.remove(uniqueId);
         }
     }

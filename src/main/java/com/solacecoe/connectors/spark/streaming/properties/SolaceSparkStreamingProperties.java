@@ -27,6 +27,10 @@ public class SolaceSparkStreamingProperties {
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC = "solace/spark/connector/offset";
     public static final String SOLACE_CONNECT_RETRIES = "connectRetries";
     public static final String SOLACE_RECONNECT_RETRIES = "reconnectRetries";
+    public static final String SOLACE_CONNECTION_IDLE_TIMEOUT = "connectIdleTimeoutInMillis";
+    public static final String SOLACE_CONNECTION_IDLE_TIMEOUT_DEFAULT = "0";
+    public static final String SOLACE_CONNECTION_IDLE_TIMEOUT_CHECK = "connectIdleTimeoutCheckInMillis";
+    public static final String SOLACE_CONNECTION_IDLE_TIMEOUT_CHECK_DEFAULT = "0";
     public static final String SOLACE_CONNECT_RETRIES_PER_HOST = "connectRetriesPerHost";
     public static final String SOLACE_RECONNECT_RETRIES_WAIT_TIME = "reconnectRetryWaitInMillis";
     public static final String SOLACE_API_PROPERTIES_PREFIX = "solace.apiProperties.";
