@@ -366,6 +366,10 @@ public class SolaceBroker implements Serializable {
         }
     }
 
+    public boolean isConnected() {
+        return session != null && !session.isClosed();
+    }
+
     public LinkedBlockingQueue<SolaceMessage> getMessages(int index) {
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
@@ -487,6 +491,8 @@ public class SolaceBroker implements Serializable {
                     log.info("SolaceSparkConnector - No messages are processed yet, skipping idle timeout check.");
                 }
             }, interval, interval, TimeUnit.MILLISECONDS); // initial delay, then interval
+        } else {
+            log.info("SolaceSparkConnector - No connection idle timeout is configured. Connector will not check for idle connections.");
         }
     }
 

@@ -49,6 +49,16 @@ NOTE: In case of databricks deployment, it is recommended to store and retrieve 
 
 In case if you are using Shared compute cluster, make sure your cluster has https://docs.databricks.com/en/data-governance/unity-catalog/manage-privileges/allowlist.html[appropriate permissions] to install connector from maven central and access the jars. Please contact your Databricks administrator for required permissions.
 
+When using an All-Purpose compute cluster, the Spark session is not automatically terminated upon job or notebook cancellation, as the cluster remains active for extended periods. In such scenarios, the connection to Solace can remain idle, which may impact connection usage on the broker.
+
+To manage this, it is recommended to configure the following parameters:
+
+. <<connect-idle-timeout-in-millis, Idle Connection Timeout in Milliseconds>>: Specifies the maximum duration a connection can remain idle before being considered for closure.
+. <<connect-idle-timeout-check-in-millis, Idle Connection Timeout Check in Milliseconds>>: Defines the interval at which idle connections are checked.
+The Solace Spark Connector monitors the time since the last processed message. If this duration exceeds the configured idle timeout, the connector proactively closes the idle connection.
+
+NOTE: Both configurations are disabled by default and must be explicitly set to enable this feature.
+
 === Checkpointing & Acknowledgement
 
 Solace Spark connector relies on Spark Checkpointing mechanism to resume from last successful message. Connector acknowledges & writes processed message id's to spark checkpoint whenever Spark sends commit signal to connector. Commit signal is an indication by Spark that data has been processed successfully.

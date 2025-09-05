@@ -10,7 +10,6 @@ public class SolaceSparkStreamingProperties {
     public static final String QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT = "10000";
     public static final String BATCH_SIZE = "batchSize";
     public static final String BATCH_SIZE_DEFAULT = "0";
-    public static final String PREFERRED_LOCATIONS = "preferred_locations";
     public static final String ACK_LAST_PROCESSED_MESSAGES = "ackLastProcessedMessages";
     public static final String ACK_LAST_PROCESSED_MESSAGES_DEFAULT = "false";
     public static final String INCLUDE_HEADERS = "includeHeaders";
@@ -19,8 +18,6 @@ public class SolaceSparkStreamingProperties {
     public static final String PARTITIONS_DEFAULT = "1";
     public static final String OFFSET_INDICATOR = "offsetIndicator";
     public static final String OFFSET_INDICATOR_DEFAULT = "MESSAGE_ID";
-    public static final String CREATE_FLOWS_ON_SAME_SESSION = "createFlowsOnSameSession";
-    public static final String CREATE_FLOWS_ON_SAME_SESSION_DEFAULT = "false";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_NAME = "lvq.name";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_TOPIC = "lvq.topic";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME = "solace.spark.connector.state";
@@ -42,8 +39,6 @@ public class SolaceSparkStreamingProperties {
     public static final String REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID = "replayReplicationGroupMessageId";
     public static final String REPLAY_STRATEGY_START_TIME = "replayStartTime";
     public static final String REPLAY_STRATEGY_TIMEZONE = "replayStartTimeTimezone";
-    public static final String SKIP_DUPLICATES = "skipDuplicates";
-    public static final String SKIP_DUPLICATES_DEFAULT = "false";
     public static final String OAUTH_CLIENT_ACCESSTOKEN_SOURCE = "solace.oauth.client.access-token.source";
     public static final String OAUTH_CLIENT_ACCESSTOKEN_SOURCE_DEFAULT = "file";
     public static final String OAUTH_CLIENT_ACCESSTOKEN = "solace.oauth.client.access-token";

@@ -53,6 +53,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private final long receiveWaitTimeout;
     private final TaskContext taskContext;
     private final boolean closeReceiversOnPartitionClose;
+    private final boolean isCommitTriggered;
+    private Iterator<SolaceMessage> iterator;
+    private boolean shouldTrackMessage = true;
     private final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
     public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, Map<String, String> properties,
                                       TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation) {
@@ -61,15 +64,30 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         
         this.solaceInputPartition = inputPartition;
         this.uniqueId = this.solaceInputPartition.getId();
+        String currentBatchId = taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
+        /*
+         * In case when multiple operations are performed on dataframe, input partition will be called as part of Spark scan.
+         * We need to acknowledge messages only if new batch is started. In case of same batch we will return the same messages.
+         */
+        if(!currentBatchId.equals(SolaceMessageTracker.getLastBatchId())) {
+            /* Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
+             * If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
+             * Solace connection is always active and acknowledgements should be successful. It might throw exception if connection is lost
+             * */
+            isCommitTriggered = true;
+            log.info("SolaceSparkConnector - Acknowledging any processed messages to Solace as commit is successful");
+            long startTime = System.currentTimeMillis();
+            SolaceMessageTracker.ackMessages(uniqueId);
+            log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
+        } else {
+            isCommitTriggered = false;
+            CopyOnWriteArrayList<SolaceMessage> messageList = SolaceMessageTracker.getMessages(uniqueId);
+            if(messageList != null) {
+                iterator= messageList.iterator();
+            }
+        }
 
-        /* Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
-        * If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
-        * Solace connection is always active and acknowledgements should be successful. It might throw exception if connection is lost
-        * */
-        log.info("SolaceSparkConnector - Acknowledging any processed messages to Solace as commit is successful");
-        long startTime = System.currentTimeMillis();
-        SolaceMessageTracker.ackMessages(uniqueId);
-        log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
+        SolaceMessageTracker.setLastBatchId(currentBatchId);
 
         this.includeHeaders = includeHeaders;
         this.properties = properties;
@@ -91,6 +109,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         // Get existing connection if a new task is scheduled on executor or create a new one
         if (SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
             solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
+            if(solaceBroker != null && !solaceBroker.isConnected()) {
+                SolaceConnectionManager.removeConnection(inputPartition.getId());
+                createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
+            }
             if (closeReceiversOnPartitionClose) {
                 createReceiver(inputPartition.getId(), ackLastProcessedMessages);
             }
@@ -130,7 +152,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)).map(solaceMessage.bytesXMLMessage);
             long timestamp = solaceRecord.getSenderTimestamp();
             if (solaceRecord.getSenderTimestamp() == 0) {
-                timestamp = System.currentTimeMillis();
+                timestamp = System.currentTimeMillis() / 1000;
             }
             InternalRow row;
             if(this.includeHeaders) {
@@ -146,12 +168,15 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp))
                 });
             }
-            if(solaceRecord.getPartitionKey() != null && !solaceRecord.getPartitionKey().isEmpty()) {
-                SolaceMessageTracker.addMessageID(solaceRecord.getPartitionKey(), solaceRecord.getMessageId());
-            } else {
-                SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
+            // No need to add message to tracker as the call is from same dataframe operation.
+            if(shouldTrackMessage) {
+                if (solaceRecord.getPartitionKey() != null && !solaceRecord.getPartitionKey().isEmpty()) {
+                    SolaceMessageTracker.addMessageID(solaceRecord.getPartitionKey(), solaceRecord.getMessageId());
+                } else {
+                    SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
+                }
+                SolaceMessageTracker.addMessage(this.uniqueId, solaceMessage);
             }
-            SolaceMessageTracker.addMessage(this.uniqueId, solaceMessage);
             solaceBroker.setLastMessageTimestamp(System.currentTimeMillis());
             return row;
         } catch (Exception e) {
@@ -177,33 +202,67 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     }
 
     private SolaceMessage getNextMessage() {
-        LinkedBlockingQueue<SolaceMessage> queue = solaceBroker.getMessages(0);
-        if(queue != null) {
-            while(shouldProcessMoreMessages(batchSize, messages)) {
-                try {
-                    solaceMessage = queue.poll(receiveWaitTimeout, TimeUnit.MILLISECONDS);
-                    if (solaceMessage == null) {
+        CopyOnWriteArrayList<SolaceMessage> messageList = SolaceMessageTracker.getMessages(this.uniqueId);
+        /*
+          If commit is triggered or messageList is null we need to fetch messages from Solace.
+          In case of same batch just return the available messages in message tracker.
+         */
+        if(this.isCommitTriggered || messageList == null || messageList.isEmpty()) {
+            LinkedBlockingQueue<SolaceMessage> queue = solaceBroker.getMessages(0);
+            if(queue != null) {
+                while(shouldProcessMoreMessages(batchSize, messages)) {
+                    try {
+                        solaceMessage = queue.poll(receiveWaitTimeout, TimeUnit.MILLISECONDS);
+                        if (solaceMessage == null) {
+                            return null;
+                        }
+
+                        if(batchSize > 0) {
+                            messages++;
+                        }
+                        if(isMessageAlreadyProcessed(solaceMessage)) {
+                            log.info("Message is added to previous partitions for processing. Moving to next message");
+                        } else {
+                            return solaceMessage;
+                        }
+
+                    } catch (InterruptedException | SDTException e) {
+                        log.warn("No messages available within specified receiveWaitTimeout", e);
+                        Thread.currentThread().interrupt();
                         return null;
                     }
+                }
+            }
+        } else {
+            synchronized (messageList) {
+                while (shouldProcessMoreMessages(batchSize, messages)) {
+                    try {
+                        if (iterator.hasNext()) {
+                            shouldTrackMessage = false;
+                            solaceMessage = iterator.next();
+                            if (solaceMessage == null) {
+                                return null;
+                            }
 
-                    if(batchSize > 0) {
-                        messages++;
+                            if (batchSize > 0) {
+                                messages++;
+                            }
+                            if (isMessageAlreadyProcessed(solaceMessage)) {
+                                log.info("Message is added to previous partitions for processing. Moving to next message");
+                            } else {
+                                return solaceMessage;
+                            }
+                        } else {
+                            return null;
+                        }
+                    } catch (Exception e) {
+                        log.warn("No messages available within specified receiveWaitTimeout", e);
+                        Thread.currentThread().interrupt();
+                        return null;
                     }
-                    if(isMessageAlreadyProcessed(solaceMessage)) {
-                        log.info("Message is added to previous partitions for processing. Moving to next message");
-                    } else {
-                        return solaceMessage;
-                    }
-
-                } catch (InterruptedException | SDTException e) {
-                    log.warn("No messages available within specified receiveWaitTimeout", e);
-                    Thread.currentThread().interrupt();
-                    return null;
                 }
             }
         }
-
-
         return null;
     }
 

@@ -57,6 +57,18 @@
 | 3000
 | How much time in (MS) to wait between each attempt to connect or reconnect to a host. If connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
 
+| connectIdleTimeoutInMillis[[connect-idle-timeout-in-millis]]
+| int
+| Timeout in Milliseconds
+| 0
+| How much time in (MS) to wait to before closing the connection to Solace. In long-running clusters, connections to Solace may remain idle if the Spark session does not terminate gracefully. Use this setting to automatically close such idle connections.
+
+| connectIdleTimeoutCheckInMillis[[connect-idle-timeout-check-in-millis]]
+| int
+| Timeout in Milliseconds
+| 0
+| The interval (in milliseconds) at which to check for idle connections to Solace. If a connection remains idle beyond the configured timeout, it will be closed automatically.
+
 | solace.apiProperties.<Property>
 | any
 | any
@@ -131,13 +143,13 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | Indicate the type of SSL connection.
 
 | solace.oauth.client.token.refresh.interval[[solace-oAuth-client-refresh-interval]]
-| integer
+| int
 | positive integer value
 | 60
 | Interval(Seconds) to fetch access token by the connector to avoid disconnection on token expiry. This value should be less than your token expiry time.
 
 | solace.oauth.client.token.fetch.timeout
-| integer
+| int
 | positive integer value
 | 100
 | Connection timeout(MS) for access token request.
@@ -147,6 +159,12 @@ solace.apiProperties.client_channel_properties.keepAliveIntervalInMillis=3000
 | any
 |
 | Solace Queue name.
+
+| queue.receiveWaitTimeout
+| int
+| Timeout in milliseconds
+| 10000
+| Specifies the timeout duration to wait before submitting the incoming stream of messages to a Spark micro-batch. Configure this setting to ensure data is sent to the Spark micro-batch as quickly as possible based on the data currently available in the queue.
 
 | batchSize
 | int
