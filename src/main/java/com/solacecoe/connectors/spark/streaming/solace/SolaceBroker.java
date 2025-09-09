@@ -42,6 +42,7 @@ public class SolaceBroker implements Serializable {
     private XMLMessageProducer producer;
     private long lastMessageTimestamp = 0;
     private boolean isShuttingDown = false;
+    private Browser queueBrowser;
     public SolaceBroker(Map<String, String> properties, String clientType) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
@@ -232,6 +233,22 @@ public class SolaceBroker implements Serializable {
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
+        }
+    }
+
+    public boolean isQueueFull() {
+        try {
+            BrowserProperties br_prop = new BrowserProperties();
+            br_prop.setEndpoint(JCSMPFactory.onlyInstance().createQueue(this.queue));
+            br_prop.setTransportWindowSize(1);
+            br_prop.setWaitTimeout(1000);
+
+            queueBrowser = session.createBrowser(br_prop);
+            boolean hasMore = queueBrowser.hasMore();
+            queueBrowser.close();
+            return hasMore;
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
     }
 

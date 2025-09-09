@@ -92,6 +92,10 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     @Override
     public Offset latestOffset() {
+        if(!this.solaceBroker.isQueueFull()) {
+            log.info("SolaceSparkConnector - Queue {} is empty. Skipping batch", queueName);
+            return new SolaceSourceOffset(latestOffsetId, checkpoints);
+        }
         latestOffsetId+=batchSize;
         checkpoints = this.getCheckpoint();
         if(checkpoints != null && !checkpoints.isEmpty()) {
