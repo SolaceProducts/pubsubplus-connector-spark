@@ -32,6 +32,7 @@ public class SolaceBroker implements Serializable {
     private final CopyOnWriteArrayList<LVQEventListener> lvqEventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
     private ScheduledExecutorService scheduledExecutorService;
+    private ScheduledExecutorService watchdogScheduler;
     private boolean isException;
     private Exception exception;
     private long accessTokenSourceLastModifiedTime = 0L;
@@ -242,13 +243,26 @@ public class SolaceBroker implements Serializable {
             br_prop.setEndpoint(JCSMPFactory.onlyInstance().createQueue(this.queue));
             br_prop.setTransportWindowSize(1);
             br_prop.setWaitTimeout(1000);
-
             queueBrowser = session.createBrowser(br_prop);
-            boolean hasMore = queueBrowser.hasMore();
-            queueBrowser.close();
-            return hasMore;
+            int retryCount = 0;
+            BytesXMLMessage rx_msg = null;
+            do {
+                rx_msg = queueBrowser.getNext();
+                if (rx_msg != null) {
+                    queueBrowser.close();
+                    return true;
+                } else {
+                    if(retryCount == 5) {
+                            return false;
+                    }
+                }
+
+                retryCount++;
+            } while (true);
         } catch (JCSMPException e) {
-            throw new RuntimeException(e);
+            log.error("SolaceSparkConnector - Exception creating Queue Browser ", e);
+            handleException("SolaceSparkConnector - Exception creating Queue Browser ", e);
+            return false;
         }
     }
 
@@ -363,6 +377,7 @@ public class SolaceBroker implements Serializable {
     public void close() {
         isShuttingDown = true;
         try {
+            shutdownExecutor();
             closeProducer();
             closeReceivers();
 
@@ -371,15 +386,19 @@ public class SolaceBroker implements Serializable {
                 session.closeSession();
                 log.info("SolaceSparkConnector - Closed Solace session");
             }
-
-            if(scheduledExecutorService != null) {
-                scheduledExecutorService.shutdownNow();
-                log.info("SolaceSparkConnector - OAuth token refresh thread is now shutdown");
-            }
-
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Graceful shutdown failed", e);
-            throw e;
+        }
+    }
+
+    public void shutdownExecutor() {
+        if(scheduledExecutorService != null && !scheduledExecutorService.isShutdown()) {
+            scheduledExecutorService.shutdownNow();
+            log.info("SolaceSparkConnector - OAuth token refresh thread is now shutdown");
+        }
+
+        if(watchdogScheduler != null && !watchdogScheduler.isShutdown()) {
+            watchdogScheduler.shutdownNow();
         }
     }
 
@@ -493,17 +512,16 @@ public class SolaceBroker implements Serializable {
         long interval = Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT_CHECK, SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT_CHECK_DEFAULT));
 
         if(timeout > 0 && interval > 0) {
-            ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-            scheduler.scheduleAtFixedRate(() -> {
+            watchdogScheduler = Executors.newSingleThreadScheduledExecutor();
+            watchdogScheduler.scheduleAtFixedRate(() -> {
                 if (isShuttingDown) {
-                    scheduler.shutdown();
+                    watchdogScheduler.shutdown();
                     return;
                 }
 
                 if (lastMessageTimestamp > 0 && (System.currentTimeMillis() - lastMessageTimestamp) > timeout) {
                     log.info("SolaceSparkConnector - Inactivity timeout. Last message processed at {} Shutting down Solace Session.", lastMessageTimestamp);
                     close();
-                    scheduler.shutdown();
                 } else {
                     log.info("SolaceSparkConnector - No messages are processed yet, skipping idle timeout check.");
                 }

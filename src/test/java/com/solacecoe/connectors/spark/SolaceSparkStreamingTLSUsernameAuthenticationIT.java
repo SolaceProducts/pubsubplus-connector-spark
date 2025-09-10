@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class SolaceSparkStreamingTLSUsernameAuthenticationIT {
+public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
     private SparkSession sparkSession;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(false);
     @BeforeAll

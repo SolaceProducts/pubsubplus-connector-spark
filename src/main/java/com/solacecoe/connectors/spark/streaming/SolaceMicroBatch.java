@@ -92,10 +92,13 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     @Override
     public Offset latestOffset() {
+        checkException();
         if(!this.solaceBroker.isQueueFull()) {
+            checkException();
             log.info("SolaceSparkConnector - Queue {} is empty. Skipping batch", queueName);
             return new SolaceSourceOffset(latestOffsetId, checkpoints);
         }
+        checkException();
         latestOffsetId+=batchSize;
         checkpoints = this.getCheckpoint();
         if(checkpoints != null && !checkpoints.isEmpty()) {
@@ -288,6 +291,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public void stop() {
         log.info("SolaceSparkConnector - Closing Spark Connector");
+        checkException();
         this.solaceBroker.close();
     }
 
@@ -297,6 +301,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
     private void checkException() {
         if(this.solaceBroker.isException()) {
+            this.solaceBroker.shutdownExecutor();
             throw new RuntimeException(this.solaceBroker.getException());
         }
     }

@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class SolaceSparkStreamingSinkIT {
+public class SolaceSparkStreamingSinkIT {
     private static final Long SHM_SIZE = (long) Math.pow(1024, 3);
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withCreateContainerCmdModifier(cmd ->{
                 Ulimit ulimit = new Ulimit("nofile", 2448, 1048576);
@@ -59,6 +59,7 @@ class SolaceSparkStreamingSinkIT {
                     .appName("data_source_test")
                     .master("local[*]")
                     .getOrCreate();
+            sparkSession.sparkContext().setLogLevel("INFO");
             SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/0");

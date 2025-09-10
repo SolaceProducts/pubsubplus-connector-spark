@@ -113,6 +113,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         if (SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
             solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
             if (solaceBroker != null && !solaceBroker.isConnected()) {
+                checkException();
                 SolaceConnectionManager.removeConnection(inputPartition.getId());
                 createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
             }
@@ -122,22 +123,14 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         } else {
             createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
         }
-        if (this.solaceBroker != null && this.solaceBroker.isException()) {
-            log.error("SolaceSparkConnector - Exception encountered, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
-            this.solaceBroker.close();
-            throw new SolaceSessionException(this.solaceBroker.getException());
-        }
+        checkException();
         log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition {}", inputPartition.getId());
         registerTaskListener();
     }
 
     @Override
     public boolean next() {
-        if (this.solaceBroker != null && this.solaceBroker.isException()) {
-            log.error("SolaceSparkConnector - Exception encountered when checking for next message, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
-            this.solaceBroker.close();
-            throw new SolaceSessionException(this.solaceBroker.getException());
-        }
+        checkException();
 
         if (TaskContext.get() != null && TaskContext.get().isInterrupted()) {
             log.info("SolaceSparkConnector - Interrupted while waiting for next message");
@@ -205,12 +198,11 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     }
 
     private SolaceMessage getNextMessage() {
-        CopyOnWriteArrayList<SolaceMessage> messageList = SolaceMessageTracker.getMessages(this.uniqueId);
         /*
           If commit is triggered or messageList is null we need to fetch messages from Solace.
           In case of same batch just return the available messages in message tracker.
          */
-        if (this.isCommitTriggered || messageList == null || messageList.isEmpty()) {
+        if (this.isCommitTriggered || iterator == null || !iterator.hasNext()) {
             LinkedBlockingQueue<SolaceMessage> queue = solaceBroker.getMessages(0);
             if (queue != null) {
                 while (shouldProcessMoreMessages(batchSize, messages)) {
@@ -282,9 +274,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     @Override
     public void close() {
         log.info("SolaceSparkConnector - Input partition reader with ID {} with task {} is closed", this.solaceInputPartition.getId(), this.uniqueId);
-        if (this.solaceBroker != null && this.solaceBroker.isException()) {
-            throw new SolaceSessionException(this.solaceBroker.getException());
-        }
+        checkException();
     }
 
     private void logShutdownMessage(TaskContext context) {
@@ -371,5 +361,13 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         // Initialize connection to Solace Broker
         solaceBroker.addReceiver(eventListener);
         SolaceConnectionManager.addConnection(inputPartitionId, solaceBroker);
+    }
+
+    private void checkException() {
+        if (this.solaceBroker != null && this.solaceBroker.isException()) {
+            log.error("SolaceSparkConnector - Exception encountered, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
+            this.solaceBroker.close();
+            throw new SolaceSessionException(this.solaceBroker.getException());
+        }
     }
 }
