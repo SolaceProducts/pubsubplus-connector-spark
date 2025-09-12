@@ -59,7 +59,7 @@ public class SolaceSparkStreamingSinkIT {
                     .appName("data_source_test")
                     .master("local[*]")
                     .getOrCreate();
-            sparkSession.sparkContext().setLogLevel("INFO");
+//            sparkSession.sparkContext().setLogLevel("INFO");
             SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/0");
