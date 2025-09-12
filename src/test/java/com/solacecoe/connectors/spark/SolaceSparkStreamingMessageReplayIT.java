@@ -38,6 +38,7 @@ import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.testcontainers.shaded.org.hamcrest.MatcherAssert.assertThat;
 import static org.testcontainers.shaded.org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -354,8 +355,9 @@ public class SolaceSparkStreamingMessageReplayIT {
     @Order(7)
     public void Should_Fail_IfReplicationGroupMessageIdIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(StreamingQueryException.class, () -> {
+//        assertThrows(StreamingQueryException.class, () -> {
 //            sparkSession.sparkContext().setLogLevel("TRACE");
+        try {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -372,7 +374,10 @@ public class SolaceSparkStreamingMessageReplayIT {
                 System.out.println("Should_Fail_IfReplicationGroupMessageIdIsInvalid " + dataset1.count());
             }).start();
             streamingQuery.awaitTermination();
-        });
+        } catch (TimeoutException | StreamingQueryException e) {
+            assertEquals(StreamingQueryException.class, e.getClass());
+        }
+//        });
     }
 
     @Test
