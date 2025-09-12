@@ -110,8 +110,7 @@ jobs:
 
       - name: Run Unit/Integration Tests
         run: >-
-          mvn -B clean verify
-          jacoco:report 
+          mvn -B clean jacoco:report -Dit.test=SolaceSparkIntegrationTestSuite verify
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
       - name: Reset JDK to ${{ inputs.jre_version }} (${{inputs.java_environment}})

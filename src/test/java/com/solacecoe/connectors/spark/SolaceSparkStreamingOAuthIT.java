@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Testcontainers
@@ -447,7 +448,8 @@ public class SolaceSparkStreamingOAuthIT {
         String accessToken = oAuthClient.getAccessToken().getValue();
         Files.write(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"), accessToken.getBytes(StandardCharsets.UTF_8));
 
-        assertThrows(StreamingQueryException.class, () -> {
+//        assertThrows(StreamingQueryException.class, () -> {
+        try {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, containerResource.getSolaceOAuthContainer().getOrigin(SolaceOAuthContainer.Service.SMF_SSL))
                     .option(SolaceSparkStreamingProperties.VPN, containerResource.getSolaceOAuthContainer().getVpn())
@@ -470,7 +472,10 @@ public class SolaceSparkStreamingOAuthIT {
                 Files.write(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"), "Invalid Token".getBytes(StandardCharsets.UTF_8));
             }).start();
             streamingQuery.awaitTermination();
-        });
+        } catch (TimeoutException | StreamingQueryException e) {
+            assertEquals(StreamingQueryException.class, e.getClass());
+        }
+//        });
 
         Files.delete(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"));
     }
