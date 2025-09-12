@@ -28,8 +28,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -347,7 +346,7 @@ public class SolaceSparkStreamingOAuthIT {
                 .option("checkpointLocation", writePath.toAbsolutePath().toString())
                 .format("solace").start();
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> assertTrue(count[0] > 0));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
         sparkSession.stop();
@@ -472,8 +471,8 @@ public class SolaceSparkStreamingOAuthIT {
                 Files.write(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"), "Invalid Token".getBytes(StandardCharsets.UTF_8));
             }).start();
             streamingQuery.awaitTermination();
-        } catch (TimeoutException | StreamingQueryException e) {
-            assertEquals(StreamingQueryException.class, e.getClass());
+        } catch (Exception e) {
+            assertTrue(e instanceof StreamingQueryException);
         }
 //        });
 
