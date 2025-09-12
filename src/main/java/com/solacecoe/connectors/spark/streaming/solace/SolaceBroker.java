@@ -160,6 +160,7 @@ public class SolaceBroker implements Serializable {
                         break;
                     case "TIMEBASED":
                         String dateStr = properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME ,null);
+                        System.out.println("Current Timestamp " + dateStr);
                         if (dateStr != null) {
                             SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                             simpleDateFormat.setTimeZone(TimeZone.getTimeZone(properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_TIMEZONE, "UTC"))); // Convert the given date into UTC time zone
@@ -253,7 +254,8 @@ public class SolaceBroker implements Serializable {
                     return true;
                 } else {
                     if(retryCount == 5) {
-                            return false;
+                        queueBrowser.close();
+                        return false;
                     }
                 }
 

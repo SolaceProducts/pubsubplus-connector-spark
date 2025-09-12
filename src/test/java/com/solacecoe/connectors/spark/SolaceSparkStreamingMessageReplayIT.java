@@ -30,6 +30,8 @@ import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
@@ -366,7 +368,7 @@ public class SolaceSparkStreamingMessageReplayIT {
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
                     .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, "invalid-id")
@@ -394,7 +396,7 @@ public class SolaceSparkStreamingMessageReplayIT {
                         .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                         .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                         .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
+                        .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
                         .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                         .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
                         .option("checkpointLocation", path.toAbsolutePath().toString())
@@ -421,7 +423,7 @@ public class SolaceSparkStreamingMessageReplayIT {
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
                     .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, "")

@@ -83,7 +83,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         log.info("SolaceSparkConnector - offsetIndicator is set to {}", solaceOffsetIndicator);
 
         this.queueName = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
-        this.solaceBroker = new SolaceBroker(properties, "lvq-consumer");
+        this.solaceBroker = new SolaceBroker(properties, "monitoring-consumer");
         LVQEventListener lvqEventListener = new LVQEventListener();
         this.solaceBroker.addLVQReceiver(lvqEventListener);
         this.solaceBroker.initProducer();
