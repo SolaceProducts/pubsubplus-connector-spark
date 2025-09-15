@@ -51,12 +51,12 @@ val df = spark.readStream.format("solace")
 
 // write to parquet file
 val query = df.writeStream
-.format("parquet")
-.outputMode("append")
-.queryName(streamName)
-.option("checkpointLocation", s"/spark_checkpoints/solace_spark_connector_checkpoint/$streamName/")
-.option("path", s"/solace_spark_connector_parquet_output/$streamName/")
-.start()
+    .format("parquet")
+    .outputMode("append")
+    .queryName(streamName)
+    .option("checkpointLocation", s"/spark_checkpoints/solace_spark_connector_checkpoint/$streamName/")
+    .option("path", s"/solace_spark_connector_parquet_output/$streamName/")
+    .start()
 
 query.awaitTermination()
 ----
@@ -219,6 +219,7 @@ public class ReadParquetAndParsePayload {
 +
 [source,scala]
 ----
+val streamName = "solace-spark-connector-sample-test"
 val parquetData = spark.read.parquet("<path-to-parquet-file>")
 val struct_stream = spark.readStream
 .schema(parquetData.schema)
@@ -226,30 +227,16 @@ val struct_stream = spark.readStream
 
 // write to parquet file
 val query = df.writeStream
-.foreachBatch((outputDf: Dataset[org.apache.spark.sql.Row], bid: Long) => {
-     // Process valid data frames only
-     if (!outputDf.isEmpty) {
-        // business logic
-        try {
-            outputDf.show()
-            outputDf.write.format("solace")
-              .option("host", "tcp://localhost:55555")
-              .option("vpn", "default")
-              .option("username", "default")
-              .option("password", "default")
-              .option("batchSize", outputDf.count())
-              .option("topic", "solace/spark/stream/processing/result") // This can be commented if topic column is present in output dataframe.
-              .option("id", "<application-message-id>") // This can be commented if Id column is present in output dataframe.
-              .mode(SaveMode.Append)
-              .save()
-        } catch {
-          case e: Exception => {
-            // Any logic to handle failed messages. Connector will log application message id along with exception as json object.
-            throw new RuntimeException(e)
-          }
-        }
-     }
-}).start()
+      .format("solace")
+      .option("host", "tcp://localhost:55555")
+      .option("vpn", "default")
+      .option("username", "default")
+      .option("password", "default")
+      .option("topic", "solace/spark/stream/processing/result") // This can be commented if topic column is present in output dataframe.
+      .option("id", "<application-message-id>")
+      .outputMode("append")
+      .option("checkpointLocation", "/spark_checkpoints/solace_spark_connector_checkpoint/" + streamName + "/")
+      .start()
 
 query.awaitTermination()
 ----
@@ -259,108 +246,72 @@ query.awaitTermination()
 [source, python]
 ----
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
 
-spark = SparkSession.builder \
-    .appName("ParquetToSolaceStream") \
-    .getOrCreate()
+stream_name = "solace-spark-connector-sample-test"
+path_to_parquet = "<path-to-parquet-file>"
 
-parquet_path = "<path-to-parquet-file>"
+spark = SparkSession.builder.appName("SolaceSparkStreaming").getOrCreate()
 
-# Load schema from static parquet file
-parquet_data = spark.read.parquet(parquet_path)
+# Read static data to infer schema
+parquet_data = spark.read.parquet(path_to_parquet)
 
-# Read as structured stream with schema
-struct_stream = spark.readStream \
-    .schema(parquet_data.schema) \
-    .parquet(parquet_path)
+# Read the streaming source
+struct_stream = spark.readStream.schema(parquet_data.schema).parquet(path_to_parquet)
 
-# Define foreachBatch logic
-def process_batch(output_df, batch_id):
-    if output_df.isEmpty():
-        return
-
-    try:
-        output_df.show()
-        output_df.write \
-            .format("solace") \
-            .option("host", "tcp://localhost:55555") \
-            .option("vpn", "default") \
-            .option("username", "default") \
-            .option("password", "default") \
-            .option("batchSize", output_df.count()) \
-            .option("topic", "solace/spark/stream/processing/result") \
-            .option("id", "<application-message-id>") \
-            .mode("append") \
-            .save()
-    except Exception as e:
-        raise RuntimeError(e)
-
-# Start streaming query
+# Write to Solace
 query = struct_stream.writeStream \
-    .foreachBatch(process_batch) \
+    .format("solace") \
+    .option("host", "tcp://localhost:55555") \
+    .option("vpn", "default") \
+    .option("username", "default") \
+    .option("password", "default") \
+    .option("topic", "solace/spark/stream/processing/result") \ # This can be commented if topic column is present in output dataframe.
+    .option("id", "<application-message-id>") \ # This can be commented if Id column is present in output dataframe.
+    .outputMode("append") \
+    .option("checkpointLocation", f"/spark_checkpoints/solace_spark_connector_checkpoint/{stream_name}/") \
     .start()
 
 query.awaitTermination()
+
 ----
 
 ... Java Code Snippet
 +
 [source, java]
 ----
-import org.apache.spark.sql.*;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.streaming.StreamingQuery;
-import org.apache.spark.sql.streaming.StreamingQueryException;
-import org.apache.spark.sql.streaming.ForeachBatchFunction;
-import java.io.Serializable;
 
-public class ParquetToSolaceJava {
-
-    public static void main(String[] args) throws StreamingQueryException {
-        SparkSession spark = SparkSession.builder()
-                .appName("ParquetToSolaceStream")
-                .getOrCreate();
-
+public class SolaceSparkStreaming {
+    public static void main(String[] args) throws Exception {
+        String streamName = "solace-spark-connector-sample-test";
         String parquetPath = "<path-to-parquet-file>";
 
-        // Load schema
-        Dataset<Row> staticDf = spark.read().parquet(parquetPath);
+        SparkSession spark = SparkSession.builder()
+                .appName("SolaceSparkStreaming")
+                .getOrCreate();
 
-        // Structured stream with schema
-        Dataset<Row> streamDf = spark.readStream()
-                .schema(staticDf.schema())
+        // Read static schema
+        Dataset<Row> parquetData = spark.read().parquet(parquetPath);
+
+        // Read stream using inferred schema
+        Dataset<Row> structStream = spark.readStream()
+                .schema(parquetData.schema())
                 .parquet(parquetPath);
 
-        // foreachBatch logic
-        ForeachBatchFunction<Row> foreachBatchFunction = new ForeachBatchFunction<Row>() {
-            @Override
-            public void call(Dataset<Row> outputDf, Long batchId) {
-                if (!outputDf.isEmpty()) {
-                    try {
-                        outputDf.show();
-
-                        outputDf.write()
-                                .format("solace")
-                                .option("host", "tcp://localhost:55555")
-                                .option("vpn", "default")
-                                .option("username", "default")
-                                .option("password", "default")
-                                .option("batchSize", outputDf.count())
-                                .option("topic", "solace/spark/stream/processing/result")
-                                .option("id", "<application-message-id>")
-                                .mode(SaveMode.Append)
-                                .save();
-
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            }
-        };
-
-        // Start query
-        StreamingQuery query = streamDf.writeStream()
-                .foreachBatch(foreachBatchFunction)
+        // Write to Solace
+        StreamingQuery query = structStream.writeStream()
+                .format("solace")
+                .option("host", "tcp://localhost:55555")
+                .option("vpn", "default")
+                .option("username", "default")
+                .option("password", "default")
+                .option("topic", "solace/spark/stream/processing/result") // This can be commented if topic column is present in output dataframe.
+                .option("id", "<application-message-id>") // This can be commented if Id column is present in output dataframe.
+                .outputMode("append")
+                .option("checkpointLocation", "/spark_checkpoints/solace_spark_connector_checkpoint/" + streamName + "/")
                 .start();
 
         query.awaitTermination();
