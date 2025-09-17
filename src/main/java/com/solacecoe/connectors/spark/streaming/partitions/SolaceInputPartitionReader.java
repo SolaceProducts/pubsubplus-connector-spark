@@ -114,8 +114,15 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
             if (solaceBroker != null && !solaceBroker.isConnected()) {
                 checkException();
+                int unackedMessages = 0;
+                CopyOnWriteArrayList<SolaceMessage> messageList = SolaceMessageTracker.getMessages(uniqueId);
+                if(messageList != null) {
+                    unackedMessages = messageList.size();
+                }
+                log.info("SolaceSparkConnector - Connection has been closed on input partition {}. {} messages will be redelivered as they are not acknowledged due to connection closure.", inputPartition.getId(), unackedMessages);
                 SolaceConnectionManager.removeConnection(inputPartition.getId());
                 createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
+                log.info("SolaceSparkConnector - Previous connection to Solace closed due to idle timeout. Established a new connection.");
             }
             if (closeReceiversOnPartitionClose) {
                 createReceiver(inputPartition.getId(), ackLastProcessedMessages);

@@ -33,7 +33,6 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
     private String topic;
     private String messageId;
-    private final int batchSize;
     private final StructType schema;
     private final Map<String, String> properties;
     private SolaceBroker solaceBroker;
@@ -42,13 +41,17 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final Map<String, SolaceAbortMessage> abortedMessages;
     private Exception exception;
     private final boolean includeHeaders;
+    private final boolean hasDefaultTopic;
+    private final boolean hasDefaultMessageId;
+    private int publishedMessages = 0;
     public SolaceDataWriter(StructType schema, Map<String, String> properties) {
         this.schema = schema;
         this.properties = properties;
-        this.batchSize = Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
         this.includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
         this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
+        hasDefaultTopic = this.topic != null;
+        hasDefaultMessageId = this.messageId != null;
         try {
             this.solaceBroker = new SolaceBroker(properties, "producer");
             this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
@@ -65,11 +68,11 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     }
 
     private void publishMessages(UnsafeRow projectedRow) {
-        if(this.topic == null) {
+        if(!hasDefaultTopic) {
             this.topic = projectedRow.getUTF8String(3).toString();
         }
 
-        if(this.messageId == null) {
+        if(!hasDefaultMessageId) {
             this.messageId = projectedRow.getUTF8String(0).toString();
         }
         byte[] payload;
@@ -93,6 +96,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         try {
             this.solaceBroker.publishMessage(this.messageId, this.topic,
                     partitionKey, payload, timestamp, headersMap);
+            publishedMessages++;
         } catch (Exception e) {
             this.solaceBroker.close();
             throw new SolacePublishException(e.getCause());
@@ -124,7 +128,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     @Override
     public WriterCommitMessage commit() {
         checkForException();
-        if(batchSize == 0 || (batchSize > 0 && this.commitMessages.size() < Integer.parseInt(this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT)))) {
+        if(this.commitMessages.size() < publishedMessages) {
             try {
                 log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT), this.commitMessages.size());
                 log.info("SolaceSparkConnector - Sleeping for 3000ms to check for pending acknowledgments");
