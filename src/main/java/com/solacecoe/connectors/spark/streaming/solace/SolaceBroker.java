@@ -54,13 +54,13 @@ public class SolaceBroker implements Serializable {
         this.queue = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
-            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             // get api properties
             Properties props = getProperties(properties);
             if(!props.isEmpty()) {
                 jcsmpProperties = JCSMPProperties.fromProperties(props);
             }
 
+            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             jcsmpProperties.setProperty(JCSMPProperties.HOST, properties.get(SolaceSparkStreamingProperties.HOST));            // host:port
             jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, properties.get(SolaceSparkStreamingProperties.VPN));    // message-vpn
 
