@@ -5,6 +5,7 @@ import com.solacecoe.connectors.spark.oauth.ContainerResource;
 import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.OAuthClient;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.api.java.function.VoidFunction2;
 import org.apache.spark.sql.Dataset;
@@ -54,6 +55,7 @@ public class SolaceSparkStreamingOAuthIT {
         sparkSession.stop();
         sparkSession.close();
         containerResource.stop();
+        SolaceConnectionManager.closeAllConnections();
     }
 
     @BeforeEach

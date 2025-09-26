@@ -4,6 +4,7 @@ import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.oauth.CertificateContainerResource;
 import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -45,6 +46,9 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
     @AfterAll
     public void afterAll() {
         containerResource.stop();
+        sparkSession.stop();
+        sparkSession.close();
+        SolaceConnectionManager.closeAllConnections();
     }
 
     @BeforeEach

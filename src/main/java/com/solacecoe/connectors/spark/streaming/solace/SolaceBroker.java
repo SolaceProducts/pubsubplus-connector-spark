@@ -388,6 +388,9 @@ public class SolaceBroker implements Serializable {
                 session.closeSession();
                 log.info("SolaceSparkConnector - Closed Solace session");
             }
+
+            this.isException = false;
+            this.exception = null;
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Graceful shutdown failed", e);
         }
