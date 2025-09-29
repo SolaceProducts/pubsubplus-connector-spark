@@ -4,6 +4,7 @@ import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.oauth.CertificateContainerResource;
 import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -25,7 +26,7 @@ import java.util.concurrent.TimeoutException;
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class SolaceSparkStreamingTLSClientCertificateCNIT {
+public class SolaceSparkStreamingTLSClientCertificateCNIT {
 
     private SparkSession sparkSession;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(true);
@@ -45,6 +46,9 @@ class SolaceSparkStreamingTLSClientCertificateCNIT {
     @AfterAll
     public void afterAll() {
         containerResource.stop();
+        sparkSession.stop();
+        sparkSession.close();
+        SolaceConnectionManager.closeAllConnections();
     }
 
     @BeforeEach

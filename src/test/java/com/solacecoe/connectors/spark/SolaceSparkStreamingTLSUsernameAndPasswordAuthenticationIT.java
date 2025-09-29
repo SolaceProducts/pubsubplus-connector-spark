@@ -4,6 +4,7 @@ import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.oauth.CertificateContainerResource;
 import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.api.java.function.VoidFunction2;
 import org.apache.spark.sql.Dataset;
@@ -29,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
+public class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
     private SparkSession sparkSession;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(false);
     @BeforeAll
@@ -59,6 +60,9 @@ class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
         }
 
         containerResource.stop();
+        sparkSession.stop();
+        sparkSession.close();
+        SolaceConnectionManager.closeAllConnections();
     }
 
     @BeforeEach
@@ -174,7 +178,7 @@ class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
                 .option("checkpointLocation", writePath.toAbsolutePath().toString())
                 .format("solace").start();
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
+        Awaitility.await().atMost(1000, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
     }

@@ -528,7 +528,8 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
                     .withOAuth()
                     .withExposedPorts(Service.SMF.getPort(), Service.SMF_SSL.getPort(), 1943, 8080)
                     .withPublishTopic("hello/direct", Service.SMF)
-                    .withPublishTopic("hello/persistent", Service.SMF);
+                    .withPublishTopic("hello/persistent", Service.SMF)
+                    .withPublishTopic("solace/spark/connector/offset", SolaceOAuthContainer.Service.SMF);
 
             solaceOAuthContainer.start();
 

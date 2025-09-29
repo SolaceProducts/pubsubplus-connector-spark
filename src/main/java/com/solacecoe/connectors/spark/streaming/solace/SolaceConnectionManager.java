@@ -53,4 +53,8 @@ public class SolaceConnectionManager {
         });
         brokerConnections.remove(connectionId);
     }
+
+    public static void removeConnection(String connectionId) {
+        brokerConnections.remove(connectionId);
+    }
 }

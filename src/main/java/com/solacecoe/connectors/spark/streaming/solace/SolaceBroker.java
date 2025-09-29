@@ -32,6 +32,7 @@ public class SolaceBroker implements Serializable {
     private final CopyOnWriteArrayList<LVQEventListener> lvqEventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
     private ScheduledExecutorService scheduledExecutorService;
+    private ScheduledExecutorService watchdogScheduler;
     private boolean isException;
     private Exception exception;
     private long accessTokenSourceLastModifiedTime = 0L;
@@ -40,7 +41,9 @@ public class SolaceBroker implements Serializable {
     private final Map<String, String> properties;
     private final JCSMPSession session;
     private XMLMessageProducer producer;
-
+    private long lastMessageTimestamp = 0;
+    private boolean isShuttingDown = false;
+    private Browser queueBrowser;
     public SolaceBroker(Map<String, String> properties, String clientType) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
@@ -51,13 +54,13 @@ public class SolaceBroker implements Serializable {
         this.queue = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
-            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             // get api properties
             Properties props = getProperties(properties);
             if(!props.isEmpty()) {
                 jcsmpProperties = JCSMPProperties.fromProperties(props);
             }
 
+            jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             jcsmpProperties.setProperty(JCSMPProperties.HOST, properties.get(SolaceSparkStreamingProperties.HOST));            // host:port
             jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, properties.get(SolaceSparkStreamingProperties.VPN));    // message-vpn
 
@@ -100,6 +103,7 @@ public class SolaceBroker implements Serializable {
             addChannelProperties(jcsmpProperties);
             session = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
             session.connect();
+            startWatchdog();
         } catch (Exception ex) {
             log.error("SolaceSparkConnector - Exception connecting to Solace ", ex);
             close();
@@ -156,6 +160,7 @@ public class SolaceBroker implements Serializable {
                         break;
                     case "TIMEBASED":
                         String dateStr = properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME ,null);
+                        System.out.println("Current Timestamp " + dateStr);
                         if (dateStr != null) {
                             SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                             simpleDateFormat.setTimeZone(TimeZone.getTimeZone(properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_TIMEZONE, "UTC"))); // Convert the given date into UTC time zone
@@ -230,6 +235,36 @@ public class SolaceBroker implements Serializable {
         } catch (Exception e) {
             log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
             close();
+        }
+    }
+
+    public boolean isQueueFull() {
+        try {
+            BrowserProperties br_prop = new BrowserProperties();
+            br_prop.setEndpoint(JCSMPFactory.onlyInstance().createQueue(this.queue));
+            br_prop.setTransportWindowSize(1);
+            br_prop.setWaitTimeout(1000);
+            queueBrowser = session.createBrowser(br_prop);
+            int retryCount = 0;
+            BytesXMLMessage rx_msg = null;
+            do {
+                rx_msg = queueBrowser.getNext();
+                if (rx_msg != null) {
+                    queueBrowser.close();
+                    return true;
+                } else {
+                    if(retryCount == 5) {
+                        queueBrowser.close();
+                        return false;
+                    }
+                }
+
+                retryCount++;
+            } while (true);
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Exception creating Queue Browser ", e);
+            handleException("SolaceSparkConnector - Exception creating Queue Browser ", e);
+            return false;
         }
     }
 
@@ -342,18 +377,38 @@ public class SolaceBroker implements Serializable {
     }
 
     public void close() {
-        closeProducer();
-        closeReceivers();
-        log.info("Closing Solace Session");
-        if(session != null && !session.isClosed()) {
-            session.closeSession();
-            log.info("SolaceSparkConnector - Closed Solace session");
-        }
+        isShuttingDown = true;
+        try {
+            shutdownExecutor();
+            closeProducer();
+            closeReceivers();
 
-        if(scheduledExecutorService != null) {
+            log.info("Closing Solace Session");
+            if(session != null && !session.isClosed()) {
+                session.closeSession();
+                log.info("SolaceSparkConnector - Closed Solace session");
+            }
+
+            this.isException = false;
+            this.exception = null;
+        } catch (Exception e) {
+            log.error("SolaceSparkConnector - Graceful shutdown failed", e);
+        }
+    }
+
+    public void shutdownExecutor() {
+        if(scheduledExecutorService != null && !scheduledExecutorService.isShutdown()) {
             scheduledExecutorService.shutdownNow();
             log.info("SolaceSparkConnector - OAuth token refresh thread is now shutdown");
         }
+
+        if(watchdogScheduler != null && !watchdogScheduler.isShutdown()) {
+            watchdogScheduler.shutdownNow();
+        }
+    }
+
+    public boolean isConnected() {
+        return session != null && !session.isClosed();
     }
 
     public LinkedBlockingQueue<SolaceMessage> getMessages(int index) {
@@ -455,5 +510,33 @@ public class SolaceBroker implements Serializable {
 
     public Exception getException() {
         return exception;
+    }
+
+    private void startWatchdog() {
+        long timeout = Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT, SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT_DEFAULT));
+        long interval = Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT_CHECK, SolaceSparkStreamingProperties.SOLACE_CONNECTION_IDLE_TIMEOUT_CHECK_DEFAULT));
+
+        if(timeout > 0 && interval > 0) {
+            watchdogScheduler = Executors.newSingleThreadScheduledExecutor();
+            watchdogScheduler.scheduleAtFixedRate(() -> {
+                if (isShuttingDown) {
+                    watchdogScheduler.shutdown();
+                    return;
+                }
+
+                if (lastMessageTimestamp > 0 && (System.currentTimeMillis() - lastMessageTimestamp) > timeout) {
+                    log.info("SolaceSparkConnector - Inactivity timeout. Last message processed at {} Shutting down Solace Session.", lastMessageTimestamp);
+                    close();
+                } else {
+                    log.info("SolaceSparkConnector - No messages are processed yet, skipping idle timeout check.");
+                }
+            }, interval, interval, TimeUnit.MILLISECONDS); // initial delay, then interval
+        } else {
+            log.info("SolaceSparkConnector - No connection idle timeout is configured. Connector will not check for idle connections.");
+        }
+    }
+
+    public void setLastMessageTimestamp(long lastMessageTimestamp) {
+        this.lastMessageTimestamp = lastMessageTimestamp;
     }
 }

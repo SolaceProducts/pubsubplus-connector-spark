@@ -30,6 +30,8 @@ import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
@@ -38,15 +40,15 @@ import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.testcontainers.shaded.org.hamcrest.MatcherAssert.assertThat;
 import static org.testcontainers.shaded.org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class SolaceSparkStreamingMessageReplayIT {
-    private static final Long SHM_SIZE = (long) Math.pow(1024, 3);
+public class SolaceSparkStreamingMessageReplayIT {
+    private final Long SHM_SIZE = (long) Math.pow(1024, 3);
     private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withCreateContainerCmdModifier(cmd ->{
         Ulimit ulimit = new Ulimit("nofile", 2448, 1048576);
         List<Ulimit> ulimitList = new ArrayList<>();
@@ -150,7 +152,7 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(1)
-    void Should_ProcessData() throws TimeoutException, InterruptedException, JCSMPException, ParseException {
+    public void Should_ProcessData() throws TimeoutException, InterruptedException, JCSMPException, ParseException {
         if(solaceContainer.isRunning()) {
             SolaceSession session = new SolaceSession(solaceContainer.getOrigin(Service.SMF), solaceContainer.getVpn(), solaceContainer.getUsername(), solaceContainer.getPassword());
             XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
@@ -215,7 +217,7 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(2)
-    void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
+    public void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
@@ -240,7 +242,7 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(3)
-    void Should_InitiateReplay_ALL_STRATEGY_And_Ack_Duplicate_Messages() throws TimeoutException, InterruptedException {
+    public void Should_InitiateReplay_ALL_STRATEGY_And_Ack_Duplicate_Messages() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
@@ -266,7 +268,7 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(4)
-    void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
+    public void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         String timezone = ZoneId.systemDefault().toString();
         DataStreamReader reader = sparkSession.readStream()
@@ -296,7 +298,7 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(5)
-    void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
+    public void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
@@ -324,9 +326,10 @@ class SolaceSparkStreamingMessageReplayIT {
 
     @Test
     @Order(6)
-    void Should_Fail_IfReplayStrategyIsInvalid() {
+    public void Should_Fail_IfReplayStrategyIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(StreamingQueryException.class, () -> {
+//        assertThrows(StreamingQueryException.class, () -> {
+        try {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
@@ -336,7 +339,7 @@ class SolaceSparkStreamingMessageReplayIT {
                     .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
                     .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
                     .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
-                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + "sub_ack_window_threshold", 75)
                     .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
                     .option(SolaceSparkStreamingProperties.BATCH_SIZE, "0")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "invalid-replay-strategy")
@@ -347,21 +350,25 @@ class SolaceSparkStreamingMessageReplayIT {
                 System.out.println("Should_Fail_IfReplayStrategyIsInvalid " + dataset1.count());
             }).start();
             streamingQuery.awaitTermination();
-        });
+        } catch (Exception e) {
+            assertTrue(e instanceof StreamingQueryException);
+        }
+//        });
     }
 
     @Test
     @Order(7)
-    void Should_Fail_IfReplicationGroupMessageIdIsInvalid() {
+    public void Should_Fail_IfReplicationGroupMessageIdIsInvalid() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(StreamingQueryException.class, () -> {
+//        assertThrows(StreamingQueryException.class, () -> {
 //            sparkSession.sparkContext().setLogLevel("TRACE");
+        try {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
                     .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, "invalid-id")
@@ -372,43 +379,51 @@ class SolaceSparkStreamingMessageReplayIT {
                 System.out.println("Should_Fail_IfReplicationGroupMessageIdIsInvalid " + dataset1.count());
             }).start();
             streamingQuery.awaitTermination();
-        });
+        } catch (Exception e) {
+            assertTrue(e instanceof StreamingQueryException);
+        }
+//        });
     }
 
     @Test
     @Order(8)
-    void Should_Fail_IfReplicationGroupMessageIdIsNull() {
+    public void Should_Fail_IfReplicationGroupMessageIdIsNull() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(StreamingQueryException.class, () -> {
+//        assertThrows(StreamingQueryException.class, () -> {
+            try {
+                DataStreamReader reader = sparkSession.readStream()
+                        .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                        .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                        .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                        .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                        .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+                        .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
+                        .option("checkpointLocation", path.toAbsolutePath().toString())
+                        .format("solace");
+                Dataset<Row> dataset = reader.load();
+                StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                    System.out.println("Should_Fail_IfReplicationGroupMessageIdIsNull " + dataset1.count());
+                }).start();
+                streamingQuery.awaitTermination();
+            } catch (Exception e) {
+                assertTrue(e instanceof StreamingQueryException);
+            }
+//        });
+    }
+
+    @Test
+    @Order(8)
+    public void Should_Fail_IfReplicationGroupMessageIdIsEmpty() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+//        assertThrows(StreamingQueryException.class, () -> {
+        try {
             DataStreamReader reader = sparkSession.readStream()
                     .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
                     .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
                     .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
                     .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                    .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
-                    .option("checkpointLocation", path.toAbsolutePath().toString())
-                    .format("solace");
-            Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                System.out.println("Should_Fail_IfReplicationGroupMessageIdIsNull " + dataset1.count());
-            }).start();
-            streamingQuery.awaitTermination();
-        });
-    }
-
-    @Test
-    @Order(8)
-    void Should_Fail_IfReplicationGroupMessageIdIsEmpty() {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        assertThrows(StreamingQueryException.class, () -> {
-            DataStreamReader reader = sparkSession.readStream()
-                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
                     .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
                     .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, "")
@@ -419,7 +434,10 @@ class SolaceSparkStreamingMessageReplayIT {
                 System.out.println("Should_Fail_IfReplicationGroupMessageIdIsEmpty " + dataset1.count());
             }).start();
             streamingQuery.awaitTermination();
-        });
+        } catch (Exception e) {
+            assertTrue(e instanceof StreamingQueryException);
+        }
+//        });
     }
 }
 

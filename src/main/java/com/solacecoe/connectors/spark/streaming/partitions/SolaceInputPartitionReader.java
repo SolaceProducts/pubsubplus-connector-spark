@@ -5,8 +5,8 @@ import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaders;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacecoe.connectors.spark.streaming.solace.EventListener;
 import com.solacecoe.connectors.spark.streaming.solace.*;
+import com.solacecoe.connectors.spark.streaming.solace.EventListener;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumerException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceMessageException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
@@ -36,40 +36,61 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
     private final transient Logger log = LogManager.getLogger(SolaceInputPartitionReader.class);
     private final boolean includeHeaders;
     private final SolaceInputPartition solaceInputPartition;
     private final Map<String, String> properties;
-    private SolaceMessage solaceMessage;
-    private SolaceBroker solaceBroker;
     private final int batchSize;
-    private int messages = 0;
     private final long taskId;
     private final String uniqueId;
     private final String checkpointLocation;
     private final long receiveWaitTimeout;
     private final TaskContext taskContext;
     private final boolean closeReceiversOnPartitionClose;
+    private final boolean isCommitTriggered;
     private final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
+    private SolaceMessage solaceMessage;
+    private SolaceBroker solaceBroker;
+    private int messages = 0;
+    private Iterator<SolaceMessage> iterator;
+    private boolean shouldTrackMessage = true;
+
     public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, Map<String, String> properties,
                                       TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation) {
 
         log.info("SolaceSparkConnector - Initializing Solace Input Partition reader with id {}", inputPartition.getId());
-        
+
         this.solaceInputPartition = inputPartition;
         this.uniqueId = this.solaceInputPartition.getId();
+        String currentBatchId = taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
+        /*
+         * In case when multiple operations are performed on dataframe, input partition will be called as part of Spark scan.
+         * We need to acknowledge messages only if new batch is started. In case of same batch we will return the same messages.
+         */
+        if (!currentBatchId.equals(SolaceMessageTracker.getLastBatchId())) {
+            /* Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
+             * If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
+             * Solace connection is always active and acknowledgements should be successful. It might throw exception if connection is lost
+             * */
+            isCommitTriggered = true;
+            log.info("SolaceSparkConnector - Acknowledging any processed messages to Solace as commit is successful");
+            long startTime = System.currentTimeMillis();
+            SolaceMessageTracker.ackMessages(uniqueId);
+            log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
+        } else {
+            isCommitTriggered = false;
+            CopyOnWriteArrayList<SolaceMessage> messageList = SolaceMessageTracker.getMessages(uniqueId);
+            if (messageList != null) {
+                iterator = messageList.iterator();
+            }
+        }
 
-        /* Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
-        * If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
-        * Solace connection is always active and acknowledgements should be successful. It might throw exception if connection is lost
-        * */
-        log.info("SolaceSparkConnector - Acknowledging any processed messages to Solace as commit is successful");
-        long startTime = System.currentTimeMillis();
-        SolaceMessageTracker.ackMessages(uniqueId);
-        log.trace("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
+        SolaceMessageTracker.setLastBatchId(currentBatchId);
 
         this.includeHeaders = includeHeaders;
         this.properties = properties;
@@ -81,8 +102,8 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT, SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT));
         this.closeReceiversOnPartitionClose = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE, SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT));
         boolean ackLastProcessedMessages = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES_DEFAULT));
-        String replayStrategy = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY ,null);
-        if(replayStrategy == null || replayStrategy.isEmpty()) {
+        String replayStrategy = this.properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY, null);
+        if (replayStrategy == null || replayStrategy.isEmpty()) {
             ackLastProcessedMessages = false;
         }
 
@@ -91,28 +112,32 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         // Get existing connection if a new task is scheduled on executor or create a new one
         if (SolaceConnectionManager.getConnection(inputPartition.getId()) != null) {
             solaceBroker = SolaceConnectionManager.getConnection(inputPartition.getId());
+            if (solaceBroker != null && !solaceBroker.isConnected()) {
+                checkException();
+                int unackedMessages = 0;
+                CopyOnWriteArrayList<SolaceMessage> messageList = SolaceMessageTracker.getMessages(uniqueId);
+                if(messageList != null) {
+                    unackedMessages = messageList.size();
+                }
+                log.info("SolaceSparkConnector - Connection has been closed on input partition {}. {} messages will be redelivered as they are not acknowledged due to connection closure.", inputPartition.getId(), unackedMessages);
+                SolaceConnectionManager.removeConnection(inputPartition.getId());
+                createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
+                log.info("SolaceSparkConnector - Previous connection to Solace closed due to idle timeout. Established a new connection.");
+            }
             if (closeReceiversOnPartitionClose) {
                 createReceiver(inputPartition.getId(), ackLastProcessedMessages);
             }
         } else {
             createNewConnection(inputPartition.getId(), ackLastProcessedMessages);
         }
-        if(this.solaceBroker != null && this.solaceBroker.isException()) {
-            log.error("SolaceSparkConnector - Exception encountered, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
-            this.solaceBroker.close();
-            throw new SolaceSessionException(this.solaceBroker.getException());
-        }
+        checkException();
         log.info("SolaceSparkConnector - Acquired connection to Solace broker for partition {}", inputPartition.getId());
         registerTaskListener();
     }
 
     @Override
     public boolean next() {
-        if(this.solaceBroker != null && this.solaceBroker.isException()) {
-            log.error("SolaceSparkConnector - Exception encountered when checking for next message, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
-            this.solaceBroker.close();
-            throw new SolaceSessionException(this.solaceBroker.getException());
-        }
+        checkException();
 
         if (TaskContext.get() != null && TaskContext.get().isInterrupted()) {
             log.info("SolaceSparkConnector - Interrupted while waiting for next message");
@@ -130,15 +155,15 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)).map(solaceMessage.bytesXMLMessage);
             long timestamp = solaceRecord.getSenderTimestamp();
             if (solaceRecord.getSenderTimestamp() == 0) {
-                timestamp = System.currentTimeMillis();
+                timestamp = System.currentTimeMillis() / 1000;
             }
             InternalRow row;
-            if(this.includeHeaders) {
+            if (this.includeHeaders) {
                 Map<String, Object> headers = getStringObjectMap(solaceRecord);
                 MapData mapData = new ArrayBasedMapData(new GenericArrayData(headers.keySet().stream().filter(key -> headers.get(key) != null).map(UTF8String::fromString).toArray()), new GenericArrayData(headers.values().stream().filter(Objects::nonNull).map(value -> value.toString().getBytes(StandardCharsets.UTF_8)).toArray()));
                 row = new GenericInternalRow(new Object[]{UTF8String.fromString(solaceRecord.getMessageId()),
                         solaceRecord.getPayload(), UTF8String.fromString(solaceRecord.getPartitionKey()), UTF8String.fromString(solaceRecord.getDestination()),
-                        DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp)),mapData
+                        DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp)), mapData
                 });
             } else {
                 row = new GenericInternalRow(new Object[]{UTF8String.fromString(solaceRecord.getMessageId()),
@@ -146,12 +171,16 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         DateTimeUtils.fromJavaTimestamp(new Timestamp(timestamp))
                 });
             }
-            if(solaceRecord.getPartitionKey() != null && !solaceRecord.getPartitionKey().isEmpty()) {
-                SolaceMessageTracker.addMessageID(solaceRecord.getPartitionKey(), solaceRecord.getMessageId());
-            } else {
-                SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
+            // No need to add message to tracker as the call is from same dataframe operation.
+            if (shouldTrackMessage) {
+                if (solaceRecord.getPartitionKey() != null && !solaceRecord.getPartitionKey().isEmpty()) {
+                    SolaceMessageTracker.addMessageID(solaceRecord.getPartitionKey(), solaceRecord.getMessageId());
+                } else {
+                    SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
+                }
+                SolaceMessageTracker.addMessage(this.uniqueId, solaceMessage);
             }
-            SolaceMessageTracker.addMessage(this.uniqueId, solaceMessage);
+            solaceBroker.setLastMessageTimestamp(System.currentTimeMillis());
             return row;
         } catch (Exception e) {
             log.error("SolaceSparkConnector- Exception while reading message", e);
@@ -162,10 +191,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private Map<String, Object> getStringObjectMap(SolaceRecord solaceRecord) {
         Map<String, Object> headers = new HashMap<>();
         Map<String, Object> userProperties = (solaceRecord.getProperties() != null) ? solaceRecord.getProperties() : new HashMap<>();
-        if(!userProperties.isEmpty()) {
+        if (!userProperties.isEmpty()) {
             headers.putAll(userProperties);
         }
-        if(solaceRecord.getSequenceNumber() != null) {
+        if (solaceRecord.getSequenceNumber() != null) {
             headers.put(SolaceHeaders.SEQUENCE_NUMBER, solaceRecord.getSequenceNumber());
         }
         headers.put(SolaceHeaders.EXPIRATION, solaceRecord.getExpiration());
@@ -176,33 +205,64 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     }
 
     private SolaceMessage getNextMessage() {
-        LinkedBlockingQueue<SolaceMessage> queue = solaceBroker.getMessages(0);
-        if(queue != null) {
-            while(shouldProcessMoreMessages(batchSize, messages)) {
-                try {
-                    solaceMessage = queue.poll(receiveWaitTimeout, TimeUnit.MILLISECONDS);
-                    if (solaceMessage == null) {
+        /*
+          If commit is triggered or messageList is null we need to fetch messages from Solace.
+          In case of same batch just return the available messages in message tracker.
+         */
+        if (this.isCommitTriggered || iterator == null || !iterator.hasNext()) {
+            LinkedBlockingQueue<SolaceMessage> queue = solaceBroker.getMessages(0);
+            if (queue != null) {
+                while (shouldProcessMoreMessages(batchSize, messages)) {
+                    try {
+                        solaceMessage = queue.poll(receiveWaitTimeout, TimeUnit.MILLISECONDS);
+                        if (solaceMessage == null) {
+                            return null;
+                        }
+
+                        if (batchSize > 0) {
+                            messages++;
+                        }
+                        if (isMessageAlreadyProcessed(solaceMessage)) {
+                            log.info("Message is added to previous partitions for processing. Moving to next message");
+                        } else {
+                            return solaceMessage;
+                        }
+
+                    } catch (InterruptedException | SDTException e) {
+                        log.warn("No messages available within specified receiveWaitTimeout", e);
+                        Thread.currentThread().interrupt();
                         return null;
                     }
+                }
+            }
+        } else {
+            while (shouldProcessMoreMessages(batchSize, messages)) {
+                try {
+                    if (iterator.hasNext()) {
+                        shouldTrackMessage = false;
+                        solaceMessage = iterator.next();
+                        if (solaceMessage == null) {
+                            return null;
+                        }
 
-                    if(batchSize > 0) {
-                        messages++;
-                    }
-                    if(isMessageAlreadyProcessed(solaceMessage)) {
-                        log.info("Message is added to previous partitions for processing. Moving to next message");
+                        if (batchSize > 0) {
+                            messages++;
+                        }
+                        if (isMessageAlreadyProcessed(solaceMessage)) {
+                            log.info("Message is added to previous partitions for processing. Moving to next message");
+                        } else {
+                            return solaceMessage;
+                        }
                     } else {
-                        return solaceMessage;
+                        return null;
                     }
-
-                } catch (InterruptedException | SDTException e) {
+                } catch (Exception e) {
                     log.warn("No messages available within specified receiveWaitTimeout", e);
                     Thread.currentThread().interrupt();
                     return null;
                 }
             }
         }
-
-
         return null;
     }
 
@@ -221,9 +281,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     @Override
     public void close() {
         log.info("SolaceSparkConnector - Input partition reader with ID {} with task {} is closed", this.solaceInputPartition.getId(), this.uniqueId);
-        if(this.solaceBroker != null && this.solaceBroker.isException()) {
-            throw new SolaceSessionException(this.solaceBroker.getException());
-        }
+        checkException();
     }
 
     private void logShutdownMessage(TaskContext context) {
@@ -242,7 +300,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         });
         this.taskContext.addTaskCompletionListener(context -> {
             log.info("SolaceSparkConnector - Task {} state is completed :: {}, failed :: {}, interrupted :: {}", uniqueId, context.isCompleted(), context.isFailed(), context.isInterrupted());
-            if(context.isInterrupted() || context.isFailed()) {
+            if (context.isInterrupted() || context.isFailed()) {
                 logShutdownMessage(context);
             } else if (context.isCompleted()) {
                 List<String> ids = SolaceMessageTracker.getIds();
@@ -256,7 +314,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         log.trace("SolaceSparkConnector - Created parent directory {} for file path {}", parentDir.toString(), path.toString());
                     }
                     // overwrite checkpoint to preserve latest value
-                    try(BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE,
+                    try (BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE,
                             StandardOpenOption.TRUNCATE_EXISTING)) {
                         for (String id : ids) {
                             String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(id);
@@ -278,9 +336,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                     throw new RuntimeException(e);
                 }
 
-                log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(),uniqueId);
+                log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(), uniqueId);
 
-                if(closeReceiversOnPartitionClose) {
+                if (closeReceiversOnPartitionClose) {
                     solaceBroker.closeReceivers();
                 }
             }
@@ -302,7 +360,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
     private void createReceiver(String inputPartitionId, boolean ackLastProcessedMessages) {
         EventListener eventListener = new EventListener(inputPartitionId);
-        if(ackLastProcessedMessages) {
+        if (ackLastProcessedMessages) {
             log.info("SolaceSparkConnector - Ack last processed messages is set to true, connector will match incoming messages with checkpoint and auto acknowledge");
 //            List<String> messageIDs = Arrays.stream(this.lastKnownOffset.split(",")).collect(Collectors.toList());
             eventListener = new EventListener(inputPartitionId, this.checkpoints, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
@@ -310,5 +368,13 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         // Initialize connection to Solace Broker
         solaceBroker.addReceiver(eventListener);
         SolaceConnectionManager.addConnection(inputPartitionId, solaceBroker);
+    }
+
+    private void checkException() {
+        if (this.solaceBroker != null && this.solaceBroker.isException()) {
+            log.error("SolaceSparkConnector - Exception encountered, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
+            this.solaceBroker.close();
+            throw new SolaceSessionException(this.solaceBroker.getException());
+        }
     }
 }
