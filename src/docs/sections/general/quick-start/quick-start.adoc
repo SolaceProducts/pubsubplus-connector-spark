@@ -111,6 +111,7 @@ import org.apache.spark.sql.streaming.StreamingQueryException;
 public class SolaceSparkStreamingJava {
     public static void main(String[] args) throws StreamingQueryException {
         SparkSession spark = SparkSession.builder()
+                .master("local[*]")
                 .appName("SolaceSparkStreaming")
                 .getOrCreate();
 
@@ -192,6 +193,7 @@ import static org.apache.spark.sql.functions.col;
 public class ReadParquetAndParsePayload {
     public static void main(String[] args) {
         SparkSession spark = SparkSession.builder()
+                .master("local[*]")
                 .appName("SolaceReadParquet")
                 .getOrCreate();
 
@@ -290,6 +292,7 @@ public class SolaceSparkStreaming {
         String parquetPath = "<path-to-parquet-file>";
 
         SparkSession spark = SparkSession.builder()
+                .master("local[*]")
                 .appName("SolaceSparkStreaming")
                 .getOrCreate();
 

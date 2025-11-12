@@ -1,5 +1,7 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidAccessTokenException;
@@ -29,8 +31,8 @@ public class SolaceBroker implements Serializable {
     private String uniqueName = "";
     private OAuthClient oAuthClient;
     private final CopyOnWriteArrayList<EventListener> eventListeners;
-    private final CopyOnWriteArrayList<LVQEventListener> lvqEventListeners;
     private final CopyOnWriteArrayList<FlowReceiver> flowReceivers;
+    private transient CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> lastKnownCheckpoint = new CopyOnWriteArrayList<>();
     private ScheduledExecutorService scheduledExecutorService;
     private ScheduledExecutorService watchdogScheduler;
     private boolean isException;
@@ -43,11 +45,12 @@ public class SolaceBroker implements Serializable {
     private XMLMessageProducer producer;
     private long lastMessageTimestamp = 0;
     private boolean isShuttingDown = false;
-    private Browser queueBrowser;
+
+    private Queue lvq;
+
     public SolaceBroker(Map<String, String> properties, String clientType) {
         eventListeners = new CopyOnWriteArrayList<>();
         flowReceivers = new CopyOnWriteArrayList<>();
-        lvqEventListeners = new CopyOnWriteArrayList<>();
         this.properties = properties;
         this.lvqName = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME);
         this.lvqTopic = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC);
@@ -160,7 +163,6 @@ public class SolaceBroker implements Serializable {
                         break;
                     case "TIMEBASED":
                         String dateStr = properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME ,null);
-                        System.out.println("Current Timestamp " + dateStr);
                         if (dateStr != null) {
                             SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                             simpleDateFormat.setTimeZone(TimeZone.getTimeZone(properties.getOrDefault(SolaceSparkStreamingProperties.REPLAY_STRATEGY_TIMEZONE, "UTC"))); // Convert the given date into UTC time zone
@@ -203,40 +205,93 @@ public class SolaceBroker implements Serializable {
         }
     }
 
-    public void addLVQReceiver(LVQEventListener lvqEventListener) {
-        lvqEventListeners.add(lvqEventListener);
-        setLVQReceiver(lvqEventListener);
-    }
+    public void createLVQIfNotExist() {
+        lvq = JCSMPFactory.onlyInstance().createQueue(this.lvqName);
 
-    private void setLVQReceiver(LVQEventListener eventListener) {
+        EndpointProperties endpoint_props = new EndpointProperties();
+        endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+        endpoint_props.setPermission(EndpointProperties.PERMISSION_CONSUME);
+        endpoint_props.setQuota(0);
         try {
-            ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
-            Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.lvqName);
-            flow_prop.setEndpoint(listenQueue);
-            flow_prop.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
-
-            EndpointProperties endpoint_props = new EndpointProperties();
-            endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
-            endpoint_props.setPermission(EndpointProperties.PERMISSION_CONSUME);
-            endpoint_props.setQuota(0);
-            this.session.provision(listenQueue, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
-            try {
-                this.session.addSubscription(listenQueue, JCSMPFactory.onlyInstance().createTopic(this.lvqTopic), JCSMPSession.WAIT_FOR_CONFIRM);
-            } catch (JCSMPException e) {
-                log.warn("SolaceSparkConnector - Subscription already exists on LVQ. Ignoring error");
-            }
-            eventListener.setBrokerInstance(this);
-            FlowReceiver cons = this.session.createFlow(eventListener,
-                    flow_prop, endpoint_props);
-
-            cons.start();
-            flowReceivers.add(cons);
-            log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {}", this.queue);
-        } catch (Exception e) {
-            log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
+            this.session.provision(lvq, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS | JCSMPSession.WAIT_FOR_CONFIRM);
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Exception creating LVQ. Shutting down consumer ", e);
             close();
         }
+        try {
+            this.session.addSubscription(lvq, JCSMPFactory.onlyInstance().createTopic(this.lvqTopic), JCSMPSession.WAIT_FOR_CONFIRM);
+        } catch (JCSMPException e) {
+            log.warn("SolaceSparkConnector - Subscription already exists on LVQ. Ignoring error");
+        }
     }
+
+    public CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> browseLVQ() {
+        BrowserProperties br_prop = new BrowserProperties();
+        br_prop.setEndpoint(lvq);
+        br_prop.setTransportWindowSize(1);
+        br_prop.setWaitTimeout(1000);
+        try {
+            Browser myBrowser = session.createBrowser(br_prop);
+            BytesXMLMessage rx_msg = null;
+            log.info("SolaceSparkConnector - Browsing message from LVQ {}", this.lvqName);
+            rx_msg = myBrowser.getNext();
+            if (rx_msg != null) {
+                log.info("SolaceSparkConnector - Browsed message from LVQ {}", this.lvqName);
+                byte[] msgData = new byte[0];
+                if (rx_msg.getContentLength() != 0) {
+                    msgData = rx_msg.getBytes();
+                }
+                if (rx_msg.getAttachmentContentLength() != 0) {
+                    msgData = rx_msg.getAttachmentByteBuffer().array();
+                }
+                lastKnownCheckpoint = new Gson().fromJson(new String(msgData, StandardCharsets.UTF_8), new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>(){}.getType());
+                log.info("SolaceSparkConnector - Checkpoint from LVQ {}", new String(msgData, StandardCharsets.UTF_8));
+            } else {
+                log.info("SolaceSparkConnector - No message available from LVQ {}", this.lvqName);
+            }
+            myBrowser.close();
+            return lastKnownCheckpoint;
+        } catch (JCSMPException e) {
+            log.error("SolaceSparkConnector - Exception browsing LVQ {}", this.lvqName, e);
+            close();
+            throw new RuntimeException(e);
+        }
+    }
+
+//    public void addLVQReceiver(LVQEventListener lvqEventListener) {
+//        lvqEventListeners.add(lvqEventListener);
+//        setLVQReceiver(lvqEventListener);
+//    }
+
+//    private void setLVQReceiver(LVQEventListener eventListener) {
+//        try {
+//            ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
+//            Queue listenQueue = JCSMPFactory.onlyInstance().createQueue(this.lvqName);
+//            flow_prop.setEndpoint(listenQueue);
+//            flow_prop.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
+//
+//            EndpointProperties endpoint_props = new EndpointProperties();
+//            endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+//            endpoint_props.setPermission(EndpointProperties.PERMISSION_CONSUME);
+//            endpoint_props.setQuota(0);
+//            this.session.provision(listenQueue, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+//            try {
+//                this.session.addSubscription(listenQueue, JCSMPFactory.onlyInstance().createTopic(this.lvqTopic), JCSMPSession.WAIT_FOR_CONFIRM);
+//            } catch (JCSMPException e) {
+//                log.warn("SolaceSparkConnector - Subscription already exists on LVQ. Ignoring error");
+//            }
+//            eventListener.setBrokerInstance(this);
+//            FlowReceiver cons = this.session.createFlow(eventListener,
+//                    flow_prop, endpoint_props);
+//
+//            cons.start();
+//            flowReceivers.add(cons);
+//            log.info("SolaceSparkConnector - Consumer flow started to listen for messages on queue {}", this.queue);
+//        } catch (Exception e) {
+//            log.error("SolaceSparkConnector - Consumer received exception. Shutting down consumer ", e);
+//            close();
+//        }
+//    }
 
     public boolean isQueueFull() {
         try {
@@ -244,7 +299,7 @@ public class SolaceBroker implements Serializable {
             br_prop.setEndpoint(JCSMPFactory.onlyInstance().createQueue(this.queue));
             br_prop.setTransportWindowSize(1);
             br_prop.setWaitTimeout(1000);
-            queueBrowser = session.createBrowser(br_prop);
+            Browser queueBrowser = session.createBrowser(br_prop);
             int retryCount = 0;
             BytesXMLMessage rx_msg = null;
             do {
@@ -373,7 +428,7 @@ public class SolaceBroker implements Serializable {
         flowReceivers.clear();
         eventListeners.forEach(eventListener -> eventListener.getMessages().clear());
         eventListeners.clear();
-        lvqEventListeners.clear();
+//        lvqEventListeners.clear();
     }
 
     public void close() {
@@ -415,14 +470,14 @@ public class SolaceBroker implements Serializable {
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
-    public CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getOffsetFromLvq() {
-        if(!lvqEventListeners.isEmpty() && !this.lvqEventListeners.get(0).getLastKnownOffsets().isEmpty()) {
-            log.info("Requesting messages from lvq listener, total messages available :: {}", this.lvqEventListeners.get(0).getLastKnownOffsets().size());
-            return this.lvqEventListeners.get(0).getLastKnownOffsets();
-        }
-
-        return new CopyOnWriteArrayList<>();
-    }
+//    public CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getOffsetFromLvq() {
+//        if(!lvqEventListeners.isEmpty() && !this.lvqEventListeners.get(0).getLastKnownOffsets().isEmpty()) {
+//            log.info("Requesting messages from lvq listener, total messages available :: {}", this.lvqEventListeners.get(0).getLastKnownOffsets().size());
+//            return this.lvqEventListeners.get(0).getLastKnownOffsets();
+//        }
+//
+//        return new CopyOnWriteArrayList<>();
+//    }
 
     @Override
     protected void finalize() {

@@ -8,7 +8,6 @@ import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheck
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceDataSourceReaderFactory;
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceInputPartition;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacecoe.connectors.spark.streaming.solace.LVQEventListener;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
@@ -45,12 +44,12 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private int partitions;
     private final int batchSize;
     private final boolean includeHeaders;
-    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
+//    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
     private final Map<String, String> properties;
     private final SolaceBroker solaceBroker;
     private String lastKnownMessageIds = "";
     private String queueName = "";
-    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> lastKnownOffset = new CopyOnWriteArrayList<>();
+    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> currentCheckpoint = new CopyOnWriteArrayList<>();
     private final String checkpointLocation;
     private final List<String> partitionIds = new ArrayList<>();
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
@@ -58,7 +57,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
         this.checkpointLocation = convertCheckpointURIToStringPath(checkpointLocation);
         log.info("SolaceSparkConnector - Configured Checkpoint location {}", checkpointLocation);
-        this.checkpoints = new CopyOnWriteArrayList<>();
+//        this.checkpoints = new CopyOnWriteArrayList<>();
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
 
@@ -84,29 +83,29 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
         this.queueName = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
         this.solaceBroker = new SolaceBroker(properties, "monitoring-consumer");
-        LVQEventListener lvqEventListener = new LVQEventListener();
-        this.solaceBroker.addLVQReceiver(lvqEventListener);
+//        LVQEventListener lvqEventListener = new LVQEventListener();
+//        this.solaceBroker.addLVQReceiver(lvqEventListener);
+        this.solaceBroker.createLVQIfNotExist();
         this.solaceBroker.initProducer();
         log.info("SolaceSparkConnector - Initialization Completed");
     }
 
     @Override
     public Offset latestOffset() {
+        currentCheckpoint = this.getCheckpoint();
         checkException();
         if(!this.solaceBroker.isQueueFull()) {
             checkException();
             log.info("SolaceSparkConnector - Queue {} is empty. Skipping batch", queueName);
-            return new SolaceSourceOffset(latestOffsetId, checkpoints);
+            return new SolaceSourceOffset(latestOffsetId, currentCheckpoint);
         }
         checkException();
         latestOffsetId+=batchSize;
-        checkpoints = this.getCheckpoint();
-        if(checkpoints != null && !checkpoints.isEmpty()) {
-            checkpoints.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
-
-            return new SolaceSourceOffset(latestOffsetId, checkpoints);
+        if(currentCheckpoint != null && !currentCheckpoint.isEmpty()) {
+            currentCheckpoint.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
+            return new SolaceSourceOffset(latestOffsetId, currentCheckpoint);
         } else {
-            checkpoints = new CopyOnWriteArrayList<>();
+            currentCheckpoint = new CopyOnWriteArrayList<>();
         }
         return new SolaceSourceOffset(latestOffsetId, new CopyOnWriteArrayList<>());
     }
@@ -193,14 +192,14 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public PartitionReaderFactory createReaderFactory() {
         log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: {}", this.includeHeaders);
-        this.checkpoints = this.getCheckpoint();
-        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, this.checkpoints, this.checkpointLocation);
+        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, currentCheckpoint, this.checkpointLocation);
     }
 
     @Override
     public Offset initialOffset() {
         CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> existingCheckpoints = this.getCheckpoint();
         if(existingCheckpoints != null && !existingCheckpoints.isEmpty()) {
+            currentCheckpoint = existingCheckpoints;
             existingCheckpoints.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
 
             return new SolaceSourceOffset(lastKnownOffsetId, existingCheckpoints);
@@ -259,20 +258,21 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public void commit(Offset end) {
         log.info("SolaceSparkConnector - Commit triggered");
+        CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> offsetToCommit = new CopyOnWriteArrayList<>();
         for(String partitionId: partitionIds) {
             Path path = Paths.get(this.checkpointLocation + "/" + partitionId + ".txt");
             if(Files.exists(path)) {
                 try (Stream<String> lines = Files.lines(path)) {
-                    lines.forEach(line -> {
-                        if (lastKnownOffset.isEmpty()) {
-                            lastKnownOffset = new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
+                    for(String line: lines.collect(Collectors.toList())) {
+                        if (offsetToCommit.isEmpty()) {
+                            offsetToCommit = new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
                             }.getType());
                         } else {
-                            lastKnownOffset.addAll(new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
+                            offsetToCommit.addAll(new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
                             }.getType()));
-                            lastKnownOffset = lastKnownOffset.stream().distinct().collect(Collectors.toCollection(CopyOnWriteArrayList::new));
+                            offsetToCommit = offsetToCommit.stream().distinct().collect(Collectors.toCollection(CopyOnWriteArrayList::new));
                         }
-                    });
+                    };
                 } catch (IOException e) {
                     log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
                     throw new RuntimeException(e);
@@ -280,11 +280,12 @@ public class SolaceMicroBatch implements MicroBatchStream {
             }
         }
 
-        if(!lastKnownOffset.isEmpty()) {
-            log.trace("SolaceSparkConnector - Final checkpoint publishing to LVQ {}", new Gson().toJson(this.lastKnownOffset));
-            this.solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), new Gson().toJson(this.lastKnownOffset));
+        if(!offsetToCommit.isEmpty()) {
+            currentCheckpoint = offsetToCommit;
+            log.trace("SolaceSparkConnector - Final checkpoint publishing to LVQ {}", new Gson().toJson(offsetToCommit));
+            this.solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), new Gson().toJson(offsetToCommit));
             checkException();
-            lastKnownOffset.clear();
+            offsetToCommit.clear();
         }
     }
 
@@ -296,7 +297,8 @@ public class SolaceMicroBatch implements MicroBatchStream {
     }
 
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> getCheckpoint() {
-        return this.solaceBroker.getOffsetFromLvq();
+//        return this.solaceBroker.getOffsetFromLvq();
+        return this.solaceBroker.browseLVQ();
     }
 
     private void checkException() {
