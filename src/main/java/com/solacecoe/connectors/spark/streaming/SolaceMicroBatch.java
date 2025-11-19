@@ -201,20 +201,23 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if(existingCheckpoints != null && !existingCheckpoints.isEmpty()) {
             currentCheckpoint = existingCheckpoints;
             existingCheckpoints.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
-
+            log.info("SolaceSparkConnector - Checkpoint available from LVQ {}", new Gson().toJson(existingCheckpoints));
             return new SolaceSourceOffset(lastKnownOffsetId, existingCheckpoints);
         }
-
+        log.info("SolaceSparkConnector - Initial Offset from LVQ is not available, the micro integration will use the available offset in checkpoint else a new checkpoint state will be created");
         return new SolaceSourceOffset(lastKnownOffsetId, new CopyOnWriteArrayList<>());
     }
 
     @Override
     public Offset deserializeOffset(String json) {
         SolaceSourceOffset solaceSourceOffset = getDeserializedOffset(json);
-        if(solaceSourceOffset != null) {
-            lastKnownOffsetId = solaceSourceOffset.getOffset();
-            solaceSourceOffset.getCheckpoints().forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
+        if(solaceSourceOffset.getCheckpoints() != null && solaceSourceOffset.getCheckpoints().isEmpty()) {
+            log.info("SolaceSparkConnector - No offset is available in spark checkpoint location. New checkpoint state will be created");
+        } else {
+            log.info("SolaceSparkConnector - Deserialized offset {}", new Gson().toJson(solaceSourceOffset));
         }
+        lastKnownOffsetId = solaceSourceOffset.getOffset();
+        solaceSourceOffset.getCheckpoints().forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
 
         return solaceSourceOffset;
     }
@@ -229,6 +232,8 @@ public class SolaceMicroBatch implements MicroBatchStream {
                 } else {
                     return migrate(solaceSourceOffset.getOffset(), "");
                 }
+            } else {
+                return solaceSourceOffset;
             }
         } catch (Exception e) {
             log.warn("SolaceSparkConnector - Exception when deserializing offset. May be due incompatible formats. Connector will try to migrate to latest offset format.");
@@ -244,8 +249,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
                 throw new RuntimeException("SolaceSparkConnector - Exception when migrating offset to latest format.", e);
             }
         }
-
-        return null;
     }
 
     private SolaceSourceOffset migrate(int offset, String messageIds) {

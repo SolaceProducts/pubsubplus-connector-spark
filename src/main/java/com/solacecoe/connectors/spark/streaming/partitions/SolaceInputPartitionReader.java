@@ -72,7 +72,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
          * In case when multiple operations are performed on dataframe, input partition will be called as part of Spark scan.
          * We need to acknowledge messages only if new batch is started. In case of same batch we will return the same messages.
          */
-        if (!currentBatchId.equals(SolaceMessageTracker.getLastBatchId())) {
+        if (!currentBatchId.equals(SolaceMessageTracker.getLastBatchId(this.uniqueId))) {
             /* Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
              * If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
              * Solace connection is always active and acknowledgements should be successful. It might throw exception if connection is lost
@@ -90,7 +90,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             }
         }
 
-        SolaceMessageTracker.setLastBatchId(currentBatchId);
+        SolaceMessageTracker.setLastBatchId(this.uniqueId, currentBatchId);
 
         this.includeHeaders = includeHeaders;
         this.properties = properties;
@@ -239,7 +239,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             while (shouldProcessMoreMessages(batchSize, messages)) {
                 try {
                     if (iterator.hasNext()) {
-                        shouldTrackMessage = false;
+//                        shouldTrackMessage = false;
                         solaceMessage = iterator.next();
                         if (solaceMessage == null) {
                             return null;

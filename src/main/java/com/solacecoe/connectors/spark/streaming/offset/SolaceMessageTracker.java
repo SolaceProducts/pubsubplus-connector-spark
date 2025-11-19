@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class SolaceMessageTracker implements Serializable {
-    private static String lastBatchId = "";
+    private static ConcurrentHashMap<String, String> lastBatchId = new ConcurrentHashMap<>();
     private static final Logger logger = LogManager.getLogger(SolaceMessageTracker.class);
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<SolaceMessage>> messages = new ConcurrentHashMap<>();
     private static ConcurrentHashMap<String, String> lastProcessedMessageId = new ConcurrentHashMap<>();
@@ -77,11 +77,11 @@ public final class SolaceMessageTracker implements Serializable {
         logger.info("SolaceSparkConnector - Cleared all messages from Offset Manager for {}", uniqueId);
     }
 
-    public static String getLastBatchId() {
-        return lastBatchId;
+    public static String getLastBatchId(String uniqueId) {
+        return lastBatchId.get(uniqueId);
     }
 
-    public static void setLastBatchId(String lastBatchId) {
-        SolaceMessageTracker.lastBatchId = lastBatchId;
+    public static void setLastBatchId(String uniqueId, String batchId) {
+        lastBatchId.put(uniqueId, batchId);
     }
 }

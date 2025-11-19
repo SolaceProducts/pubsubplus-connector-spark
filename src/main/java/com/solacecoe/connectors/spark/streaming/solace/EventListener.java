@@ -48,10 +48,7 @@ public class EventListener implements XMLMessageListener, Serializable {
             if(!this.checkpoints.isEmpty()) {
                 List<String> lastKnownMessageIDs = new ArrayList<>();
                 String messageID = SolaceUtils.getMessageID(msg, this.offsetIndicator);
-                boolean hasPartitionKey = false;
-                if(msg.getProperties() != null && msg.getProperties().containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)) {
-                    hasPartitionKey = true;
-                }
+                boolean hasPartitionKey = msg.getProperties() != null && msg.getProperties().containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
                 if(!hasPartitionKey) {
                     for(SolaceSparkPartitionCheckpoint checkpoint : this.checkpoints) {
                         lastKnownMessageIDs.addAll(Arrays.stream(checkpoint.getMessageIDs().split(",")).collect(Collectors.toList()));
@@ -87,7 +84,7 @@ public class EventListener implements XMLMessageListener, Serializable {
                             this.messages.add(new SolaceMessage(msg));
                         }
                     } else {
-                        log.warn("SolaceSparkConnector - Incoming message has no partition key but messages in checkpoint has partition id's. Message will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.");
+                        log.warn("SolaceSparkConnector - Incoming message partition key is either null or empty. Message will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.");
                         this.messages.add(new SolaceMessage(msg));
                     }
                 }
@@ -112,7 +109,7 @@ public class EventListener implements XMLMessageListener, Serializable {
             } else {
                 this.messages.add(new SolaceMessage(msg));
                 if (lastKnownMessageIDs.size() > 1) {
-                    log.warn("SolaceSparkConnector - Message ID {} not acknowledged as it may be a previously failed message received before newer checkpointed ones(parallel consumers). The connector will not check against checkpointed message IDs. It will be reprocessed to ensure reliability—any duplicates must be handled by the downstream system.", messageID);
+                    log.warn("SolaceSparkConnector - Message ID {} was not acknowledged because it may be an older, previously failed message received ahead of more recent checkpointed messages (due to parallel consumers). The connector does not validate message IDs against checkpoints, so this message will be reprocessed to ensure reliability. Any resulting duplicates must be handled by the downstream system.”", messageID);
                     break;
                 }
             }
