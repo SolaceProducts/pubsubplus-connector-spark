@@ -334,8 +334,9 @@ public class SolaceBroker implements Serializable {
                 retryCount++;
             } while (true);
         } catch (JCSMPException e) {
-            log.error("SolaceSparkConnector - Exception creating Queue Browser ", e);
-            handleException("SolaceSparkConnector - Exception creating Queue Browser ", e);
+            log.error("SolaceSparkConnector - Exception creating monitoring consumer on queue {}", this.queue, e);
+            close();
+            handleException("SolaceSparkConnector - Exception creating monitoring consumer on queue " + this.queue, e);
             return false;
         }
     }
@@ -484,6 +485,7 @@ public class SolaceBroker implements Serializable {
     }
 
     public LinkedBlockingQueue<SolaceMessage> getMessages(int index) {
+//        log.info("SolaceSparkConnector - {} messages received on Solace Consumer Session {} are ready for processing", (index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages().size() : 0), this.uniqueName);
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
@@ -597,14 +599,16 @@ public class SolaceBroker implements Serializable {
                 }
 
                 if (lastMessageTimestamp > 0 && (System.currentTimeMillis() - lastMessageTimestamp) > timeout) {
-                    log.info("SolaceSparkConnector - Inactivity timeout. Last message processed at {} Shutting down Solace Session.", lastMessageTimestamp);
+                    log.info("SolaceSparkConnector - Inactivity timeout for consumer session {}. Last message processed at {}. Closing Session.", this.uniqueName, lastMessageTimestamp);
                     close();
+                } else if(lastMessageTimestamp == 0){
+                    log.info("SolaceSparkConnector - No messages are processed yet by consumer session {}, skipping idle timeout check.", this.uniqueName);
                 } else {
-                    log.info("SolaceSparkConnector - No messages are processed yet, skipping idle timeout check.");
+                    log.info("SolaceSparkConnector - Last message is processed by consumer session {} at {} and current timestamp is {}", this.uniqueName, this.lastMessageTimestamp, System.currentTimeMillis());
                 }
             }, interval, interval, TimeUnit.MILLISECONDS); // initial delay, then interval
         } else {
-            log.info("SolaceSparkConnector - No connection idle timeout is configured. Connector will not check for idle connections.");
+            log.info("SolaceSparkConnector - No connection idle timeout is configured. Micro Integration will not check for idle connections.");
         }
     }
 

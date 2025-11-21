@@ -35,7 +35,7 @@ This guide assumes you are familiar with Spark set up and Spark Structured Strea
 
 === Supported Platforms
 
-The connector is built on the Spark Structured Streaming API and has been tested on Azure Databricks(15.4 LTS (includes Apache Spark 3.5.0, Scala 2.12) with photon acceleration disabled). Since the Databricks runtime is consistent across all supported cloud platforms(AWS & Google Cloud), it is expected to behave similarly in other Databricks environments. Additionally, the connector has been validated on vanilla Apache Spark, ensuring compatibility with any platform that supports standard Spark deployments.
+The connector is built on the Spark Structured Streaming API and has been tested on Azure Databricks(15.4 LTS (includes Apache Spark 3.5.0, Scala 2.12) with photon acceleration disabled and 16.4 LTS(includes Apache Spark 3.5.2, Scala 2.12)). Since the Databricks runtime is consistent across all supported cloud platforms(AWS & Google Cloud), it is expected to behave similarly in other Databricks environments. Additionally, the connector has been validated on vanilla Apache Spark, ensuring compatibility with any platform that supports standard Spark deployments.
 
 === Quick Start common steps
 
@@ -67,11 +67,26 @@ Solace Spark connector relies on Spark Checkpointing mechanism to resume from la
 
 === Checkpoint Handling
 
-Starting from version 3.1.0 connector, solace connection is now executed on worker node instead of driver node. This give us the ability to utilize cluster resource efficiently and also improves processing performance. The connector uses Solace LVQ to store checkpoint along with Spark Checkpoint.
+Starting from version 3.1.0 connector, solace connection is now executed on worker node instead of driver node. This gives us the ability to utilize cluster resource efficiently and also improves processing performance. The connector uses Solace LVQ to store checkpoint along with Spark Checkpoint.
 
 NOTE: In case of recovery, connector uses offset state from LVQ to identify last successfully processed messages. Hence, it is recommended not to delete or modify offset state in LVQ.
 
 In some cases, there might be checkpoint failures as spark may fail to write to checkpoint during instance crash or unavailability or other reasons. Though the connector will handle duplicates in most cases, we recommend to keep your downstream systems idempotent.
+
+==== Pre-requisites for LVQ creation
+The following pre-requisites are applicable for LVQ that are provisioned by Solace Administrator.
+1. The Queue should be of type Exclusive
+2. Spool Quota should be set to 0
+3. Owner of the Queue should be the client username used by the micro integration
+4. Non-Owner access should be set to No Access to prevent unauthorized access
+5. Add a topic subscription
+6. Ensure the ACL applied to the user has publish access to the topic subscribed by LVQ
+
+The following pre-requisites are applicable if the micro integration need to create LVQ if it doesn't exist.
+
+1. Ensure the Client Profile applied to the user has "Allow Client to Create Endpoints" enabled.
+2. Ensure the ACL applied to the user has publish and subscribe access to the topic subscribed by LVQ. The Subscribe access is required to programmatically apply the topic subscription to LVQ.
+3. The Micro Integration will create a LVQ with pre-requisites mentioned in above section.
 
 === User Authentication
 

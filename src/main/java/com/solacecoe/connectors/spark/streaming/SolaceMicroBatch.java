@@ -192,6 +192,9 @@ public class SolaceMicroBatch implements MicroBatchStream {
     @Override
     public PartitionReaderFactory createReaderFactory() {
         log.info("SolaceSparkConnector - Create reader factory with includeHeaders :: {}", this.includeHeaders);
+        if(currentCheckpoint != null && currentCheckpoint.isEmpty()) {
+            currentCheckpoint = this.getCheckpoint();
+        }
         return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, currentCheckpoint, this.checkpointLocation);
     }
 
@@ -217,6 +220,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
             log.info("SolaceSparkConnector - Deserialized offset {}", new Gson().toJson(solaceSourceOffset));
         }
         lastKnownOffsetId = solaceSourceOffset.getOffset();
+        currentCheckpoint = solaceSourceOffset.getCheckpoints();
         solaceSourceOffset.getCheckpoints().forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
 
         return solaceSourceOffset;
@@ -246,7 +250,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
                 }
             } catch (Exception e2) {
                 log.error("SolaceSparkConnector - Exception when migrating offset to latest format.");
-                throw new RuntimeException("SolaceSparkConnector - Exception when migrating offset to latest format.", e);
+                throw new RuntimeException("SolaceSparkConnector - Exception when migrating offset to latest format. Please delete the checkpoint and restart the micro integration", e);
             }
         }
     }

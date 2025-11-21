@@ -35,7 +35,7 @@ public final class SolaceMessageTracker implements Serializable {
         if(messages.containsKey(uniqueId)) {
             messageList = messages.get(uniqueId);
         }
-        messageList.add(message);
+        messageList.addIfAbsent(message);
         messages.put(uniqueId, messageList);
     }
 
