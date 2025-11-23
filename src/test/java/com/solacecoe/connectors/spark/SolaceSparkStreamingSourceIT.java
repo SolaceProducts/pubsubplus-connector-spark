@@ -50,7 +50,7 @@ public class SolaceSparkStreamingSourceIT {
                 .withShmSize(SHM_SIZE)
                 .withUlimits(ulimitList)
                 .withCpuCount(1l);
-    }).withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF).withTopic("solace/spark/connector/offset", Service.SMF);
+    }).withExposedPorts(8080, 55555).withTopic("solace/spark/streaming", Service.SMF).withTopic("solace/spark/connector/offset", Service.SMF).withTopic("solace/spark/streaming/offset", Service.SMF);
     private SparkSession sparkSession;
     @BeforeAll
     public void beforeAll() throws ApiException {
@@ -73,6 +73,22 @@ public class SolaceSparkStreamingSourceIT {
 
             sempV2Api.config().createMsgVpnQueue("default", queue, null, null);
             sempV2Api.config().createMsgVpnQueueSubscription("default", "Solace/Queue/0", subscription, null, null);
+
+            MsgVpnQueue lvq = new MsgVpnQueue();
+            lvq.queueName("Solace/Queue/lvq/0");
+            lvq.accessType(MsgVpnQueue.AccessTypeEnum.EXCLUSIVE);
+            lvq.permission(MsgVpnQueue.PermissionEnum.NO_ACCESS);
+            lvq.setOwner("default");
+            lvq.ingressEnabled(true);
+            lvq.egressEnabled(true);
+            lvq.setMaxMsgSpoolUsage(0l);
+
+            MsgVpnQueueSubscription lvqSubscription = new MsgVpnQueueSubscription();
+            lvqSubscription.setSubscriptionTopic("solace/spark/streaming/offset");
+
+            sempV2Api.config().createMsgVpnQueue("default", lvq, null, null);
+            sempV2Api.config().createMsgVpnQueueSubscription("default", "Solace/Queue/lvq/0", lvqSubscription, null, null);
+
         } else {
             throw new RuntimeException("Solace Container is not started yet");
         }
@@ -739,6 +755,68 @@ public class SolaceSparkStreamingSourceIT {
             }).start();
             streamingQuery.awaitTermination();
         } catch (Exception e) {
+            assertTrue(e instanceof StreamingQueryException);
+        }
+    }
+
+    @Test
+    void Should_Fail_IfLVQ_Has_No_Permission_To_Access() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        try{
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, "Solace/Queue/lvq/0")
+                    .option(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, "solace/spark/streaming/offset")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                System.out.println(dataset1.count());
+            }).start();
+            streamingQuery.awaitTermination();
+        } catch (Exception e) {
+            System.out.println(e);
+            assertTrue(e instanceof StreamingQueryException);
+        }
+    }
+
+    @Test
+    void Should_Fail_IfLVQ_Has_No_Permission_To_Add_Subscription() {
+        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        try{
+            DataStreamReader reader = sparkSession.readStream()
+                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
+                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
+                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX+"sub_ack_window_threshold", 75)
+                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "1")
+                    .option(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, "Solace/Queue/lvq/0")
+                    .option(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, "invalid/topic")
+                    .option("checkpointLocation", path.toAbsolutePath().toString())
+                    .format("solace");
+            Dataset<Row> dataset = reader.load();
+            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+                System.out.println(dataset1.count());
+            }).start();
+            streamingQuery.awaitTermination();
+        } catch (Exception e) {
+            System.out.println(e);
             assertTrue(e instanceof StreamingQueryException);
         }
     }
