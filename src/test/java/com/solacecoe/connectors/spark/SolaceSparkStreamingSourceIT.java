@@ -63,7 +63,7 @@ public class SolaceSparkStreamingSourceIT {
             sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/0");
-            queue.accessType(MsgVpnQueue.AccessTypeEnum.EXCLUSIVE);
+            queue.accessType(MsgVpnQueue.AccessTypeEnum.NON_EXCLUSIVE);
             queue.permission(MsgVpnQueue.PermissionEnum.DELETE);
             queue.ingressEnabled(true);
             queue.egressEnabled(true);
