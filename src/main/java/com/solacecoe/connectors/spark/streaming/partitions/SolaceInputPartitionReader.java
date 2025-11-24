@@ -339,7 +339,6 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                 logShutdownMessage(context);
             } else if (context.isCompleted()) {
                 String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(this.solaceInputPartition.getId());
-                System.out.println(this.solaceInputPartition.getId() + " - " + processedMessageIDs);
                 if(processedMessageIDs != null && !processedMessageIDs.isEmpty()) {
                     try {
                         Path path = Paths.get(this.checkpointLocation + "/" + this.solaceInputPartition.getId() + ".txt");
