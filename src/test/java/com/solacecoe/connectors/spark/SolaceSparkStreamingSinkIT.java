@@ -63,7 +63,7 @@ public class SolaceSparkStreamingSinkIT {
             SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/0");
-            queue.accessType(MsgVpnQueue.AccessTypeEnum.EXCLUSIVE);
+            queue.accessType(MsgVpnQueue.AccessTypeEnum.NON_EXCLUSIVE);
             queue.permission(MsgVpnQueue.PermissionEnum.DELETE);
             queue.ingressEnabled(true);
             queue.egressEnabled(true);
@@ -741,7 +741,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    @Order(11)
+    @Order(12)
     void Should_ProcessData_WithMultipleConsumer_And_Publish_To_Solace_With_MultipleOperations_On_Dataframe() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         final long[] dataFrameCount = {0};
@@ -805,7 +805,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    @Order(12)
+    @Order(13)
     void Should_Not_ProcessData_When_QueueIsEmpty() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         final long[] batchTriggerCount = {0};
@@ -960,6 +960,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
+    @Order(11)
     void Should_Fail_Publish_IfMessagePayloadIsMissing() {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         try {
