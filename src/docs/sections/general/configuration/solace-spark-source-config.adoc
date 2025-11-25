@@ -204,20 +204,6 @@ a| Set this value to true if connector needs to identify and acknowledge process
 
 NOTE: This property will be void if replay strategy is enabled.
 
-| offsetIndicator
-| string
-| any
-| MESSAGE_ID, CORRELATION_ID, APPLICATION_MESSAGE_ID, <CUSTOM_USER_PROPERTY>
-a| Set this value if your Solace Message has unique ID in message header. Supported Values are
-
- * MESSAGE_ID
- * CORRELATION_ID
- * APPLICATION_MESSAGE_ID
- * <CUSTOM_USER_PROPERTY> - refers to one of headers in user properties
-Header.
-
-Note: Default value uses replication group message ID property as offset indicator. ReplicationGroupMessageId is a unique message id across a broker cluster.
-
 | includeHeaders
 | boolean
 | true or false

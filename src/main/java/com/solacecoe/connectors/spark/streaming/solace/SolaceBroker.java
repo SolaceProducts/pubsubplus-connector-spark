@@ -210,18 +210,35 @@ public class SolaceBroker implements Serializable {
 
         EndpointProperties endpoint_props = new EndpointProperties();
         endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
-        endpoint_props.setPermission(EndpointProperties.PERMISSION_CONSUME);
         endpoint_props.setQuota(0);
         try {
             this.session.provision(lvq, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS | JCSMPSession.WAIT_FOR_CONFIRM);
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Exception creating LVQ. Shutting down consumer ", e);
             close();
+            this.isException = true;
+            this.exception = e;
+            throw new RuntimeException(e);
         }
         try {
             this.session.addSubscription(lvq, JCSMPFactory.onlyInstance().createTopic(this.lvqTopic), JCSMPSession.WAIT_FOR_CONFIRM);
         } catch (JCSMPException e) {
-            log.warn("SolaceSparkConnector - Subscription already exists on LVQ. Ignoring error");
+            if(e instanceof JCSMPErrorResponseException) {
+                JCSMPErrorResponseException jce = (JCSMPErrorResponseException) e;
+                if(jce.getResponsePhrase().contains("Subscription Already Exists")) {
+                    log.warn("SolaceSparkConnector - Subscription Already Exists on LVQ {}", this.lvqName);
+                } else {
+                    close();
+                    this.isException = true;
+                    this.exception = e;
+                    throw new RuntimeException(e);
+                }
+            } else {
+                close();
+                this.isException = true;
+                this.exception = e;
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -233,10 +250,10 @@ public class SolaceBroker implements Serializable {
         try {
             Browser myBrowser = session.createBrowser(br_prop);
             BytesXMLMessage rx_msg = null;
-            log.info("SolaceSparkConnector - Browsing message from LVQ {}", this.lvqName);
+            log.info("SolaceSparkConnector - Browsing checkpoint from LVQ {}", this.lvqName);
             rx_msg = myBrowser.getNext();
             if (rx_msg != null) {
-                log.info("SolaceSparkConnector - Browsed message from LVQ {}", this.lvqName);
+                log.info("SolaceSparkConnector - Browsed checkpoint from LVQ {}", this.lvqName);
                 byte[] msgData = new byte[0];
                 if (rx_msg.getContentLength() != 0) {
                     msgData = rx_msg.getBytes();
@@ -247,7 +264,7 @@ public class SolaceBroker implements Serializable {
                 lastKnownCheckpoint = new Gson().fromJson(new String(msgData, StandardCharsets.UTF_8), new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>(){}.getType());
                 log.info("SolaceSparkConnector - Checkpoint from LVQ {}", new String(msgData, StandardCharsets.UTF_8));
             } else {
-                log.info("SolaceSparkConnector - No message available from LVQ {}", this.lvqName);
+                log.info("SolaceSparkConnector - No checkpoint available in LVQ {}", this.lvqName);
             }
             myBrowser.close();
             return lastKnownCheckpoint;
@@ -317,8 +334,9 @@ public class SolaceBroker implements Serializable {
                 retryCount++;
             } while (true);
         } catch (JCSMPException e) {
-            log.error("SolaceSparkConnector - Exception creating Queue Browser ", e);
-            handleException("SolaceSparkConnector - Exception creating Queue Browser ", e);
+            log.error("SolaceSparkConnector - Exception creating monitoring consumer on queue {}", this.queue, e);
+            close();
+            handleException("SolaceSparkConnector - Exception creating monitoring consumer on queue " + this.queue, e);
             return false;
         }
     }
@@ -467,6 +485,7 @@ public class SolaceBroker implements Serializable {
     }
 
     public LinkedBlockingQueue<SolaceMessage> getMessages(int index) {
+//        log.info("SolaceSparkConnector - {} messages received on Solace Consumer Session {} are ready for processing", (index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages().size() : 0), this.uniqueName);
         return index < this.eventListeners.size() ? this.eventListeners.get(index).getMessages() : null;
     }
 
@@ -580,14 +599,16 @@ public class SolaceBroker implements Serializable {
                 }
 
                 if (lastMessageTimestamp > 0 && (System.currentTimeMillis() - lastMessageTimestamp) > timeout) {
-                    log.info("SolaceSparkConnector - Inactivity timeout. Last message processed at {} Shutting down Solace Session.", lastMessageTimestamp);
+                    log.info("SolaceSparkConnector - Inactivity timeout for consumer session {}. Last message processed at {}. Closing Session.", this.uniqueName, lastMessageTimestamp);
                     close();
+                } else if(lastMessageTimestamp == 0){
+                    log.info("SolaceSparkConnector - No messages are processed yet by consumer session {}, skipping idle timeout check.", this.uniqueName);
                 } else {
-                    log.info("SolaceSparkConnector - No messages are processed yet, skipping idle timeout check.");
+                    log.info("SolaceSparkConnector - Last message is processed by consumer session {} at {} and current timestamp is {}", this.uniqueName, this.lastMessageTimestamp, System.currentTimeMillis());
                 }
             }, interval, interval, TimeUnit.MILLISECONDS); // initial delay, then interval
         } else {
-            log.info("SolaceSparkConnector - No connection idle timeout is configured. Connector will not check for idle connections.");
+            log.info("SolaceSparkConnector - No connection idle timeout is configured. Micro Integration will not check for idle connections.");
         }
     }
 

@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark.oauth;
 
 import com.github.dockerjava.api.command.InspectContainerResponse;
+import com.github.dockerjava.api.model.Ulimit;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.Transferable;
@@ -59,12 +60,15 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
     public SolaceOAuthContainer(DockerImageName dockerImageName) {
         super(dockerImageName);
         dockerImageName.assertCompatibleWith(DEFAULT_IMAGE_NAME);
+        Ulimit ulimit = new Ulimit("nofile", 2448, 1048576);
+        List<Ulimit> ulimitList = new ArrayList<>();
+        ulimitList.add(ulimit);
         withCreateContainerCmdModifier(cmd -> {
             cmd.withUser("1000");
             cmd.getHostConfig()
                     .withShmSize(SHM_SIZE)
-                    .withMemorySwap(-1L)
-                    .withMemoryReservation(0L);
+                    .withUlimits(ulimitList)
+                    .withCpuCount(1l);
         });
         this.waitStrategy = Wait.forLogMessage(SOLACE_READY_MESSAGE, 1).withStartupTimeout(Duration.ofSeconds(60));
         withExposedPorts(8080);
