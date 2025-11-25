@@ -22,7 +22,7 @@
         -->
         <revision>3.1.5</revision>
         <sha1/> <!-- Doesn't actually need to be a sha1, this is just another version modifier variable -->
-        <changelist>-SNAPSHOT</changelist>
+        <changelist></changelist>
         <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
 
         <maven.compiler.source>8</maven.compiler.source>
