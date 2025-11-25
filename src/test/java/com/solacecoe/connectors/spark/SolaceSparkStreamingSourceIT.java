@@ -67,6 +67,7 @@ public class SolaceSparkStreamingSourceIT {
             queue.permission(MsgVpnQueue.PermissionEnum.DELETE);
             queue.ingressEnabled(true);
             queue.egressEnabled(true);
+            queue.setMaxDeliveredUnackedMsgsPerFlow(50L);
 
             MsgVpnQueueSubscription subscription = new MsgVpnQueueSubscription();
             subscription.setSubscriptionTopic("solace/spark/streaming");
@@ -248,6 +249,9 @@ public class SolaceSparkStreamingSourceIT {
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals("Hello Spark!", payload.get()));
         Thread.sleep(3000); // add timeout to ack messages on queue
         streamingQuery.stop();
+
+        sparkSession.stop();
+        sparkSession.close();
     }
 
 
@@ -255,6 +259,10 @@ public class SolaceSparkStreamingSourceIT {
     @Test
     @Order(4)
     void Should_CreateMultipleConsumersOnDifferentSessions_And_ProcessData() throws TimeoutException, InterruptedException, com.solace.semp.v2.monitor.ApiException {
+        sparkSession = SparkSession.builder()
+                .appName("data_source_test_1")
+                .master("local[*]")
+                .getOrCreate();
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-2");
         DataStreamReader reader = sparkSession.readStream()
                 .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
