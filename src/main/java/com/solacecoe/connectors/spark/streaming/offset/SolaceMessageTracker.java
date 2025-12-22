@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class SolaceMessageTracker implements Serializable {
+    private static final transient Logger log = LogManager.getLogger(SolaceMessageTracker.class);
     private static ConcurrentHashMap<String, String> lastBatchId = new ConcurrentHashMap<>();
     private static final Logger logger = LogManager.getLogger(SolaceMessageTracker.class);
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<SolaceMessage>> messages = new ConcurrentHashMap<>();
@@ -35,7 +36,8 @@ public final class SolaceMessageTracker implements Serializable {
         if(messages.containsKey(uniqueId)) {
             messageList = messages.get(uniqueId);
         }
-        messageList.addIfAbsent(message);
+        boolean isAdded = messageList.addIfAbsent(message);
+//        log.info("SolaceSparkConnector - Is message added to list {}", isAdded);
         messages.put(uniqueId, messageList);
     }
 
