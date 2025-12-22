@@ -217,7 +217,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if(solaceSourceOffset.getCheckpoints() != null && solaceSourceOffset.getCheckpoints().isEmpty()) {
             log.info("SolaceSparkConnector - No offset is available in spark checkpoint location. New checkpoint state will be created");
         } else {
-            log.info("SolaceSparkConnector - Deserialized offset {}", new Gson().toJson(solaceSourceOffset));
+            log.trace("SolaceSparkConnector - Deserialized offset {}", new Gson().toJson(solaceSourceOffset));
         }
         lastKnownOffsetId = solaceSourceOffset.getOffset();
         currentCheckpoint = solaceSourceOffset.getCheckpoints();
@@ -289,7 +289,8 @@ public class SolaceMicroBatch implements MicroBatchStream {
 
         if(!offsetToCommit.isEmpty()) {
             currentCheckpoint = offsetToCommit;
-            log.trace("SolaceSparkConnector - Final checkpoint publishing to LVQ {}", new Gson().toJson(offsetToCommit));
+            log.info("SolaceSparkConnector - Final checkpoint published to LVQ on topic {}", properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC));
+            log.trace("SolaceSparkConnector - Final checkpoint publishing to LVQ {} on topic {}", new Gson().toJson(offsetToCommit), properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC));
             this.solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), new Gson().toJson(offsetToCommit));
             checkException();
             offsetToCommit.clear();

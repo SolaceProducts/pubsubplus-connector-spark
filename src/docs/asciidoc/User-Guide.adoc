@@ -80,7 +80,7 @@ The following pre-requisites are applicable for LVQ that are provisioned by Sola
 3. Owner of the Queue should be the client username used by the micro integration
 4. Non-Owner access should be set to No Access to prevent unauthorized access
 5. Add a topic subscription
-6. Ensure the ACL applied to the user has publish access to the topic subscribed by LVQ
+6. Ensure the ACL applied to the user has publish/subscribe access to the topic subscribed by LVQ
 
 The following pre-requisites are applicable if the micro integration need to create LVQ if it doesn't exist.
 
