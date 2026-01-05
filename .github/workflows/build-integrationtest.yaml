@@ -65,8 +65,8 @@ jobs:
           path: jwt-github
           jwtGithubAudience: https://github.com/${{ github.repository_owner }}
           exportToken: true
-          secrets: secret/data/tools/githubactions PACKAGES_ADMIN_USER | PACKAGES_ADMIN_USER ;
-            secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
+          secrets: secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_USER | GITHUB_USER ;
+            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_TOKEN | GITHUB_TOKEN ;
 
       - name: Warn of Vault Login Failure
         if: steps.secrets.outcome != 'success'
