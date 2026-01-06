@@ -45,7 +45,7 @@ NOTE: Above sample code used parquet as example data source. You can configure y
 
 NOTE: In case of databricks deployment, it is recommended to store and retrieve sensitive credentials from Databricks secrets. Please refer to <<Using Databricks Secret Management>> on how to configure secrets and use them in notebook.
 
-NOTE: Partitioned Queue's is not fully supported. The connector can process data from partition queue but checkpointing per partition key is not yet supported.
+NOTE: Solace Partitioned Queue's is not supported.
 
 === Databricks Considerations
 
