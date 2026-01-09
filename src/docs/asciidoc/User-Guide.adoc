@@ -45,6 +45,8 @@ NOTE: Above sample code used parquet as example data source. You can configure y
 
 NOTE: In case of databricks deployment, it is recommended to store and retrieve sensitive credentials from Databricks secrets. Please refer to <<Using Databricks Secret Management>> on how to configure secrets and use them in notebook.
 
+NOTE: Solace Partitioned Queue's is not supported.
+
 === Databricks Considerations
 
 In case if you are using Shared compute cluster, make sure your cluster has https://docs.databricks.com/en/data-governance/unity-catalog/manage-privileges/allowlist.html[appropriate permissions] to install connector from maven central and access the jars. Please contact your Databricks administrator for required permissions.
@@ -73,14 +75,15 @@ NOTE: In case of recovery, connector uses offset state from LVQ to identify last
 
 In some cases, there might be checkpoint failures as spark may fail to write to checkpoint during instance crash or unavailability or other reasons. Though the connector will handle duplicates in most cases, we recommend to keep your downstream systems idempotent.
 
-==== Pre-requisites for LVQ creation
-The following pre-requisites are applicable for LVQ that are provisioned by Solace Administrator.
+==== Prerequisites for LVQ creation
+The following prerequisites are applicable for LVQ that are provisioned by Solace Administrator.
+
 1. The Queue should be of type Exclusive
 2. Spool Quota should be set to 0
 3. Owner of the Queue should be the client username used by the micro integration
 4. Non-Owner access should be set to No Access to prevent unauthorized access
 5. Add a topic subscription
-6. Ensure the ACL applied to the user has publish access to the topic subscribed by LVQ
+6. Ensure the ACL applied to the user has publish and subscribe access to the topic subscribed by LVQ
 
 The following pre-requisites are applicable if the micro integration need to create LVQ if it doesn't exist.
 

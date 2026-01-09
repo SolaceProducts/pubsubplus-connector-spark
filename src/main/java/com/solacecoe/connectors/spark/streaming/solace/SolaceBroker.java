@@ -206,8 +206,8 @@ public class SolaceBroker implements Serializable {
     }
 
     public void createLVQIfNotExist() {
+        log.info("SolaceSparkConnector - Configured LVQ name {} and topic {}", this.lvqName, this.lvqTopic);
         lvq = JCSMPFactory.onlyInstance().createQueue(this.lvqName);
-
         EndpointProperties endpoint_props = new EndpointProperties();
         endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
         endpoint_props.setQuota(0);
@@ -226,7 +226,7 @@ public class SolaceBroker implements Serializable {
             if(e instanceof JCSMPErrorResponseException) {
                 JCSMPErrorResponseException jce = (JCSMPErrorResponseException) e;
                 if(jce.getResponsePhrase().contains("Subscription Already Exists")) {
-                    log.warn("SolaceSparkConnector - Subscription Already Exists on LVQ {}", this.lvqName);
+                    log.warn("SolaceSparkConnector - Subscription {} Already Exists on LVQ {}", this.lvqTopic, this.lvqName);
                 } else {
                     close();
                     this.isException = true;
@@ -377,6 +377,7 @@ public class SolaceBroker implements Serializable {
         Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
         try {
             this.producer.send(xmlMessage, destination);
+            log.info("SolaceSparkConnector - Published checkpoint to LVQ topic {}", topic);
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Exception publishing lvq message to Solace", e);
             handleException("SolaceSparkConnector - Exception publishing lvq message to Solace ", e);
