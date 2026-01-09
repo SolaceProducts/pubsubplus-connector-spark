@@ -53,8 +53,8 @@ jobs:
           jwtGithubAudience: https://github.com/${{ github.repository_owner }}
           exportToken: true
           secrets:
-            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_WRITE_CLASSIC_USER | GITHUB_USER ;
-            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_WRITE_CLASSIC_TOKEN | GITHUB_TOKEN ;
+            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_USER | PACKAGES_READ_USER ;
+            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_TOKEN | PACKAGES_READ_TOKEN ;
             secret/data/tools/githubactions MAVEN_GPG_KEY_PASSPHRASE | MAVEN_GPG_KEY_PASSPHRASE ;
             secret/data/tools/githubactions MAVEN_GPG_KEY | MAVEN_GPG_KEY ;
             secret/data/tools/githubactions MAVEN_USERNAME | MAVEN_USERNAME ;
@@ -128,12 +128,16 @@ jobs:
 
       - name: Deploy Artifacts (GH Packages)
         env:
+          PACKAGES_READ_USER: ${{ steps.secrets.outputs.PACKAGES_READ_USER }}
+          PACKAGES_READ_TOKEN: ${{ steps.secrets.outputs.PACKAGES_READ_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           mvn deploy -B -DreleaseTarget=github  -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
 
       - name: Deploy Artifacts (Maven Central)
         env:
+          PACKAGES_READ_USER: ${{ steps.secrets.outputs.PACKAGES_READ_USER }}
+          PACKAGES_READ_TOKEN: ${{ steps.secrets.outputs.PACKAGES_READ_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           mvn deploy -B -DreleaseTarget=central -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS

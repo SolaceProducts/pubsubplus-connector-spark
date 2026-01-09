@@ -65,8 +65,8 @@ jobs:
           path: jwt-github
           jwtGithubAudience: https://github.com/${{ github.repository_owner }}
           exportToken: true
-          secrets: secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_USER | GITHUB_USER ;
-            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_TOKEN | GITHUB_TOKEN ;
+          secrets: secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_USER | PACKAGES_READ_USER ;
+            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_TOKEN | PACKAGES_READ_TOKEN ;
 
       - name: Warn of Vault Login Failure
         if: steps.secrets.outcome != 'success'
@@ -97,6 +97,9 @@ jobs:
           echo "GITHUB_PACKAGES_DEPLOY=$GITHUB_PACKAGES_DEPLOY" >> $GITHUB_ENV
 
       - name: Static Code Analysis
+        env:
+          PACKAGES_READ_USER: ${{ steps.secrets.outputs.PACKAGES_READ_USER }}
+          PACKAGES_READ_TOKEN: ${{ steps.secrets.outputs.PACKAGES_READ_TOKEN }}
         run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
       - name: Unit/Integration Tests JDK 8 (zulu)
@@ -109,6 +112,9 @@ jobs:
         run: docker info
 
       - name: Run Unit/Integration Tests
+        env:
+          PACKAGES_READ_USER: ${{ steps.secrets.outputs.PACKAGES_READ_USER }}
+          PACKAGES_READ_TOKEN: ${{ steps.secrets.outputs.PACKAGES_READ_TOKEN }}
         run: >-
           mvn -B clean jacoco:report -Dit.test=SolaceSparkIntegrationTestSuite verify
           --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
