@@ -91,7 +91,7 @@ jobs:
 
       - name: Pre-Release Check - Version
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.secrets.outputs.GITHUB_TOKEN }}
         run: |
           gh api --method GET /repos/${{github.repository}}/releases -f sort=updated -f direction=asc > releases.json
           release_version_exists=$(jq -r --arg RELEASE_VERSION ${{ inputs.release_version }} '.[].name|select(.|test($RELEASE_VERSION))'  releases.json)
@@ -128,13 +128,13 @@ jobs:
 
       - name: Deploy Artifacts (GH Packages)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.secrets.outputs.GITHUB_TOKEN }}
         run: >-
           mvn deploy -B -DreleaseTarget=github  -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
 
       - name: Deploy Artifacts (Maven Central)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.secrets.outputs.GITHUB_TOKEN }}
         run: >-
           mvn deploy -B -DreleaseTarget=central -s maven/settings.xml $SKIP_FLAGS_ALL_TESTS
 
