@@ -7,6 +7,7 @@ import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
 import com.solacecoe.connectors.spark.base.SempV2Api;
 import com.solacecoe.connectors.spark.base.SolaceSession;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.api.java.function.VoidFunction2;
 import org.apache.spark.sql.Dataset;
@@ -146,6 +147,8 @@ public class SolaceSparkStreamingSinkIT {
         if(Files.exists(path2)) {
             FileUtils.deleteDirectory(path2.toAbsolutePath().toFile());
         }
+
+        SolaceConnectionManager.closeAllConnections();
     }
 
     @Test
@@ -806,7 +809,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    @Order(13)
+    @Order(16)
     void Should_Not_ProcessData_When_QueueIsEmpty() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         final long[] batchTriggerCount = {0};
@@ -866,7 +869,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    @Order(14)
+    @Order(13)
     void Should_ProcessData_Publish_MicrosAs_SenderTimeStamp_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
@@ -920,7 +923,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    @Order(15)
+    @Order(14)
     void Should_ProcessData_And_Publish_MillisAs_SenderTimeStamp_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
@@ -975,7 +978,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    @Order(16)
+    @Order(15)
     void Should_ProcessData_And_Publish_SecondsAs_SenderTimeStamp_To_Solace() throws TimeoutException, InterruptedException {
         Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
         DataStreamReader reader = sparkSession.readStream()
