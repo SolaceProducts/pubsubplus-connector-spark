@@ -420,6 +420,8 @@ public class SolaceBroker implements Serializable {
         xmlMessage.setCorrelationId(applicationMessageId);
         xmlMessage.setApplicationMessageId(applicationMessageId);
         if (timestamp > 0L) {
+            // Spark TimestampType by default return's in microseconds(https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/types/TimestampType.html) whether it is millis or seconds. So division by 1000 is required
+            // as microseconds format will be too long to parse
             long senderTimestamp = timestamp/1000;
             xmlMessage.setSenderTimestamp(senderTimestamp);
         }

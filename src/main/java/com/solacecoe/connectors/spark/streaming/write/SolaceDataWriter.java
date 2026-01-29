@@ -83,6 +83,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         }
         long timestamp = 0L;
         if(projectedRow.get(4, DataTypes.TimestampType) != null) {
+            // TimestampType always returns long. So safe to use getLong
             timestamp = projectedRow.getLong(4);
         }
         UnsafeMapData headersMap = new UnsafeMapData();
