@@ -420,7 +420,8 @@ public class SolaceBroker implements Serializable {
         xmlMessage.setCorrelationId(applicationMessageId);
         xmlMessage.setApplicationMessageId(applicationMessageId);
         if (timestamp > 0L) {
-            xmlMessage.setSenderTimestamp(timestamp / 1000);
+            long senderTimestamp = timestamp/1000;
+            xmlMessage.setSenderTimestamp(senderTimestamp);
         }
         xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
 
