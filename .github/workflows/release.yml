@@ -42,9 +42,40 @@ permissions:
   statuses: write
 
 jobs:
+  check_admin:
+    name: Check Admin Permissions
+    runs-on: ubuntu-latest
+    if: inputs.skip_fossa == true
+    outputs:
+      is_admin: ${{ steps.check.outputs.is_admin }}
+    steps:
+      - name: Check if user is admin
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          USER="${{ github.actor }}"
+          REPO="${{ github.repository }}"
+
+          # Get user's permission level
+          PERMISSION=$(gh api repos/$REPO/collaborators/$USER/permission --jq '.permission')
+
+          echo "User: $USER"
+          echo "Permission: $PERMISSION"
+
+          if [[ "$PERMISSION" == "admin" ]]; then
+            echo "is_admin=true" >> $GITHUB_OUTPUT
+            echo "✅ User $USER has admin permissions - bypass allowed"
+          else
+            echo "is_admin=false" >> $GITHUB_OUTPUT
+            echo "❌ User $USER does not have admin permissions - bypass NOT allowed"
+            exit 1
+          fi
+
   fossa_scan:
     name: FOSSA Scan
-    if: inputs.skip_fossa == false
+    needs: [check_admin]
+    if: always() && inputs.skip_fossa == false
     uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@main
     with:
       git_ref: ${{ inputs.release_version }}
@@ -54,8 +85,8 @@ jobs:
       FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
 
   release_binder:
-    needs: [fossa_scan]
-    if: always() && (needs.fossa_scan.result == 'success' || needs.fossa_scan.result == 'skipped')
+    needs: [check_admin, fossa_scan]
+    if: always() && (needs.fossa_scan.result == 'success' || (needs.fossa_scan.result == 'skipped' && needs.check_admin.outputs.is_admin == 'true'))
     runs-on: ubuntu-latest
     env:
       java_environment: zulu
