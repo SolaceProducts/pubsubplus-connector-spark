@@ -25,16 +25,41 @@ on:
           - Beta
           - EA
           - GA
+      skip_fossa:
+        description: "Skip FOSSA scan (admin bypass only - use if FOSSA site is down)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  pull-requests: write
+  actions: read
+  issues: write
+  checks: write
+  statuses: write
+
 jobs:
+  fossa_scan:
+    name: FOSSA Scan
+    if: inputs.skip_fossa == false
+    uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@main
+    with:
+      git_ref: ${{ inputs.release_version }}
+      use_vault: false
+      config_file: '.github/workflow-config.json'
+    secrets:
+      FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+
   release_binder:
+    needs: [fossa_scan]
+    if: always() && (needs.fossa_scan.result == 'success' || needs.fossa_scan.result == 'skipped')
     runs-on: ubuntu-latest
     env:
       java_environment: zulu
       jre_version: 17
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
