@@ -12,7 +12,7 @@
       },
       "project_id": "SolaceProducts_pubsubplus-connector-spark",
       "team": null,
-      "labels": ["MI", "repository", "connectors-coe"]
+      "labels": [""]
     }
   },
   "build": {
