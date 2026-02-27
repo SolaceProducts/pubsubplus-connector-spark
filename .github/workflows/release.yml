@@ -92,14 +92,14 @@ jobs:
       java_environment: zulu
       jre_version: 17
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ inputs.release_branch }}
           fetch-depth: 0
           ssh-key: ${{ secrets.COMMIT_KEY }}
       - name: Retrieve secrets from Vault
         id: secrets
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3.4.0
         continue-on-error: true
         with:
           url: "${{ secrets.VAULT_ADDR }}"
@@ -122,7 +122,7 @@ jobs:
 
       # Setup all secrets and env needed for the build
       - name: Set up JDK ${{ env.jre_version }} (${{env.java_environment}})
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           distribution: ${{ env.java_environment }}
           java-version: ${{ env.jre_version }}
@@ -135,7 +135,7 @@ jobs:
           passphrase: ${{ steps.secrets.outputs.MAVEN_GPG_KEY_PASSPHRASE }}
 
       - name: Add SSH Key for write access for commits
-        uses: kielabokkie/ssh-key-and-known-hosts-action@v1
+        uses: kielabokkie/ssh-key-and-known-hosts-action@242f53d26bbd43e843b08b0cbc8287ceb03fbe71 # v1.5.0
         with:
           ssh-private-key: ${{ secrets.COMMIT_KEY }}
           ssh-host: github.com
@@ -208,7 +208,7 @@ jobs:
           mvn scm:tag -B -Dtag=${{ inputs.release_version }}
 
       - name: Create GitHub Release
-        uses: ncipollo/release-action@v1.14.0
+        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
         with:
           tag: "${{ inputs.release_version }}"
           generateReleaseNotes: true
@@ -230,7 +230,7 @@ jobs:
           -Dmessage="[ci skip] prepare for next development iteration"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: build-artifacts
           path: |
