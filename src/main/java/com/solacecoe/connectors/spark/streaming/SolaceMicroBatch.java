@@ -11,15 +11,10 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingP
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.SparkEnv;
 import org.apache.spark.scheduler.ExecutorCacheTaskLocation;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream;
@@ -27,20 +22,19 @@ import org.apache.spark.sql.connector.read.streaming.Offset;
 import org.apache.spark.storage.BlockManager;
 import org.apache.spark.storage.BlockManagerId;
 import org.apache.spark.storage.BlockManagerMaster;
-import org.apache.spark.util.SerializableConfiguration;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class SolaceMicroBatch implements MicroBatchStream {
     private static final Logger log = LogManager.getLogger(SolaceMicroBatch.class);
@@ -58,7 +52,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> currentCheckpoint = new CopyOnWriteArrayList<>();
     private final String checkpointLocation;
     private final List<String> partitionIds = new ArrayList<>();
-    private SerializableConfiguration serializableHadoopConfiguration;
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
         this.properties = properties;
 
@@ -94,9 +87,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
 //        this.solaceBroker.addLVQReceiver(lvqEventListener);
         this.solaceBroker.createLVQIfNotExist();
         this.solaceBroker.initProducer();
-        Configuration hadoopConfiguration = SparkSession.getActiveSession().get().sparkContext().hadoopConfiguration();
-        serializableHadoopConfiguration = new SerializableConfiguration(hadoopConfiguration);
-        log.info("SolaceSparkConnector - Fetched hadoop configuration to write to checkpoint storage.");
         log.info("SolaceSparkConnector - Initialization Completed");
     }
 
@@ -143,7 +133,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
     }
 
     private List<ExecutorCacheTaskLocation> getExecutorList() {
-        SparkSession.active().sparkContext().hadoopConfiguration();
         BlockManager bm = SparkEnv.get().blockManager();
         BlockManagerMaster master = bm.master();
 
@@ -206,7 +195,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if(currentCheckpoint != null && currentCheckpoint.isEmpty()) {
             currentCheckpoint = this.getCheckpoint();
         }
-        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, currentCheckpoint, this.checkpointLocation, this.serializableHadoopConfiguration);
+        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, currentCheckpoint, this.checkpointLocation);
     }
 
     @Override
@@ -228,7 +217,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if(solaceSourceOffset.getCheckpoints() != null && solaceSourceOffset.getCheckpoints().isEmpty()) {
             log.info("SolaceSparkConnector - No offset is available in spark checkpoint location. New checkpoint state will be created");
         } else {
-            log.info("SolaceSparkConnector - Deserialized offset {}", new Gson().toJson(solaceSourceOffset));
+            log.trace("SolaceSparkConnector - Deserialized offset {}", new Gson().toJson(solaceSourceOffset));
         }
         lastKnownOffsetId = solaceSourceOffset.getOffset();
         currentCheckpoint = solaceSourceOffset.getCheckpoints();
@@ -278,56 +267,30 @@ public class SolaceMicroBatch implements MicroBatchStream {
         log.info("SolaceSparkConnector - Commit triggered");
         CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> offsetToCommit = new CopyOnWriteArrayList<>();
         for(String partitionId: partitionIds) {
-            try {
-                Path path = new Path(this.checkpointLocation + "/" + partitionId + ".txt");
-                FileSystem fileSystem = path.getFileSystem(this.serializableHadoopConfiguration.value());
-                if(fileSystem.exists(path)) {
-                    try (FSDataInputStream in = fileSystem.open(path);
-                         BufferedReader reader =
-                                 new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            if (offsetToCommit.isEmpty()) {
-                                offsetToCommit = new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
-                                }.getType());
-                            } else {
-                                offsetToCommit.addAll(new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
-                                }.getType()));
-                                offsetToCommit = offsetToCommit.stream().distinct().collect(Collectors.toCollection(CopyOnWriteArrayList::new));
-                            }
-                        };
-                    } catch (IOException e) {
-                        log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
-                        throw new RuntimeException(e);
-                    }
+            Path path = Paths.get(this.checkpointLocation + "/" + partitionId + ".txt");
+            if(Files.exists(path)) {
+                try (Stream<String> lines = Files.lines(path)) {
+                    for(String line: lines.collect(Collectors.toList())) {
+                        if (offsetToCommit.isEmpty()) {
+                            offsetToCommit = new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
+                            }.getType());
+                        } else {
+                            offsetToCommit.addAll(new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
+                            }.getType()));
+                            offsetToCommit = offsetToCommit.stream().distinct().collect(Collectors.toCollection(CopyOnWriteArrayList::new));
+                        }
+                    };
+                } catch (IOException e) {
+                    log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
+                    throw new RuntimeException(e);
                 }
-            } catch (IOException e) {
-                log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
-                throw new RuntimeException(e);
             }
-//            Path path = Paths.get(this.checkpointLocation + "/" + partitionId + ".txt");
-//            if(Files.exists(path)) {
-//                try (Stream<String> lines = Files.lines(path)) {
-//                    for(String line: lines.collect(Collectors.toList())) {
-//                        if (offsetToCommit.isEmpty()) {
-//                            offsetToCommit = new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
-//                            }.getType());
-//                        } else {
-//                            offsetToCommit.addAll(new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
-//                            }.getType()));
-//                            offsetToCommit = offsetToCommit.stream().distinct().collect(Collectors.toCollection(CopyOnWriteArrayList::new));
-//                        }
-//                    };
-//                } catch (IOException e) {
-//                    log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
-//                    throw new RuntimeException(e);
-//                }
-//            }
         }
 
         if(!offsetToCommit.isEmpty()) {
             currentCheckpoint = offsetToCommit;
-            log.info("SolaceSparkConnector - Final checkpoint publishing to LVQ {} on topic {}", new Gson().toJson(offsetToCommit), properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC));
+            log.info("SolaceSparkConnector - Final checkpoint published to LVQ on topic {}", properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC));
+            log.trace("SolaceSparkConnector - Final checkpoint publishing to LVQ {} on topic {}", new Gson().toJson(offsetToCommit), properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC));
             this.solaceBroker.publishMessage(properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC), new Gson().toJson(offsetToCommit));
             checkException();
             offsetToCommit.clear();
@@ -357,9 +320,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if (checkpointLocation.startsWith("dbfs:/")) {
             // Strip "dbfs:/" and prepend "/dbfs/"
             String dbfsPath = checkpointLocation.replaceFirst("dbfs:/+", "");
-            if(!dbfsPath.startsWith("/Volumes")) {
-                checkpointLocation = String.valueOf(Paths.get("/dbfs", dbfsPath));
-            }
+            checkpointLocation = String.valueOf(Paths.get("/dbfs", dbfsPath));
         } else if (checkpointLocation.startsWith("file:/")) {
             // Parse as standard URI
             URI fileUri = null;

@@ -12,11 +12,8 @@ import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceMessageE
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.SDTException;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
@@ -28,15 +25,15 @@ import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
 import org.apache.spark.sql.execution.streaming.StreamExecution;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.apache.hadoop.fs.Path;
-import org.apache.spark.sql.SparkSession;
-import org.apache.spark.util.SerializableConfiguration;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.sql.Timestamp;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -62,9 +59,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private int messages = 0;
     private Iterator<SolaceMessage> iterator;
     private boolean shouldTrackMessage = true;
-    private final SerializableConfiguration serializableConfiguration;
+    private boolean isPartitionQueue = false;
     public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, Map<String, String> properties,
-                                      TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation, SerializableConfiguration serializableConfiguration) {
+                                      TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation) {
 
         log.info("SolaceSparkConnector - Initializing Solace Input Partition reader with id {}", inputPartition.getId());
 
@@ -76,7 +73,6 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         this.taskId = taskContext.taskAttemptId();
         this.checkpoints = checkpoints;
         this.checkpointLocation = checkpointLocation;
-        this.serializableConfiguration = serializableConfiguration;
         this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
         this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT, SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT));
         this.closeReceiversOnPartitionClose = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE, SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT));
@@ -171,7 +167,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)).map(solaceMessage.bytesXMLMessage);
             long timestamp = solaceRecord.getSenderTimestamp();
             if (solaceRecord.getSenderTimestamp() == 0) {
-                timestamp = System.currentTimeMillis() / 1000;
+                timestamp = System.currentTimeMillis();
             }
             InternalRow row;
             if (this.includeHeaders) {
@@ -189,7 +185,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             }
             // No need to add message to tracker as the call is from same dataframe operation.
             if (shouldTrackMessage) {
-                if (solaceRecord.getPartitionKey() != null && !solaceRecord.getPartitionKey().isEmpty()) {
+                if (solaceRecord.getPartitionKey() != null && !solaceRecord.getPartitionKey().isEmpty() && isPartitionQueue) {
                     SolaceMessageTracker.addMessageID(solaceRecord.getPartitionKey(), solaceRecord.getMessageId());
                 } else {
                     SolaceMessageTracker.addMessageID(this.uniqueId, solaceRecord.getMessageId());
@@ -343,52 +339,19 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                 logShutdownMessage(context);
             } else if (context.isCompleted()) {
                 String processedMessageIDs = SolaceMessageTracker.getProcessedMessagesIDs(this.solaceInputPartition.getId());
-//                Path path = Paths.get(this.checkpointLocation + "/" + this.solaceInputPartition.getId() + ".txt");
-//                log.info("SolaceSparkConnector - File path {} to store checkpoint processed in worker node {}", path.toString(), this.solaceInputPartition.getPreferredLocation());
-//                if(processedMessageIDs != null && !processedMessageIDs.isEmpty()) {
-//                    try {
-//                        Path parentDir = path.getParent();
-//                        if (parentDir != null) {
-//                            // Create the directory and all nonexistent parent directories
-//                            Files.createDirectories(parentDir);
-//                            log.info("SolaceSparkConnector - Created parent directory {} for file path {}", parentDir.toString(), path.toString());
-//                        }
-//                        // overwrite checkpoint to preserve latest value
-//                        try (BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE,
-//                                StandardOpenOption.TRUNCATE_EXISTING)) {
-////                        for (String id : ids) {
-//                            SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(processedMessageIDs, this.solaceInputPartition.getId());
-//                            CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> solaceSparkPartitionCheckpoints = new CopyOnWriteArrayList<>();
-//                            solaceSparkPartitionCheckpoints.add(solaceSparkPartitionCheckpoint);
-//                            // Publish state to checkpoint. On commit the state is published to Solace LVQ.
-//                            writer.write(new Gson().toJson(solaceSparkPartitionCheckpoints));
-//                            writer.newLine();
-//                            log.info("SolaceSparkConnector - Checkpoint {} stored in file path {}", new Gson().toJson(solaceSparkPartitionCheckpoints), path.toString());
-//                            SolaceMessageTracker.removeProcessedMessagesIDs(this.solaceInputPartition.getId());
-//                            //                        }
-//                        }
-//                    } catch (IOException e) {
-//                        log.error("SolaceSparkConnector - Exception when writing checkpoint to path {}", this.checkpointLocation, e);
-//                        this.solaceBroker.close();
-//                        throw new RuntimeException(e);
-//                    }
-//                } else {
-//                    log.info("SolaceSparkConnector - No processed message id's available for input partition {} and nothing is written to checkpoint", this.solaceInputPartition.getId());
-//                }
-                try {
-                    String checkpointPath = this.checkpointLocation + "/" + this.solaceInputPartition.getId() + ".txt";
-                    log.info("SolaceSparkConnector - File path {} to store checkpoint processed in worker node {}", checkpointPath, this.solaceInputPartition.getPreferredLocation());
-                    if(processedMessageIDs != null && !processedMessageIDs.isEmpty()) {
-                        Path path = new Path(checkpointPath);
-                        FileSystem fileSystem = path.getFileSystem(this.serializableConfiguration.value());
+                Path path = Paths.get(this.checkpointLocation + "/" + this.solaceInputPartition.getId() + ".txt");
+                log.info("SolaceSparkConnector - File path {} to store checkpoint processed in worker node {}", path.toString(), this.solaceInputPartition.getPreferredLocation());
+                if(processedMessageIDs != null && !processedMessageIDs.isEmpty()) {
+                    try {
                         Path parentDir = path.getParent();
-                        if (parentDir != null && !fileSystem.exists(parentDir)) {
-                            fileSystem.mkdirs(parentDir);
+                        if (parentDir != null) {
+                            // Create the directory and all nonexistent parent directories
+                            Files.createDirectories(parentDir);
                             log.info("SolaceSparkConnector - Created parent directory {} for file path {}", parentDir.toString(), path.toString());
                         }
-                        try (FSDataOutputStream os = fileSystem.create(path, true);
-                             BufferedWriter writer =
-                                     new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8))) {
+                        // overwrite checkpoint to preserve latest value
+                        try (BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE,
+                                StandardOpenOption.TRUNCATE_EXISTING)) {
 //                        for (String id : ids) {
                             SolaceSparkPartitionCheckpoint solaceSparkPartitionCheckpoint = new SolaceSparkPartitionCheckpoint(processedMessageIDs, this.solaceInputPartition.getId());
                             CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> solaceSparkPartitionCheckpoints = new CopyOnWriteArrayList<>();
@@ -400,15 +363,14 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                             SolaceMessageTracker.removeProcessedMessagesIDs(this.solaceInputPartition.getId());
                             //                        }
                         }
-                    } else {
-                        log.info("SolaceSparkConnector - No processed message id's available for input partition {} and nothing is written to checkpoint", this.solaceInputPartition.getId());
+                    } catch (IOException e) {
+                        log.error("SolaceSparkConnector - Exception when writing checkpoint to path {}", this.checkpointLocation, e);
+                        this.solaceBroker.close();
+                        throw new RuntimeException(e);
                     }
-                } catch (IOException e) {
-                    log.error("SolaceSparkConnector - Exception when writing checkpoint to path {}", this.checkpointLocation, e);
-                    this.solaceBroker.close();
-                    throw new RuntimeException(e);
+                } else {
+                    log.info("SolaceSparkConnector - No processed message id's available for input partition {} and nothing is written to checkpoint {}", this.solaceInputPartition.getId(), this.checkpointLocation);
                 }
-
 
                 log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(), uniqueId);
 

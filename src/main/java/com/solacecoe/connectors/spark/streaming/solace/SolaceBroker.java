@@ -208,7 +208,6 @@ public class SolaceBroker implements Serializable {
     public void createLVQIfNotExist() {
         log.info("SolaceSparkConnector - Configured LVQ name {} and topic {}", this.lvqName, this.lvqTopic);
         lvq = JCSMPFactory.onlyInstance().createQueue(this.lvqName);
-
         EndpointProperties endpoint_props = new EndpointProperties();
         endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
         endpoint_props.setQuota(0);
@@ -421,7 +420,10 @@ public class SolaceBroker implements Serializable {
         xmlMessage.setCorrelationId(applicationMessageId);
         xmlMessage.setApplicationMessageId(applicationMessageId);
         if (timestamp > 0L) {
-            xmlMessage.setSenderTimestamp(timestamp);
+            // Spark TimestampType by default return's in microseconds(https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/types/TimestampType.html) whether it is millis or seconds. So division by 1000 is required
+            // as microseconds format will be too long to parse
+            long senderTimestamp = timestamp/1000;
+            xmlMessage.setSenderTimestamp(senderTimestamp);
         }
         xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
 
