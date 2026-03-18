@@ -1,4 +1,4 @@
-package com.solacecoe.connectors.spark.oauth;
+package com.solacecoe.connectors.spark.containers.oauth;
 
 import org.testcontainers.shaded.org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.testcontainers.shaded.org.bouncycastle.openssl.PEMParser;
@@ -10,11 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 

@@ -1,8 +1,8 @@
 package com.solacecoe.connectors.spark;
 
 import com.solacecoe.connectors.spark.base.SolaceSession;
-import com.solacecoe.connectors.spark.oauth.ContainerResource;
-import com.solacecoe.connectors.spark.oauth.SolaceOAuthContainer;
+import com.solacecoe.connectors.spark.containers.oauth.ContainerResource;
+import com.solacecoe.connectors.spark.containers.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.OAuthClient;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;

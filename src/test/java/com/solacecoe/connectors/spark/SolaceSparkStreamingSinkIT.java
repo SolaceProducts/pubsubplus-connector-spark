@@ -6,8 +6,10 @@ import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
 import com.solacecoe.connectors.spark.base.SempV2Api;
 import com.solacecoe.connectors.spark.base.SolaceSession;
+import com.solacecoe.connectors.spark.containers.SolaceTestContainer;
+import com.solacecoe.connectors.spark.containers.SparkContainer;
+import com.solacecoe.connectors.spark.containers.SparkWorkerContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacesystems.jcsmp.*;
 import org.apache.spark.api.java.function.VoidFunction2;
 import org.apache.spark.sql.Dataset;
@@ -20,17 +22,17 @@ import org.apache.spark.sql.streaming.StreamingQueryException;
 import static org.apache.spark.sql.functions.*;
 import org.junit.jupiter.api.*;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
 import org.testcontainers.solace.Service;
 import org.testcontainers.solace.SolaceContainer;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -53,16 +55,36 @@ public class SolaceSparkStreamingSinkIT {
             .withTopic("random/topic", Service.SMF).withTopic("Spark/Topic/0", Service.SMF)
             .withTopic("solace/spark/connector/offset", Service.SMF);
     private SparkSession sparkSession;
+    private SparkContainer sparkContainer;
+    private SparkWorkerContainer sparkWorkerContainer;
+    private SolaceTestContainer solaceTestContainer;
+    private SolaceSession session;
     @BeforeAll
-    public void beforeAll() throws ApiException {
-        solaceContainer.start();
-        if(solaceContainer.isRunning()) {
+    public void beforeAll() throws ApiException, IOException {
+        sparkContainer = new SparkContainer();
+        sparkContainer.start();
+
+        sparkWorkerContainer = new SparkWorkerContainer();
+        sparkWorkerContainer.dependsOn(sparkContainer);
+        sparkWorkerContainer.start();
+
+        Map<String, Service> topics = new HashMap<String, Service>(){
+            {
+                put("solace/spark/streaming", Service.SMF);
+                put("solace/spark/connector/offset", Service.SMF);
+                put("random/topic", Service.SMF);
+                put("Spark/Topic/0", Service.SMF);
+            }
+        };
+        solaceTestContainer = new SolaceTestContainer("solace/solace-pubsub-standard:latest", topics);
+        solaceTestContainer.start();
+        if(solaceTestContainer.isRunning()) {
             sparkSession = SparkSession.builder()
                     .appName("data_source_test")
                     .master("local[*]")
                     .getOrCreate();
 //            sparkSession.sparkContext().setLogLevel("INFO");
-            SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
+            SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceTestContainer.getHost(), solaceTestContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/0");
             queue.accessType(MsgVpnQueue.AccessTypeEnum.NON_EXCLUSIVE);
@@ -84,6 +106,8 @@ public class SolaceSparkStreamingSinkIT {
             emptyQueue.egressEnabled(true);
 
             sempV2Api.config().createMsgVpnQueue("default", emptyQueue, null, null);
+
+            session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
         } else {
             throw new RuntimeException("Solace Container is not started yet");
         }
@@ -91,13 +115,15 @@ public class SolaceSparkStreamingSinkIT {
 
     @AfterAll
     public void afterAll() {
-        solaceContainer.stop();
+        sparkContainer.stop();
+        sparkWorkerContainer.stop();
+        solaceTestContainer.stop();
     }
 
     @BeforeEach
     public void beforeEach() throws JCSMPException {
-        if(solaceContainer.isRunning()) {
-            SolaceSession session = new SolaceSession(solaceContainer.getOrigin(Service.SMF), solaceContainer.getVpn(), solaceContainer.getUsername(), solaceContainer.getPassword());
+        if(solaceTestContainer.isRunning()) {
+            SolaceSession session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
             XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
                 @Override
                 public void responseReceivedEx(Object o) {
@@ -134,52 +160,86 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @AfterEach
-    public void afterEach() throws IOException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        Path path1 = Paths.get("src", "test", "resources", "spark-checkpoint-2");
-        Path path2 = Paths.get("src", "test", "resources", "spark-checkpoint-3");
-        if(Files.exists(path)) {
-            FileUtils.deleteDirectory(path.toAbsolutePath().toFile());
-        }
-        if(Files.exists(path1)) {
-            FileUtils.deleteDirectory(path1.toAbsolutePath().toFile());
-        }
-        if(Files.exists(path2)) {
-            FileUtils.deleteDirectory(path2.toAbsolutePath().toFile());
-        }
+    public void afterEach() throws IOException, InterruptedException {
+        sparkContainer.execInContainer(
+                "bash",
+                "-c",
+                "pkill -f spark-submit || true"
+        );
 
-        SolaceConnectionManager.closeAllConnections();
+        sparkContainer.execInContainer(
+                "bash",
+                "-c",
+                "rm -rf /opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint"
+        );
+
+        sparkContainer.execInContainer(
+                "bash",
+                "-c",
+                "rm -f /tmp/spark.log"
+        );
+    }
+
+    private void executeScript(String envVars, boolean isBatch) throws IOException, InterruptedException {
+        if(!isBatch) {
+            sparkContainer.execInContainer(
+                    "sh", "-c",
+                    envVars + "/opt/spark/bin/spark-submit " +
+                            "--master spark://spark-master:7077 " +
+                            "--jars /opt/spark/jars/pubsubplus-connector-spark.jar " +
+                            "/opt/spark/work-dir/SolaceSparkSink.py > /tmp/spark.log 2>&1 &"
+            );
+        } else {
+            sparkContainer.execInContainer(
+                    "sh", "-c",
+                    envVars + "/opt/spark/bin/spark-submit " +
+                            "--master spark://spark-master:7077 " +
+                            "--jars /opt/spark/jars/pubsubplus-connector-spark.jar " +
+                            "/opt/spark/work-dir/SolaceSparkSink_ForEachBatch.py > /tmp/spark.log 2>&1 &"
+            );
+        }
     }
 
     @Test
     @Order(1)
-    void Should_ProcessData_And_Publish_As_Stream_To_Solace() throws TimeoutException, InterruptedException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
+    void Should_ProcessData_And_Publish_As_Stream_To_Solace() throws TimeoutException, InterruptedException, IOException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_id","my-default-id");
+                put("solace_topic","random/topic");
+            }
+        };
 
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                .option("checkpointLocation", path.toAbsolutePath().toString())
-                .format("solace");
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString(), false);
+
+//        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+//        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
+//
+//        DataStreamReader reader = sparkSession.readStream()
+//                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+//                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+//                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+//                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+//                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+//                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+//                .option("checkpointLocation", path.toAbsolutePath().toString())
+//                .format("solace");
         final long[] count = {0};
         final String[] messageId = {""};
-        Dataset<Row> dataset = reader.load();
+//        Dataset<Row> dataset = reader.load();
+//
+//        StreamingQuery streamingQuery = dataset.writeStream().option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+//                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+//                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+//                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+//                .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
+//                .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
+//                .option("checkpointLocation", writePath.toAbsolutePath().toString())
+//                .format("solace").start();
 
-        StreamingQuery streamingQuery = dataset.writeStream().option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
-                .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
-                .option("checkpointLocation", writePath.toAbsolutePath().toString())
-                .format("solace").start();
-
-        SolaceSession session = new SolaceSession(solaceContainer.getOrigin(Service.SMF), solaceContainer.getVpn(), solaceContainer.getUsername(), solaceContainer.getPassword());
         Topic topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
         XMLMessageConsumer messageConsumer = null;
         try {
@@ -189,6 +249,8 @@ public class SolaceSparkStreamingSinkIT {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
                         messageId[0] = bytesXMLMessage.getApplicationMessageId();
+                        System.out.println("Total records consumed " + count[0]);
+                        System.out.println("Received Application Message Id " + messageId[0]);
                     }
                 }
 
@@ -205,45 +267,54 @@ public class SolaceSparkStreamingSinkIT {
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
     }
 
     @Test
     @Order(2)
-    void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, InterruptedException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                .option("checkpointLocation", path.toAbsolutePath().toString())
-                .format("solace");
+    void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, InterruptedException, IOException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_id","my-default-id");
+                put("solace_topic","random/topic");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString(), true);
+
+//        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+//        Path writePath = Paths.get("src", "test", "resources", "spark-checkpoint-3");
+//        DataStreamReader reader = sparkSession.readStream()
+//                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+//                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+//                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+//                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+//                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+//                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+//                .option("checkpointLocation", path.toAbsolutePath().toString())
+//                .format("solace");
         final long[] count = {0};
         final String[] messageId = {""};
-        Dataset<Row> dataset = reader.load();
-        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-            try {
-                dataset1.drop("Topic", "PartitionKey", "TimeStamp", "Headers").write()
-                        .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                        .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                        .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                        .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
-                        .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
-                        .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
-                        .mode(SaveMode.Append)
-                        .format("solace").save();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).option("checkpointLocation", writePath.toAbsolutePath().toString()).start();
+//        Dataset<Row> dataset = reader.load();
+//        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+//            try {
+//                dataset1.drop("Topic", "PartitionKey", "TimeStamp", "Headers").write()
+//                        .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+//                        .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+//                        .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+//                        .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+//                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
+//                        .option(SolaceSparkStreamingProperties.MESSAGE_ID, "my-default-id")
+//                        .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
+//                        .mode(SaveMode.Append)
+//                        .format("solace").save();
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//            }
+//        }).option("checkpointLocation", writePath.toAbsolutePath().toString()).start();
 
-        SolaceSession session = new SolaceSession(solaceContainer.getOrigin(Service.SMF), solaceContainer.getVpn(), solaceContainer.getUsername(), solaceContainer.getPassword());
         Topic topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
         XMLMessageConsumer messageConsumer = null;
         try {
@@ -253,6 +324,8 @@ public class SolaceSparkStreamingSinkIT {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
                         messageId[0] = bytesXMLMessage.getApplicationMessageId();
+                        System.out.println("Total records consumed " + count[0]);
+                        System.out.println("Received Application Message Id " + messageId[0]);
                     }
                 }
 
@@ -269,39 +342,47 @@ public class SolaceSparkStreamingSinkIT {
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
     }
 
     @Test
     @Order(3)
-    void Should_ProcessData_And_Publish_With_DataFrameId_To_Solace() throws TimeoutException, InterruptedException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                .option("checkpointLocation", path.toAbsolutePath().toString())
-                .format("solace");
+    void Should_ProcessData_And_Publish_With_DataFrameId_To_Solace() throws TimeoutException, InterruptedException, IOException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_id","__DELETE__");
+                put("solace_topic","random/topic");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString(), true);
+//        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+//        DataStreamReader reader = sparkSession.readStream()
+//                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+//                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+//                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+//                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+//                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
+//                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
+//                .option("checkpointLocation", path.toAbsolutePath().toString())
+//                .format("solace");
         final long[] count = {0};
-        Dataset<Row> dataset = reader.load();
+//        Dataset<Row> dataset = reader.load();
+//
+//        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
+//            dataset1.write()
+//                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
+//                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
+//                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
+//                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
+//                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
+//                    .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
+//                    .mode(SaveMode.Append)
+//                    .format("solace").save();
+//        }).start();
 
-        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-            dataset1.write()
-                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, 0)
-                    .option(SolaceSparkStreamingProperties.TOPIC, "random/topic")
-                    .mode(SaveMode.Append)
-                    .format("solace").save();
-        }).start();
-
-        SolaceSession session = new SolaceSession(solaceContainer.getOrigin(Service.SMF), solaceContainer.getVpn(), solaceContainer.getUsername(), solaceContainer.getPassword());
         Topic topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
         XMLMessageConsumer messageConsumer = null;
         try {
@@ -309,6 +390,7 @@ public class SolaceSparkStreamingSinkIT {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
+                    System.out.println("Total records consumed " + count[0]);
                 }
 
                 @Override
@@ -324,8 +406,6 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
     }
 
     @Test

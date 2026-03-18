@@ -1,4 +1,4 @@
-package com.solacecoe.connectors.spark.oauth;
+package com.solacecoe.connectors.spark.containers.oauth;
 
 import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.model.Ulimit;

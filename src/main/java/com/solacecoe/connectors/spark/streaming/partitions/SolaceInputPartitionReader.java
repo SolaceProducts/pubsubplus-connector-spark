@@ -83,6 +83,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         }
 
         String currentBatchId = taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
+        log.info("SolaceSparkConnector - Current batch id {} and previous batch id {}", currentBatchId, SolaceMessageTracker.getLastBatchId(this.uniqueId));
         /*
          * In case when multiple operations are performed on dataframe, input partition will be called as part of Spark scan.
          * We need to acknowledge messages only if new batch is started. In case of same batch we will return the same messages.

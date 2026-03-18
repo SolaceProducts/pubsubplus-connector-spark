@@ -1,4 +1,4 @@
-package com.solacecoe.connectors.spark.oauth;
+package com.solacecoe.connectors.spark.containers.oauth;
 
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
