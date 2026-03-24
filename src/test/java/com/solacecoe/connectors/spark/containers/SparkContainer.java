@@ -19,12 +19,14 @@ public class SparkContainer extends GenericContainer<SparkContainer> {
         addFixedExposedPort(8080, 8080);
         addFixedExposedPort(7077, 7077);
         addFixedExposedPort(4040, 4040);
+        addFixedExposedPort(6066, 6066);
 
         addEnv("SPARK_RPC_AUTHENTICATION_ENABLED", "no");
         addEnv("HOME", "/tmp");
         addEnv("KRB5_CONFIG", "");
         addEnv("KRB5CCNAME", "");
         addEnv("JAVA_TOOL_OPTIONS", "");
+        addEnv("SPARK_MASTER_OPTS", "-Dspark.master.rest.enabled=true");
 
         // ✅ Start Spark Master explicitly
         withCommand(

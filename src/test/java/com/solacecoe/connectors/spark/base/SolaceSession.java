@@ -23,6 +23,7 @@ public class SolaceSession {
             properties.setProperty(JCSMPProperties.USERNAME, this.username); // client-username
             properties.setProperty(JCSMPProperties.VPN_NAME, this.vpn);    // message-vpn
             properties.setProperty(JCSMPProperties.PASSWORD, this.password); // client-password
+            properties.setProperty(JCSMPProperties.GENERATE_SEND_TIMESTAMPS, true);
             session = JCSMPFactory.onlyInstance().createSession(properties);
             session.connect();
         } catch (Exception e) {

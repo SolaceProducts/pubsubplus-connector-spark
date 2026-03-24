@@ -189,6 +189,12 @@
             <version>2.39.0</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.solace</groupId>
+            <artifactId>solace-semp-action-java-client</artifactId>
+            <version>2.39.0</version>
+            <scope>test</scope>
+        </dependency>
 
     </dependencies>
 

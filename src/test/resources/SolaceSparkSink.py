@@ -15,6 +15,8 @@ out_stream_name = "/opt/spark/checkpoint/solace-spark-connector-integration-test
 # Read all environment variables
 env_vars = dict(os.environ)  # everything present in env
 
+# if only write
+only_write = env_vars.get("only_write", "false")
 # Filter for only those starting with 'SOLACE_'
 solace_env = {k[len("solace_"):]: v for k, v in env_vars.items() if k.startswith("solace_")}
 
@@ -30,7 +32,8 @@ common_options = {
 }
 read_options = {
     "queue": "Solace/Queue/0",
-    "queue.receiveWaitTimeout": 1000
+    "queue.receiveWaitTimeout": 1000,
+    "includeHeaders": True
 }
 
 read_options = {**common_options, **read_options}
@@ -48,15 +51,17 @@ for key, value in solace_env.items():
     normalized_key = key.strip()
 
     if str(value) == "__DELETE__":
-        if normalized_key in read_options:
-            print(f"Removing option: {normalized_key}")
-            del read_options[normalized_key]
+        if only_write == "false":
+            if normalized_key in read_options:
+                print(f"Removing option: {normalized_key}")
+                del read_options[normalized_key]
         if normalized_key in write_options:
             print(f"Removing option: {normalized_key}")
             del write_options[normalized_key]
     elif str(value) == "NULL":
-        if normalized_key in read_options:
-            read_options[normalized_key] = None
+        if only_write == "false":
+            if normalized_key in read_options:
+                read_options[normalized_key] = None
         if normalized_key in write_options:
             write_options[normalized_key] = None
     elif "lvq_topic" in normalized_key:
@@ -64,11 +69,12 @@ for key, value in solace_env.items():
     elif "lvq_name" in normalized_key:
         read_options["lvq.name"] = value
     else:
-        if normalized_key in read_options:
-            print(f"Overriding {normalized_key}: {read_options[normalized_key]} -> {value}")
-        else:
-            print(f"Adding new option: {normalized_key} = {value}")
-        read_options[normalized_key] = value
+        if only_write == "false":
+            if normalized_key in read_options:
+                print(f"Overriding {normalized_key}: {read_options[normalized_key]} -> {value}")
+            else:
+                print(f"Adding new option: {normalized_key} = {value}")
+            read_options[normalized_key] = value
 
         if normalized_key in write_options:
             print(f"Overriding {normalized_key}: {write_options[normalized_key]} -> {value}")
@@ -76,6 +82,8 @@ for key, value in solace_env.items():
             print(f"Adding new option: {normalized_key} = {value}")
         write_options[normalized_key] = value
 
+print(f"Read options {read_options}")
+print(f"Write options {write_options}")
 # Apply final options to reader
 reader = spark.readStream.format("solace")
 for k, v in read_options.items():

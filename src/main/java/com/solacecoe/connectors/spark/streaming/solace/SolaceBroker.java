@@ -398,6 +398,7 @@ public class SolaceBroker implements Serializable {
     public XMLMessage createMessage(String applicationMessageId, String partitionKey, Object msg, long timestamp, UnsafeMapData headersMap) {
         Map<String, Object> headers = new HashMap<>();
         if(headersMap != null && headersMap.numElements() > 0) {
+            log.info("SolaceSparkConnector - Need to set message headers. Number of headers are {}", headersMap.numElements());
             for (int i = 0; i < headersMap.numElements(); i++) {
                 headers.put(headersMap.keyArray().get(i, DataTypes.StringType).toString(),
                         headersMap.valueArray().get(i, DataTypes.BinaryType));

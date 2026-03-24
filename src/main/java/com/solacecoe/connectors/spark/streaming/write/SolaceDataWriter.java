@@ -197,14 +197,14 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         return new JCSMPStreamingPublishCorrelatingEventHandler() {
             @Override
             public void responseReceivedEx(Object o) {
-                log.info("SolaceSparkConnector - Message published successfully to Solace");
+                log.info("SolaceSparkConnector - Message published successfully to Solace on topic {}", topic);
                 SolaceDataWriterCommitMessage solaceWriterCommitMessage = new SolaceDataWriterCommitMessage(SolacePublishStatus.SUCCESS, "");
                 commitMessages.put(o.toString(), solaceWriterCommitMessage);
             }
 
             @Override
             public void handleErrorEx(Object o, JCSMPException e, long l) {
-                log.error("SolaceSparkConnector - Exception when publishing message to Solace", e);
+                log.error("SolaceSparkConnector - Exception when publishing message to Solace on topic {}", topic, e);
                 StringWriter sw = new StringWriter();
                 PrintWriter pw = new PrintWriter(sw);
                 e.printStackTrace(pw);
