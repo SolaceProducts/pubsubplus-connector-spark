@@ -1,77 +1,64 @@
 package com.solacecoe.connectors.spark;
 
-import com.github.dockerjava.api.model.Ulimit;
 import com.solace.semp.v2.config.ApiException;
 import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
 import com.solace.semp.v2.config.client.model.MsgVpnReplayLog;
 import com.solacecoe.connectors.spark.base.SempV2Api;
 import com.solacecoe.connectors.spark.base.SolaceSession;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
+import com.solacecoe.connectors.spark.containers.SolaceTestContainer;
+import com.solacecoe.connectors.spark.containers.SparkContainer;
+import com.solacecoe.connectors.spark.containers.SparkWorkerContainer;
 import com.solacesystems.jcsmp.*;
-import org.apache.spark.api.java.function.VoidFunction2;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.streaming.DataStreamReader;
-import org.apache.spark.sql.streaming.StreamingQuery;
-import org.apache.spark.sql.streaming.StreamingQueryException;
+import com.solacesystems.jcsmp.Queue;
 import org.junit.jupiter.api.*;
+import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
-import org.testcontainers.shaded.org.awaitility.Awaitility;
 import org.testcontainers.solace.Service;
-import org.testcontainers.solace.SolaceContainer;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.Duration;
-import java.time.Instant;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.TimeZone;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.testcontainers.shaded.org.hamcrest.MatcherAssert.assertThat;
-import static org.testcontainers.shaded.org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingMessageReplayIT {
-    private final Long SHM_SIZE = (long) Math.pow(1024, 3);
-    private SolaceContainer solaceContainer = new SolaceContainer("solace/solace-pubsub-standard:latest").withCreateContainerCmdModifier(cmd ->{
-        Ulimit ulimit = new Ulimit("nofile", 2448, 1048576);
-        List<Ulimit> ulimitList = new ArrayList<>();
-        ulimitList.add(ulimit);
-        cmd.getHostConfig()
-                .withShmSize(SHM_SIZE)
-                .withUlimits(ulimitList)
-                .withCpuCount(1l);
-    }).withExposedPorts(8080, 55555);
-    private SparkSession sparkSession;
+    private SempV2Api sempV2Api = null;
+    private SparkContainer sparkContainer;
+    private SparkWorkerContainer sparkWorkerContainer;
+    private SolaceTestContainer solaceTestContainer;
     private String replicationGroupMessageId = "";
     private String messageTimestamp = "";
     private int testIndex = 0;
     @BeforeAll
-    public void beforeAll() throws ApiException {
-        solaceContainer.start();
-        if(solaceContainer.isRunning()) {
-            sparkSession = SparkSession.builder()
-                    .appName("data_source_test")
-                    .master("local[*]")
-                    .config("spark.task.maxFailures", 1)
-                    .getOrCreate();
-            SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
+    public void beforeAll() throws ApiException, IOException {
+        sparkContainer = new SparkContainer();
+        sparkContainer.start();
+
+        sparkWorkerContainer = new SparkWorkerContainer();
+        sparkWorkerContainer.dependsOn(sparkContainer);
+        sparkWorkerContainer.start();
+
+        Map<String, Service> topics = new HashMap<String, Service>(){
+            {
+                put("solace/spark/streaming", Service.SMF);
+                put("solace/spark/connector/offset", Service.SMF);
+            }
+        };
+        solaceTestContainer = new SolaceTestContainer("solace/solace-pubsub-standard:latest", topics);
+        solaceTestContainer.start();
+
+        if(solaceTestContainer.isRunning()) {
+            sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceTestContainer.getHost(), solaceTestContainer.getMappedPort(8080)), "admin", "admin");
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/0");
             queue.accessType(MsgVpnQueue.AccessTypeEnum.EXCLUSIVE);
@@ -106,13 +93,15 @@ public class SolaceSparkStreamingMessageReplayIT {
 
     @AfterAll
     public void afterAll() {
-        solaceContainer.stop();
+        sparkContainer.stop();
+        sparkWorkerContainer.stop();
+        solaceTestContainer.stop();
     }
 
     @BeforeEach
     public void beforeEach() throws ApiException {
-        if(solaceContainer.isRunning() && (testIndex != 0 && testIndex <= 4)) {
-            SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceContainer.getHost(), solaceContainer.getMappedPort(8080)), "admin", "admin");
+        if(solaceTestContainer.isRunning() && (testIndex != 0 && testIndex <= 4)) {
+            SempV2Api sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceTestContainer.getHost(), solaceTestContainer.getMappedPort(8080)), "admin", "admin");
 
             MsgVpnQueue queue = new MsgVpnQueue();
             queue.queueName("Solace/Queue/" + testIndex);
@@ -130,314 +119,311 @@ public class SolaceSparkStreamingMessageReplayIT {
     }
 
     @AfterEach
-    public void afterEach() throws IOException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        Path path1 = Paths.get("src", "test", "resources", "spark-checkpoint-2");
-        Path path2 = Paths.get("src", "test", "resources", "spark-checkpoint-3");
-        Path path3 = Paths.get("src", "test", "resources", "spark-parquet");
-        if(Files.exists(path)) {
-            FileUtils.deleteDirectory(path.toAbsolutePath().toFile());
-        }
-        if(Files.exists(path1)) {
-            FileUtils.deleteDirectory(path1.toAbsolutePath().toFile());
-        }
-        if(Files.exists(path2)) {
-            FileUtils.deleteDirectory(path2.toAbsolutePath().toFile());
-        }
-        if(Files.exists(path3)) {
-            FileUtils.deleteDirectory(path3.toAbsolutePath().toFile());
-        }
+    public void afterEach() throws com.solace.semp.v2.action.ApiException {
         testIndex++;
+        sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
+        sparkContainer.stop();
+        sparkContainer.start();
+        sparkWorkerContainer.stop();
+        sparkWorkerContainer.start();
+    }
+
+    private void executeScript(String envVars) throws IOException, InterruptedException {
+        sparkContainer.execInContainer(
+                "sh", "-c",
+                envVars + "/opt/spark/bin/spark-submit " +
+                        "--master spark://spark-master:7077 " +
+                        "--jars /opt/spark/jars/pubsubplus-connector-spark.jar " +
+                        "/opt/spark/work-dir/SolaceSparkSource.py > /tmp/spark.log 2>&1 &"
+        );
+    }
+
+    private void assertResult(boolean assertResult, int count, String text) throws InterruptedException, IOException {
+        int expectedTotal = count;
+        int timeoutSeconds = 60;
+        boolean customMatcherResult = false;
+        Pattern batchPattern = Pattern.compile("\"batchId\"\\s*:\\s*(\\d+)");
+        Pattern rowsPattern = Pattern.compile("\"numInputRows\"\\s*:\\s*(\\d+)");
+        Pattern customPattern = null;
+        if(text != null) {
+            customPattern = Pattern.compile(Pattern.quote(text));
+        }
+        Set<Integer> seenBatches = new HashSet<>();
+        int total = 0;
+
+        long start = System.currentTimeMillis();
+
+        while ((System.currentTimeMillis() - start) < timeoutSeconds * 1000) {
+
+            // 3️⃣ Read log file from container
+            Container.ExecResult logResult = sparkContainer.execInContainer(
+                    "bash", "-c", "cat /tmp/spark.log || true"
+            );
+
+            String logs = logResult.getStdout();
+
+            // 4️⃣ Extract batchIds and numInputRows
+            Matcher batchMatcher = batchPattern.matcher(logs);
+            Matcher rowsMatcher = rowsPattern.matcher(logs);
+            Matcher customMatcher = null;
+            if(customPattern != null) {
+                customMatcher = customPattern.matcher(logs);
+            }
+
+            List<Integer> batches = new ArrayList<>();
+            List<Integer> rows = new ArrayList<>();
+
+            while (batchMatcher.find()) {
+                batches.add(Integer.parseInt(batchMatcher.group(1)));
+            }
+
+            while (rowsMatcher.find()) {
+                rows.add(Integer.parseInt(rowsMatcher.group(1)));
+            }
+
+            if(customMatcher != null) {
+                while (customMatcher.find()) {
+                    customMatcherResult = true;
+                }
+            }
+
+            // 5️⃣ Sum only new batches (avoid duplicates)
+            for (int i = 0; i < Math.min(batches.size(), rows.size()); i++) {
+                int batchId = batches.get(i);
+                int numRows = rows.get(i);
+
+                if (seenBatches.add(batchId)) {
+                    total += numRows;
+                }
+            }
+
+            if (assertResult && total >= expectedTotal) {
+                System.out.println("Total records consumed " + total);
+                if(text != null) {
+                    System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                }
+                break;
+            } else if(!assertResult && customMatcherResult){
+                System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                break;
+            }
+
+            Thread.sleep(1000);
+        }
+
+        // 6️⃣ Assertion
+        if(assertResult) {
+            assertEquals(expectedTotal, total);
+        }
+        if(text != null) {
+            assertTrue(customMatcherResult);
+        }
     }
 
     @Test
     @Order(1)
-    public void Should_ProcessData() throws TimeoutException, InterruptedException, JCSMPException, ParseException {
-        if(solaceContainer.isRunning()) {
-            SolaceSession session = new SolaceSession(solaceContainer.getOrigin(Service.SMF), solaceContainer.getVpn(), solaceContainer.getUsername(), solaceContainer.getPassword());
-            XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-                    // not required in test
-                }
+    public void Should_ProcessData() throws TimeoutException, InterruptedException, JCSMPException, ParseException, IOException {
+        SolaceSession session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
 
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-                    // not required in test
-                }
-            });
+        Queue tempQueue = session.getSession().createTemporaryQueue("temp.q");
 
-            Topic topic = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
-            for (int i = 0; i < 100; i++) {
-                TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-                textMessage.setText("Hello Spark!");
-                Timestamp timestamp = new Timestamp(System.currentTimeMillis());
-                Date date = new Date(timestamp.getTime());
-                SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                format.setTimeZone(TimeZone.getTimeZone(          // Capture the current moment in the wall-clock time used by the people of a certain region (a time zone).
-                        ZoneId.systemDefault()   // Get the JVM’s current default time zone. Can change at any moment during runtime. If important, confirm with the user.
-                ));
-                textMessage.setSenderTimestamp(format.parse(format.format(date)).getTime());
-                messageProducer.send(textMessage, topic);
+        ConsumerFlowProperties flowProps = new ConsumerFlowProperties();
+        flowProps.setEndpoint(tempQueue);
+
+        FlowReceiver flowReceiver = session.getSession().createFlow(new XMLMessageListener() {
+            @Override
+            public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                if(replicationGroupMessageId == null || replicationGroupMessageId.isEmpty()) {
+                    replicationGroupMessageId = bytesXMLMessage.getReplicationGroupMessageId().toString();
+                    System.out.println("Rep group id " + replicationGroupMessageId);
+                }
             }
 
-            messageProducer.close();
-        } else {
-            throw new RuntimeException("Solace Container is not started yet");
+            @Override
+            public void onException(JCSMPException e) {
+
+            }
+        }, flowProps);
+
+        Topic tempQueueSubscription = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
+        session.getSession().addSubscription(tempQueue, tempQueueSubscription, JCSMPSession.WAIT_FOR_CONFIRM);
+
+        flowReceiver.start();
+
+        XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+            @Override
+            public void responseReceivedEx(Object o) {
+                // not required in test
+            }
+
+            @Override
+            public void handleErrorEx(Object o, JCSMPException e, long l) {
+                // not required in test
+            }
+        });
+
+        Topic topic = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
+        for (int i = 0; i < 100; i++) {
+            TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+            textMessage.setText("Hello Spark!");
+            textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+            Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+            Date date = new Date(timestamp.getTime());
+            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+            format.setTimeZone(TimeZone.getTimeZone(          // Capture the current moment in the wall-clock time used by the people of a certain region (a time zone).
+                    ZoneId.systemDefault()   // Get the JVM’s current default time zone. Can change at any moment during runtime. If important, confirm with the user.
+            ));
+            textMessage.setSenderTimestamp(format.parse(format.format(date)).getTime());
+            messageProducer.send(textMessage, topic);
         }
 
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+        messageProducer.close();
 
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, "1")
-                .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, "1")
-                .option("checkpointLocation", path.toAbsolutePath().toString())
-                .format("solace");
-        final long[] count = {0};
-        Dataset<Row> dataset = reader.load();
-
-        StreamingQuery streamingQuery = dataset.writeStream().option("checkpointLocation", path.toAbsolutePath().toString())
-                .format("parquet").outputMode("append").queryName("SolaceSparkStreaming").option("path", Paths.get("src", "test", "resources", "spark-parquet").toAbsolutePath().toString())
-                .foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                    dataset1 = dataset1.cache();
-                    count[0] = count[0] + dataset1.count();
-                    replicationGroupMessageId = dataset1.head().getString(0);
-                }).start();
-
-        Awaitility.await().atMost(50, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100L, count[0]));
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
+        executeScript("");
+        assertResult(true, 100,null);
     }
 
     @Test
     @Order(2)
-    public void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/1")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "BEGINNING")
-                .format("solace");
-        final long[] count = {0};
-        Dataset<Row> dataset = reader.load();
+    public void Should_InitiateReplay_ALL_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException, IOException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_queue","Solace/Queue/1");
+                put("solace_replayStrategy","BEGINNING");
+            }
+        };
 
-        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-            count[0] = count[0] + dataset1.count();
-        }).option("checkpointLocation", path.toAbsolutePath().toString()).start();
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100L,count[0]));
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
+        executeScript(envVars.toString());
+        assertResult(true, 100,null);
     }
 
     @Test
     @Order(3)
-    public void Should_InitiateReplay_ALL_STRATEGY_And_Ack_Duplicate_Messages() throws TimeoutException, InterruptedException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/2")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                .option(SolaceSparkStreamingProperties.ACK_LAST_PROCESSED_MESSAGES, true)
-                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "BEGINNING")
-                .format("solace");
-        final long[] count = {0};
-        Dataset<Row> dataset = reader.load();
+    public void Should_InitiateReplay_ALL_STRATEGY_And_Ack_Duplicate_Messages() throws TimeoutException, InterruptedException, IOException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_queue","Solace/Queue/2");
+                put("solace_replayStrategy","BEGINNING");
+            }
+        };
 
-        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-            count[0] = count[0] + dataset1.count();
-        }).option("checkpointLocation", path.toAbsolutePath().toString()).start();
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(0L,count[0]));
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
+        executeScript(envVars.toString());
+        assertResult(true, 0,null);
     }
 
     @Test
     @Order(4)
-    public void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
+    public void Should_InitiateReplay_TIMEBASED_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException, IOException {
         String timezone = ZoneId.systemDefault().toString();
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/3")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "TIMEBASED")
-                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_START_TIME, messageTimestamp)
-                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_TIMEZONE, timezone)
-                .option("checkpointLocation", path.toAbsolutePath().toString())
-                .format("solace");
-        final long[] count = {0};
-        Dataset<Row> dataset = reader.load();
 
-        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-            count[0] = count[0] + dataset1.count();
-        }).start();
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_queue","Solace/Queue/3");
+                put("solace_replayStrategy","TIMEBASED");
+                put("solace_replayStartTime", messageTimestamp);
+                put("solace_replayStartTimeTimezone", timezone);
+            }
+        };
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> assertThat("", count[0], greaterThanOrEqualTo(99L)));
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
 
+        executeScript(envVars.toString());
+        assertResult(true, 100,null);
     }
 
     @Test
     @Order(5)
-    public void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-        DataStreamReader reader = sparkSession.readStream()
-                .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/4")
-                .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
-                .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, replicationGroupMessageId)
-                .option("checkpointLocation", path.toAbsolutePath().toString())
-                .format("solace");
-        final long[] count = {0};
-        Dataset<Row> dataset = reader.load();
+    public void Should_InitiateReplay_REPLICATIONGROUPMESSAGEID_STRATEGY_And_ProcessData() throws TimeoutException, InterruptedException, IOException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_queue","Solace/Queue/4");
+                put("solace_replayStrategy","REPLICATION-GROUP-MESSAGE-ID");
+                put("solace_replayReplicationGroupMessageId", replicationGroupMessageId);
+            }
+        };
 
-        StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-            count[0] = count[0] + dataset1.count();
-        }).start();
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(49L, count[0]));
-        Thread.sleep(3000); // add timeout to ack messages on queue
-        streamingQuery.stop();
-
+        executeScript(envVars.toString());
+        assertResult(true, 100,null);
     }
 
     @Test
     @Order(6)
-    public void Should_Fail_IfReplayStrategyIsInvalid() {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        assertThrows(StreamingQueryException.class, () -> {
-        try {
-            DataStreamReader reader = sparkSession.readStream()
-                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES, 1)
-                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES, 1)
-                    .option(SolaceSparkStreamingProperties.SOLACE_CONNECT_RETRIES_PER_HOST, 1)
-                    .option(SolaceSparkStreamingProperties.SOLACE_RECONNECT_RETRIES_WAIT_TIME, 100)
-                    .option(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + "sub_ack_window_threshold", 75)
-                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "0")
-                    .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "invalid-replay-strategy")
-                    .option("checkpointLocation", path.toAbsolutePath().toString())
-                    .format("solace");
-            Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                System.out.println("Should_Fail_IfReplayStrategyIsInvalid " + dataset1.count());
-            }).start();
-            streamingQuery.awaitTermination();
-        } catch (Exception e) {
-            assertTrue(e instanceof StreamingQueryException);
-        }
-//        });
+    public void Should_Fail_IfReplayStrategyIsInvalid() throws IOException, InterruptedException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_queue","Solace/Queue/0");
+                put("solace_replayStrategy","invalid-replay-strategy");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString());
+        assertResult(false, 0,"SolaceSparkConnector - Unsupported replay strategy: invalid-replay-strategy");
     }
 
     @Test
     @Order(7)
-    public void Should_Fail_IfReplicationGroupMessageIdIsInvalid() {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        assertThrows(StreamingQueryException.class, () -> {
-//            sparkSession.sparkContext().setLogLevel("TRACE");
-        try {
-            DataStreamReader reader = sparkSession.readStream()
-                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                    .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
-                    .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, "invalid-id")
-                    .option("checkpointLocation", path.toAbsolutePath().toString())
-                    .format("solace");
-            Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                System.out.println("Should_Fail_IfReplicationGroupMessageIdIsInvalid " + dataset1.count());
-            }).start();
-            streamingQuery.awaitTermination();
-        } catch (Exception e) {
-            assertTrue(e instanceof StreamingQueryException);
-        }
-//        });
-    }
-
-    @Test
-    @Order(8)
-    public void Should_Fail_IfReplicationGroupMessageIdIsNull() {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        assertThrows(StreamingQueryException.class, () -> {
-            try {
-                DataStreamReader reader = sparkSession.readStream()
-                        .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                        .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                        .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                        .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                        .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                        .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                        .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
-                        .option("checkpointLocation", path.toAbsolutePath().toString())
-                        .format("solace");
-                Dataset<Row> dataset = reader.load();
-                StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                    System.out.println("Should_Fail_IfReplicationGroupMessageIdIsNull " + dataset1.count());
-                }).start();
-                streamingQuery.awaitTermination();
-            } catch (Exception e) {
-                assertTrue(e instanceof StreamingQueryException);
+    public void Should_Fail_IfReplicationGroupMessageIdIsInvalid() throws IOException, InterruptedException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_queue","Solace/Queue/0");
+                put("solace_replayStrategy","REPLICATION-GROUP-MESSAGE-ID");
+                put("solace_replayReplicationGroupMessageId", "invalid-id");
             }
-//        });
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString());
+        assertResult(false, 0,"Invalid Replication Group Message ID format: invalid-id");
     }
 
     @Test
     @Order(8)
-    public void Should_Fail_IfReplicationGroupMessageIdIsEmpty() {
-        Path path = Paths.get("src", "test", "resources", "spark-checkpoint-1");
-//        assertThrows(StreamingQueryException.class, () -> {
-        try {
-            DataStreamReader reader = sparkSession.readStream()
-                    .option(SolaceSparkStreamingProperties.HOST, solaceContainer.getOrigin(Service.SMF))
-                    .option(SolaceSparkStreamingProperties.VPN, solaceContainer.getVpn())
-                    .option(SolaceSparkStreamingProperties.USERNAME, solaceContainer.getUsername())
-                    .option(SolaceSparkStreamingProperties.PASSWORD, solaceContainer.getPassword())
-                    .option(SolaceSparkStreamingProperties.QUEUE, "Solace/Queue/0")
-                    .option(SolaceSparkStreamingProperties.BATCH_SIZE, "50")
-                    .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY, "REPLICATION-GROUP-MESSAGE-ID")
-                    .option(SolaceSparkStreamingProperties.REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID, "")
-                    .option("checkpointLocation", path.toAbsolutePath().toString())
-                    .format("solace");
-            Dataset<Row> dataset = reader.load();
-            StreamingQuery streamingQuery = dataset.writeStream().foreachBatch((VoidFunction2<Dataset<Row>, Long>) (dataset1, batchId) -> {
-                System.out.println("Should_Fail_IfReplicationGroupMessageIdIsEmpty " + dataset1.count());
-            }).start();
-            streamingQuery.awaitTermination();
-        } catch (Exception e) {
-            assertTrue(e instanceof StreamingQueryException);
-        }
-//        });
+    public void Should_Fail_IfReplicationGroupMessageIdIsNull() throws IOException, InterruptedException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_queue","Solace/Queue/0");
+                put("solace_replayStrategy","REPLICATION-GROUP-MESSAGE-ID");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString());
+        assertResult(false, 0,"SolaceSparkConnector - Invalid replication group message id");
+    }
+
+    @Test
+    @Order(8)
+    public void Should_Fail_IfReplicationGroupMessageIdIsEmpty() throws IOException, InterruptedException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_queue","Solace/Queue/0");
+                put("solace_replayStrategy","REPLICATION-GROUP-MESSAGE-ID");
+                put("solace_replayReplicationGroupMessageId", "");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString());
+        assertResult(false, 0,"SolaceSparkConnector - Invalid replication group message id");
     }
 }
 

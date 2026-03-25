@@ -1,8 +1,5 @@
 package com.solacecoe.connectors.spark;
 
-import com.github.dockerjava.api.model.Ulimit;
-import com.google.gson.Gson;
-import com.solace.semp.v2.action.client.model.SempMetaOnlyResponse;
 import com.solace.semp.v2.config.ApiException;
 import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
@@ -14,13 +11,11 @@ import com.solacecoe.connectors.spark.containers.SolaceTestContainer;
 import com.solacecoe.connectors.spark.containers.SparkContainer;
 import com.solacecoe.connectors.spark.containers.SparkWorkerContainer;
 import com.solacesystems.jcsmp.*;
-import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
 import org.testcontainers.solace.Service;
-import org.testcontainers.solace.SolaceContainer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
