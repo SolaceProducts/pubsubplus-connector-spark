@@ -155,7 +155,6 @@ public class SolaceSparkStreamingSinkIT {
                     envVars + "/opt/spark/bin/spark-submit " +
                             "--master spark://spark-master:7077 " +
                             "--jars /opt/spark/jars/pubsubplus-connector-spark.jar " +
-                            "--files /opt/spark/work-dir/keycloak.crt " +
                             "/opt/spark/work-dir/SolaceSparkSink.py > /tmp/spark.log 2>&1 &"
             );
         } else {
