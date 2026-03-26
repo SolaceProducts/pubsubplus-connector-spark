@@ -2,6 +2,7 @@ package com.solacecoe.connectors.spark.containers.oauth;
 
 import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.model.Ulimit;
+import com.solacecoe.connectors.spark.containers.SparkContainer;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.Transferable;
@@ -71,13 +72,13 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
                     .withCpuCount(1l);
         });
         this.waitStrategy = Wait.forLogMessage(SOLACE_READY_MESSAGE, 1).withStartupTimeout(Duration.ofSeconds(60));
-        withExposedPorts(8080);
+        withExposedPorts(8080, 55443, 1943);
         withEnv("system_scaling_maxconnectioncount", "100");
         withEnv("logging_system_output", "all");
         withEnv("username_admin_globalaccesslevel", "admin");
         withEnv("username_admin_password", "admin");
-        withNetwork(KeyCloakContainer.network);
-        withNetworkAliases("solace");
+        withNetwork(SparkContainer.network);
+        withNetworkAliases("solace-broker");
     }
 
     @Override

@@ -14,7 +14,7 @@ import java.util.Optional;
 
 public class SparkContainer extends GenericContainer<SparkContainer> {
     public static Network network = Network.newNetwork();
-    public SparkContainer() throws IOException {
+    public SparkContainer(boolean copyCerts) throws IOException {
         super("apache/spark:3.5.2");
         addFixedExposedPort(8080, 8080);
         addFixedExposedPort(7077, 7077);
@@ -53,6 +53,13 @@ public class SparkContainer extends GenericContainer<SparkContainer> {
         withCopyFileToContainer(MountableFile.forClasspathResource("SolaceSparkSource.py"), "/opt/spark/work-dir/");
         withCopyFileToContainer(MountableFile.forClasspathResource("SolaceSparkSink.py"), "/opt/spark/work-dir/");
         withCopyFileToContainer(MountableFile.forClasspathResource("SolaceSparkSink_ForEachBatch.py"), "/opt/spark/work-dir/");
+        withCopyFileToContainer(MountableFile.forClasspathResource("SolaceSparkSourceOAuth.py"), "/opt/spark/work-dir/");
+        if(copyCerts) {
+            withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.crt"), "/opt/spark/work-dir/");
+            withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.key"), "/opt/spark/work-dir/");
+//            withCopyFileToContainer(MountableFile.forClasspathResource("solace.jks"), "/opt/spark/work-dir/");
+//            withCopyFileToContainer(MountableFile.forClasspathResource("solace_keystore.jks"), "/opt/spark/work-dir/");
+        }
         withNetwork(network);
         withNetworkAliases("spark-master");
         Wait.forLogMessage(".*Successfully started service.*", 1).withStartupTimeout(Duration.ofSeconds(60));

@@ -34,10 +34,10 @@ public class SolaceSparkStreamingSourceIT {
     private SolaceTestContainer solaceTestContainer;
     @BeforeAll
     public void beforeAll() throws ApiException, IOException {
-        sparkContainer = new SparkContainer();
+        sparkContainer = new SparkContainer(false);
         sparkContainer.start();
 
-        sparkWorkerContainer = new SparkWorkerContainer();
+        sparkWorkerContainer = new SparkWorkerContainer(false);
         sparkWorkerContainer.dependsOn(sparkContainer);
         sparkWorkerContainer.start();
 

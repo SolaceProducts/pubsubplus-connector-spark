@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark.containers.oauth;
 
+import com.solacecoe.connectors.spark.containers.SparkContainer;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -22,7 +23,7 @@ public class KeyCloakContainer extends GenericContainer<KeyCloakContainer> {
         withEnv("KC_HTTPS_CERTIFICATE_FILE", "/opt/keycloak/conf/server.crt");
         withEnv("KC_HTTPS_CERTIFICATE_KEY_FILE", "/opt/keycloak/conf/server.key");
         waitingFor(Wait.forLogMessage(".*Listening.*", 1));
-        withNetwork(network);
+        withNetwork(SparkContainer.network);
         withNetworkAliases("keycloak");
         withCopyFileToContainer(MountableFile.forClasspathResource("keycloak/realms/solace-realm.json"),
                 "/opt/keycloak/data/import/solace-realm.json");
