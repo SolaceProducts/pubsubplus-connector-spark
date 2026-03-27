@@ -41,10 +41,10 @@ public class SolaceSparkStreamingMessageReplayIT {
     private int testIndex = 0;
     @BeforeAll
     public void beforeAll() throws ApiException, IOException {
-        sparkContainer = new SparkContainer(false);
+        sparkContainer = new SparkContainer(false, false);
         sparkContainer.start();
 
-        sparkWorkerContainer = new SparkWorkerContainer(false);
+        sparkWorkerContainer = new SparkWorkerContainer(false, false);
         sparkWorkerContainer.dependsOn(sparkContainer);
         sparkWorkerContainer.start();
 

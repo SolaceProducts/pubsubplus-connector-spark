@@ -10,7 +10,6 @@ import com.solacecoe.connectors.spark.containers.oauth.SolaceOAuthContainer;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.OAuthClient;
 import com.solacesystems.jcsmp.*;
-import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -40,10 +39,10 @@ public class SolaceSparkStreamingOAuthIT {
     private SparkWorkerContainer sparkWorkerContainer;
     @BeforeAll
     public void beforeAll() throws IOException {
-        sparkContainer = new SparkContainer(true);
+        sparkContainer = new SparkContainer(true, false);
         sparkContainer.start();
 
-        sparkWorkerContainer = new SparkWorkerContainer(true);
+        sparkWorkerContainer = new SparkWorkerContainer(true, false);
         sparkWorkerContainer.dependsOn(sparkContainer);
         sparkWorkerContainer.start();
 

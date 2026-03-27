@@ -7,7 +7,7 @@ import org.testcontainers.utility.MountableFile;
 import java.time.Duration;
 
 public class SparkWorkerContainer extends GenericContainer<SparkWorkerContainer> {
-    public SparkWorkerContainer(boolean copyCerts) {
+    public SparkWorkerContainer(boolean copyKeyCloakCerts, boolean copySolaceCerts) {
         super("apache/spark:3.5.2");
         addFixedExposedPort(8087, 8081);
         addEnv("SPARK_MASTER_URL", "spark://spark-master:7077");
@@ -21,11 +21,13 @@ public class SparkWorkerContainer extends GenericContainer<SparkWorkerContainer>
                 "spark://spark-master:7077"
         );
 
-        if(copyCerts) {
+        if(copyKeyCloakCerts) {
             withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.crt"), "/opt/spark/work-dir/");
             withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.key"), "/opt/spark/work-dir/");
-//            withCopyFileToContainer(MountableFile.forClasspathResource("solace.jks"), "/opt/spark/work-dir/");
-//            withCopyFileToContainer(MountableFile.forClasspathResource("solace_keystore.jks"), "/opt/spark/work-dir/");
+        }
+        if(copySolaceCerts) {
+            withCopyFileToContainer(MountableFile.forClasspathResource("solace.jks"), "/opt/spark/work-dir/");
+            withCopyFileToContainer(MountableFile.forClasspathResource("solace_keystore.jks"), "/opt/spark/work-dir/");
         }
 
         withNetwork(SparkContainer.network);

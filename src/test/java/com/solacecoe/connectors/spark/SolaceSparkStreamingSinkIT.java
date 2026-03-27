@@ -42,10 +42,10 @@ public class SolaceSparkStreamingSinkIT {
     private SolaceSession session;
     @BeforeAll
     public void beforeAll() throws ApiException, IOException, JCSMPException {
-        sparkContainer = new SparkContainer(false);
+        sparkContainer = new SparkContainer(false, false);
         sparkContainer.start();
 
-        sparkWorkerContainer = new SparkWorkerContainer(false);
+        sparkWorkerContainer = new SparkWorkerContainer(false, false);
         sparkWorkerContainer.dependsOn(sparkContainer);
         sparkWorkerContainer.start();
 

@@ -14,7 +14,7 @@ import java.util.Optional;
 
 public class SparkContainer extends GenericContainer<SparkContainer> {
     public static Network network = Network.newNetwork();
-    public SparkContainer(boolean copyCerts) throws IOException {
+    public SparkContainer(boolean copyKeyCloakCerts, boolean copySolaceCerts) throws IOException {
         super("apache/spark:3.5.2");
         addFixedExposedPort(8080, 8080);
         addFixedExposedPort(7077, 7077);
@@ -54,11 +54,14 @@ public class SparkContainer extends GenericContainer<SparkContainer> {
         withCopyFileToContainer(MountableFile.forClasspathResource("SolaceSparkSink.py"), "/opt/spark/work-dir/");
         withCopyFileToContainer(MountableFile.forClasspathResource("SolaceSparkSink_ForEachBatch.py"), "/opt/spark/work-dir/");
         withCopyFileToContainer(MountableFile.forClasspathResource("SolaceSparkSourceOAuth.py"), "/opt/spark/work-dir/");
-        if(copyCerts) {
+        withCopyFileToContainer(MountableFile.forClasspathResource("SolaceSparkSourceTLS.py"), "/opt/spark/work-dir/");
+        if(copyKeyCloakCerts) {
             withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.crt"), "/opt/spark/work-dir/");
             withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.key"), "/opt/spark/work-dir/");
-//            withCopyFileToContainer(MountableFile.forClasspathResource("solace.jks"), "/opt/spark/work-dir/");
-//            withCopyFileToContainer(MountableFile.forClasspathResource("solace_keystore.jks"), "/opt/spark/work-dir/");
+        }
+        if(copySolaceCerts) {
+            withCopyFileToContainer(MountableFile.forClasspathResource("solace.jks"), "/opt/spark/work-dir/");
+            withCopyFileToContainer(MountableFile.forClasspathResource("solace_keystore.jks"), "/opt/spark/work-dir/");
         }
         withNetwork(network);
         withNetworkAliases("spark-master");
