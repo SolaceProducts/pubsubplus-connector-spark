@@ -28,11 +28,14 @@ public class SparkWorkerContainer extends GenericContainer<SparkWorkerContainer>
             withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.key"), "/opt/spark/work-dir/");
         }
         if(copySolaceCerts) {
-            Path resources = Paths.get("src", "test", "resources");
-            String absolutePath = resources.toFile().getAbsolutePath();
+            Path solacejks = Paths.get("src", "test", "resources", "solace.jks");
+            String solaceJksAbsolutePath = solacejks.toFile().getAbsolutePath();
 
-            withCopyFileToContainer(MountableFile.forHostPath(absolutePath + "solace.jks"), "/opt/spark/work-dir/");
-            withCopyFileToContainer(MountableFile.forHostPath(absolutePath + "solace_keystore.jks"), "/opt/spark/work-dir/");
+            Path solaceKeyStore = Paths.get("src", "test", "resources", "solace_keystore.jks");
+            String solaceKeyStoreAbsolutePath = solaceKeyStore.toFile().getAbsolutePath();
+
+            withCopyFileToContainer(MountableFile.forHostPath(solaceJksAbsolutePath), "/opt/spark/work-dir/");
+            withCopyFileToContainer(MountableFile.forHostPath(solaceKeyStoreAbsolutePath), "/opt/spark/work-dir/");
         }
 
         withNetwork(SparkContainer.network);
