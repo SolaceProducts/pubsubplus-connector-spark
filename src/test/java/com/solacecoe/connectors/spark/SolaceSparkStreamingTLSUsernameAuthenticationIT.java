@@ -41,7 +41,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
     private SempV2Api sempV2Api = null;
-    private SparkSession sparkSession;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(false);
     private SparkContainer sparkContainer;
     private SparkWorkerContainer sparkWorkerContainer;
@@ -59,11 +58,6 @@ public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
             sparkWorkerContainer.start();
 
             sempV2Api = new SempV2Api(String.format("http://%s:%d", containerResource.getSolaceOAuthContainer().getHost(), containerResource.getSolaceOAuthContainer().getMappedPort(8080)), "admin", "admin");
-
-            sparkSession = SparkSession.builder()
-                    .appName("data_source_test")
-                    .master("local[*]")
-                    .getOrCreate();
         } else {
             throw new RuntimeException("Solace Container is not started yet");
         }

@@ -60,8 +60,11 @@ public class SparkContainer extends GenericContainer<SparkContainer> {
             withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.key"), "/opt/spark/work-dir/");
         }
         if(copySolaceCerts) {
-            withCopyFileToContainer(MountableFile.forClasspathResource("solace.jks"), "/opt/spark/work-dir/");
-            withCopyFileToContainer(MountableFile.forClasspathResource("solace_keystore.jks"), "/opt/spark/work-dir/");
+            Path resources = Paths.get("src", "test", "resources");
+            String absolutePath = resources.toFile().getAbsolutePath();
+
+            withCopyFileToContainer(MountableFile.forHostPath(absolutePath + "solace.jks"), "/opt/spark/work-dir/");
+            withCopyFileToContainer(MountableFile.forHostPath(absolutePath + "solace_keystore.jks"), "/opt/spark/work-dir/");
         }
         withNetwork(network);
         withNetworkAliases("spark-master");

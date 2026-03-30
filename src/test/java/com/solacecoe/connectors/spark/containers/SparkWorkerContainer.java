@@ -4,6 +4,8 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.MountableFile;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 
 public class SparkWorkerContainer extends GenericContainer<SparkWorkerContainer> {
@@ -26,8 +28,11 @@ public class SparkWorkerContainer extends GenericContainer<SparkWorkerContainer>
             withCopyFileToContainer(MountableFile.forClasspathResource("keycloak.key"), "/opt/spark/work-dir/");
         }
         if(copySolaceCerts) {
-            withCopyFileToContainer(MountableFile.forClasspathResource("solace.jks"), "/opt/spark/work-dir/");
-            withCopyFileToContainer(MountableFile.forClasspathResource("solace_keystore.jks"), "/opt/spark/work-dir/");
+            Path resources = Paths.get("src", "test", "resources");
+            String absolutePath = resources.toFile().getAbsolutePath();
+
+            withCopyFileToContainer(MountableFile.forHostPath(absolutePath + "solace.jks"), "/opt/spark/work-dir/");
+            withCopyFileToContainer(MountableFile.forHostPath(absolutePath + "solace_keystore.jks"), "/opt/spark/work-dir/");
         }
 
         withNetwork(SparkContainer.network);
