@@ -438,7 +438,7 @@ public class SolaceSparkStreamingOAuthIT {
 
     @Test
     void Should_Fail_When_MultipleAccessTokensArePresentInFile() throws IOException, InterruptedException {
-        Path resources = Paths.get("tmp");
+        Path resources = Paths.get("src", "test", "resources");
 
         OAuthClient oAuthClient = new OAuthClient("https://localhost:7778/realms/solace/protocol/openid-connect/token", "solace", "solace-secret");
 
