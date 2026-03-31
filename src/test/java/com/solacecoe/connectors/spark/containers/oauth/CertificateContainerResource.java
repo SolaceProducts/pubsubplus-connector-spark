@@ -55,11 +55,12 @@ public class CertificateContainerResource {
 
     private static void writeTrustStore() {
         Path resources = Paths.get("src", "test", "resources");
+        Path tmp = Paths.get("tmp");
         String absolutePath = resources.toFile().getAbsolutePath();
         File file = new File(absolutePath + "/MyRootCaCert.pem");
         File keyFile = new File(absolutePath + "/MyRootCaKey.key");
         try {
-            String path = absolutePath +"/solace.jks";
+            String path = tmp.toFile().getAbsolutePath() +"/solace.jks";
             File yourFile = new File(absolutePath +"/solace.jks");
             if(!yourFile.exists()) {
                 yourFile.createNewFile();
@@ -74,11 +75,12 @@ public class CertificateContainerResource {
 
     private static void writeKeyStore() {
         Path resources = Paths.get("src", "test", "resources");
+        Path tmp = Paths.get("tmp");
         String absolutePath = resources.toFile().getAbsolutePath();
         File file = new File(absolutePath + "/clientCert1.pem");
         File keyFile = new File(absolutePath + "/client1.key");
         try {
-            File yourFile = new File(absolutePath +"/solace_keystore.jks");
+            File yourFile = new File(tmp.toFile().getAbsolutePath() +"/solace_keystore.jks");
             if(!yourFile.exists()) {
                 yourFile.createNewFile();
             }
