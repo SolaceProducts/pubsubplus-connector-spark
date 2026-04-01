@@ -49,11 +49,13 @@ public class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
         containerResource.start();
         if(containerResource.isRunning()) {
             sparkContainer = new SparkContainer(false, true);
-            sparkContainer.withFileSystemBind("/tmp/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
+            Path tempCheckpoint = Paths.get(System.getProperty("java.io.tmpdir"), "checkpoint");
+            Files.createDirectories(tempCheckpoint);
+            sparkContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
             sparkContainer.start();
 
             sparkWorkerContainer = new SparkWorkerContainer(false, true);
-            sparkWorkerContainer.withFileSystemBind("/tmp/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
+            sparkWorkerContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
             sparkWorkerContainer.dependsOn(sparkContainer);
             sparkWorkerContainer.start();
 
