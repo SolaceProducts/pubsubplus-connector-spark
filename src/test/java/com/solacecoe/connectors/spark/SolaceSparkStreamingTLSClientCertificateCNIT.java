@@ -53,6 +53,11 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
             sparkContainer = new SparkContainer(false, true);
             Path tempCheckpoint = Paths.get(System.getProperty("java.io.tmpdir"), "checkpoint");
             Files.createDirectories(tempCheckpoint);
+
+            tempCheckpoint.toFile().setWritable(true, false);
+            tempCheckpoint.toFile().setReadable(true, false);
+            tempCheckpoint.toFile().setExecutable(true, false);
+
             sparkContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
             sparkContainer.start();
 
