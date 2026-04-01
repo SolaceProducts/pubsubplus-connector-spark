@@ -40,6 +40,7 @@ public class SolaceSparkStreamingSinkIT {
     private SparkWorkerContainer sparkWorkerContainer;
     private SolaceTestContainer solaceTestContainer;
     private SolaceSession session;
+    private Topic topic;
     @BeforeAll
     public void beforeAll() throws ApiException, IOException, JCSMPException {
         sparkContainer = new SparkContainer(false, false);
@@ -84,8 +85,7 @@ public class SolaceSparkStreamingSinkIT {
             sempV2Api.config().createMsgVpnQueue("default", emptyQueue, null, null);
 
             session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
-            Topic topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
-            session.getSession().addSubscription(topic);
+            topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
         } else {
             throw new RuntimeException("Solace Container is not started yet");
         }
@@ -101,6 +101,7 @@ public class SolaceSparkStreamingSinkIT {
     @BeforeEach
     public void beforeEach() throws JCSMPException {
         if(solaceTestContainer.isRunning()) {
+            session.getSession().addSubscription(topic);
             SolaceSession session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
 
             XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
@@ -140,8 +141,9 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @AfterEach
-    public void afterEach() throws com.solace.semp.v2.action.ApiException {
+    public void afterEach() throws com.solace.semp.v2.action.ApiException, JCSMPException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
+        session.getSession().removeSubscription(topic);
         sparkContainer.stop();
         sparkContainer.start();
         sparkWorkerContainer.stop();

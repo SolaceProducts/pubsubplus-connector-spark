@@ -154,7 +154,7 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
             );
 
             String logs = logResult.getStdout();
-
+            System.out.println(logs);
             // 4️⃣ Extract batchIds and numInputRows
             Matcher batchMatcher = batchPattern.matcher(logs);
             Matcher rowsMatcher = rowsPattern.matcher(logs);
