@@ -71,8 +71,8 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
         sparkWorkerContainer.stop();
         containerResource.stop();
 
-        Path path1 = Paths.get("tmp", "solace.jks");
-        Path path2 = Paths.get("tmp", "solace_keystore.jks");
+        Path path1 = Paths.get(System.getProperty("java.io.tmpdir"), "solace.jks");
+        Path path2 = Paths.get(System.getProperty("java.io.tmpdir"), "solace_keystore.jks");
 
         if(Files.exists(path1)) {
             FileUtils.delete(path1.toAbsolutePath().toFile());
