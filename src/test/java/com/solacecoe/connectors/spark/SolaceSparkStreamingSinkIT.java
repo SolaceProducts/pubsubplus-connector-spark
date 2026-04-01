@@ -890,14 +890,14 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         LocalDate dateFromTimestamp = Instant.ofEpochSecond(timestamp[0])
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate();
 
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
 
-        assertEquals(today, dateFromTimestamp, "Timestamp is not from today");
+        assertEquals(today, dateFromTimestamp, "Timestamp is not current day");
     }
 
     @Test

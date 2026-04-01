@@ -61,7 +61,7 @@ public class CertificateContainerResource {
         File keyFile = new File(absolutePath + "/MyRootCaKey.key");
         try {
             String path = tmp.toFile().getAbsolutePath() +"/solace.jks";
-            File yourFile = new File(absolutePath +"/solace.jks");
+            File yourFile = new File(tmp.toFile().getAbsolutePath() +"/solace.jks");
             if(!yourFile.exists()) {
                 yourFile.createNewFile();
             }
