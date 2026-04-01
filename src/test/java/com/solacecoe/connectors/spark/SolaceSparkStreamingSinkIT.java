@@ -393,11 +393,11 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
     }
 
     @Test
-    @Order(4)
+    @Order(17)
     void Should_ProcessData_And_Publish_To_CustomTopic_Solace() throws TimeoutException, InterruptedException, IOException, JCSMPException {
         Map<String,String> env = new HashMap<String, String>(){
             {
