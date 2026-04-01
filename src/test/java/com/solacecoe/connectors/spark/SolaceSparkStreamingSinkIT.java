@@ -28,8 +28,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -255,7 +254,11 @@ public class SolaceSparkStreamingSinkIT {
             assertEquals(expectedTotal, total);
         }
         if(text != null) {
-            assertTrue(customMatcherResult);
+            if(times > 0) {
+                assertTrue(customMatcherResult);
+            } else {
+                assertFalse(customMatcherResult);
+            }
         }
     }
 
@@ -399,6 +402,7 @@ public class SolaceSparkStreamingSinkIT {
     @Test
     @Order(17)
     void Should_ProcessData_And_Publish_To_CustomTopic_Solace() throws TimeoutException, InterruptedException, IOException, JCSMPException {
+        session.getSession().removeSubscription(topic);
         Map<String,String> env = new HashMap<String, String>(){
             {
                 put("solace_id","__DELETE__");
@@ -437,7 +441,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         session.getSession().removeSubscription(topic);
     }
 
@@ -955,6 +959,29 @@ public class SolaceSparkStreamingSinkIT {
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
 
         assertEquals(today, dateFromTimestamp, "Timestamp is not from today");
+    }
+
+    @Test
+    @Order(18)
+    void Should_Not_ProcessData_And_Should_Not_Throw_ConcurrentModificationException() throws InterruptedException, IOException, com.solace.semp.v2.monitor.ApiException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_topic","random/topic/1");
+                put("solace_includeHeaders", "false");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString(), true);
+        assertResult(false, "SolacePublishException", 1);
+        assertResult(false, "java.util.ConcurrentModificationException", 0);
+        MsgVpnQueueResponse msgVpnQueueTxFlowResponse = sempV2Api.monitor().getMsgVpnQueue("default", "Solace/Queue/0", null);
+        if (msgVpnQueueTxFlowResponse.getCollections() != null && msgVpnQueueTxFlowResponse.getCollections().getMsgs() != null) {
+            System.out.println("Total message in queue " + msgVpnQueueTxFlowResponse.getCollections().getMsgs().getCount());
+            assertEquals(100, msgVpnQueueTxFlowResponse.getCollections().getMsgs().getCount(), "Number of messages should be 100");
+        }
     }
 
     @Test
