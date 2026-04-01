@@ -168,7 +168,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)).map(solaceMessage.bytesXMLMessage);
             long timestamp = solaceRecord.getSenderTimestamp();
             if (solaceRecord.getSenderTimestamp() == 0) {
-                timestamp = System.currentTimeMillis();
+                timestamp = solaceRecord.getReceiveTimestamp();
             }
             InternalRow row;
             if (this.includeHeaders) {

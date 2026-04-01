@@ -402,7 +402,6 @@ public class SolaceSparkStreamingSinkIT {
     @Test
     @Order(17)
     void Should_ProcessData_And_Publish_To_CustomTopic_Solace() throws TimeoutException, InterruptedException, IOException, JCSMPException {
-        session.getSession().removeSubscription(topic);
         Map<String,String> env = new HashMap<String, String>(){
             {
                 put("solace_id","__DELETE__");
@@ -423,9 +422,11 @@ public class SolaceSparkStreamingSinkIT {
             messageConsumer = session.getSession().getMessageConsumer(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    count[0] = count[0] + 1;
-                    if(count[0] == 100) {
-                        System.out.println("Total records consumed " + count[0]);
+                    if(bytesXMLMessage.getDestination().toString().equals("Spark/Topic/0")) {
+                        count[0] = count[0] + 1;
+                        if (count[0] == 100) {
+                            System.out.println("Total records consumed " + count[0]);
+                        }
                     }
                 }
 
@@ -897,7 +898,7 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
-        LocalDate dateFromTimestamp = Instant.ofEpochSecond(timestamp[0])
+        LocalDate dateFromTimestamp = Instant.ofEpochMilli(timestamp[0])
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate();
 
@@ -1041,7 +1042,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @Test
-    @Order(11)
+    @Order(19)
     void Should_Fail_Publish_IfMessagePayloadIsMissing() throws IOException, InterruptedException {
         Map<String,String> env = new HashMap<String, String>(){
             {
