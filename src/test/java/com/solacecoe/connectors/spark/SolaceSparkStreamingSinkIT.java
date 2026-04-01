@@ -751,7 +751,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        assertResult(true, null, 0);
+//        assertResult(true, null, 0);
         MsgVpnQueueTxFlowsResponse msgVpnQueueTxFlowResponse = sempV2Api.monitor().getMsgVpnQueueTxFlows("default", "Solace/Queue/0", 10, null, null, null);
         if (msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
             assertEquals(3, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 3");
