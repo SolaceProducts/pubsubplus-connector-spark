@@ -85,6 +85,7 @@ public class SolaceSparkStreamingSinkIT {
 
             session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
             topic = JCSMPFactory.onlyInstance().createTopic("random/topic");
+            session.getSession().addSubscription(topic);
         } else {
             throw new RuntimeException("Solace Container is not started yet");
         }
@@ -100,7 +101,6 @@ public class SolaceSparkStreamingSinkIT {
     @BeforeEach
     public void beforeEach() throws JCSMPException {
         if(solaceTestContainer.isRunning()) {
-            session.getSession().addSubscription(topic);
             SolaceSession session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
 
             XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
@@ -142,7 +142,6 @@ public class SolaceSparkStreamingSinkIT {
     @AfterEach
     public void afterEach() throws com.solace.semp.v2.action.ApiException, JCSMPException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
-        session.getSession().removeSubscription(topic);
         sparkContainer.stop();
         sparkContainer.start();
         sparkWorkerContainer.stop();
@@ -306,6 +305,8 @@ public class SolaceSparkStreamingSinkIT {
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -353,6 +354,8 @@ public class SolaceSparkStreamingSinkIT {
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -397,6 +400,8 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -416,10 +421,11 @@ public class SolaceSparkStreamingSinkIT {
 
         final long[] count = {0};
 
+        SolaceSession solaceSession = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
         Topic topic = JCSMPFactory.onlyInstance().createTopic("Spark/Topic/0");
         XMLMessageConsumer messageConsumer = null;
         try {
-            messageConsumer = session.getSession().getMessageConsumer(new XMLMessageListener() {
+            messageConsumer = solaceSession.getSession().getMessageConsumer(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     if(bytesXMLMessage.getDestination().toString().equals("Spark/Topic/0")) {
@@ -436,14 +442,17 @@ public class SolaceSparkStreamingSinkIT {
 
                 }
             });
-            session.getSession().addSubscription(topic);
+            solaceSession.getSession().addSubscription(topic);
             messageConsumer.start();
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
 
         Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
-        session.getSession().removeSubscription(topic);
+        messageConsumer.stop();
+        messageConsumer.close();
+        solaceSession.getSession().removeSubscription(topic);
+        solaceSession.getSession().closeSession();
     }
 
     @Test
@@ -499,6 +508,8 @@ public class SolaceSparkStreamingSinkIT {
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -545,6 +556,8 @@ public class SolaceSparkStreamingSinkIT {
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -587,6 +600,8 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -631,6 +646,8 @@ public class SolaceSparkStreamingSinkIT {
 
         assertResult(true, null, 0);
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -674,6 +691,8 @@ public class SolaceSparkStreamingSinkIT {
         }
         assertResult(false, "Write Batch", 2);
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -715,6 +734,8 @@ public class SolaceSparkStreamingSinkIT {
 
         assertResult(true, null, 0);
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -762,6 +783,8 @@ public class SolaceSparkStreamingSinkIT {
             assertEquals(3, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 3");
         }
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] >= 100));
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -805,6 +828,8 @@ public class SolaceSparkStreamingSinkIT {
 
         assertResult(false, "Write Batch", 1);
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(0, count[0]));
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -851,6 +876,8 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -905,6 +932,8 @@ public class SolaceSparkStreamingSinkIT {
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
 
         assertEquals(today, dateFromTimestamp, "Timestamp is not current day");
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
@@ -960,6 +989,8 @@ public class SolaceSparkStreamingSinkIT {
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
 
         assertEquals(today, dateFromTimestamp, "Timestamp is not from today");
+        messageConsumer.stop();
+        messageConsumer.close();
     }
 
     @Test
