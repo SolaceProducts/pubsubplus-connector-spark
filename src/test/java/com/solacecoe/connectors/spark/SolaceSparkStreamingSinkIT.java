@@ -554,6 +554,20 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
+        long start = System.currentTimeMillis();
+
+        int timeoutSeconds = 60;
+        while ((System.currentTimeMillis() - start) < timeoutSeconds * 1000) {
+            // 3️⃣ Read log file from container
+            Container.ExecResult logResult = sparkContainer.execInContainer(
+                    "bash", "-c", "cat /tmp/spark.log || true"
+            );
+
+            String logs = logResult.getStdout();
+            System.out.println(logs);
+        }
+
+
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
         messageConsumer.stop();
