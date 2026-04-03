@@ -235,7 +235,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         if (batchSize > 0) {
                             messages++;
                         }
-                        if (isMessageAlreadyProcessed(solaceMessage)) {
+                        if (isMessageProcessed(solaceMessage)) {
                             log.info("Message is added to previous partitions for processing. Moving to next message");
                         } else {
                             return solaceMessage;
@@ -261,7 +261,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         if (batchSize > 0) {
                             messages++;
                         }
-                        if (isMessageAlreadyProcessed(solaceMessage)) {
+                        if (isMessageProcessed(solaceMessage)) {
                             log.info("Message is added to previous partitions for processing. Moving to next message");
                         } else {
                             return solaceMessage;
@@ -278,7 +278,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                                 if (batchSize > 0) {
                                     messages++;
                                 }
-                                if (isMessageAlreadyProcessed(solaceMessage)) {
+                                if (isMessageProcessed(solaceMessage)) {
                                     log.info("Message is added to previous partitions for processing. Moving to next message");
                                 } else {
                                     return solaceMessage;
@@ -302,12 +302,12 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         return null;
     }
 
-    private boolean isMessageAlreadyProcessed(SolaceMessage solaceMessage) throws SDTException {
+    private boolean isMessageProcessed(SolaceMessage solaceMessage) throws SDTException {
         String messageId = SolaceUtils.getMessageID(
                 solaceMessage.bytesXMLMessage,
                 this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)
         );
-        return SolaceMessageTracker.containsMessageID(messageId);
+        return SolaceMessageTracker.isMessageProcessed(this.uniqueId, messageId);
     }
 
     private boolean shouldProcessMoreMessages(int batchSize, int messages) {

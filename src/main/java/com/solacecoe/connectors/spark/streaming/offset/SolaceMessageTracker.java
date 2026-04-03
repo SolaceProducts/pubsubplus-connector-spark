@@ -1,10 +1,14 @@
 package com.solacecoe.connectors.spark.streaming.offset;
 
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
+import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
+import com.solacesystems.jcsmp.SDTException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,6 +19,7 @@ public final class SolaceMessageTracker implements Serializable {
     private static final Logger logger = LogManager.getLogger(SolaceMessageTracker.class);
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<SolaceMessage>> messages = new ConcurrentHashMap<>();
     private static ConcurrentHashMap<String, String> lastProcessedMessageId = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, CopyOnWriteArrayList<String>> processedMessageIds = new ConcurrentHashMap<>();
 
     public static List<String> getIds() {
         return Collections.list(lastProcessedMessageId.keys());
@@ -28,6 +33,7 @@ public final class SolaceMessageTracker implements Serializable {
 
     public static void removeProcessedMessagesIDs(String uniqueId) {
         lastProcessedMessageId.remove(uniqueId);
+        processedMessageIds.remove(uniqueId);
     }
 
     public static void addMessage(String uniqueId, SolaceMessage message) {
@@ -58,22 +64,38 @@ public final class SolaceMessageTracker implements Serializable {
     }
 
     public static void addMessageID(String uniqueId, String messageId) {
-        SolaceMessageTracker.lastProcessedMessageId.put(uniqueId, messageId);
+        lastProcessedMessageId.put(uniqueId, messageId);
+        CopyOnWriteArrayList<String> idList = new CopyOnWriteArrayList<>();
+        if(processedMessageIds.containsKey(uniqueId)) {
+            idList = processedMessageIds.get(uniqueId);
+        }
+        idList.addIfAbsent(messageId);
+        processedMessageIds.put(uniqueId, idList);
     }
 
-    public static boolean containsMessageID(String messageId) {
-        return lastProcessedMessageId.values().stream().anyMatch(id -> id.equals(messageId));
+//    public static boolean isMessageProcessed(String messageId) {
+//        return lastProcessedMessageId.values().stream().anyMatch(id -> id.equals(messageId));
+//    }
+
+    public static boolean isMessageProcessed(String uniqueId, String messageId) {
+        if(processedMessageIds.containsKey(uniqueId)) {
+            return processedMessageIds.get(uniqueId).stream().anyMatch(messageId::equals);
+        }
+
+        return false;
     }
 
     public static void reset() {
         messages = new ConcurrentHashMap<>();
         lastProcessedMessageId = new ConcurrentHashMap<>();
+        processedMessageIds.clear();
         logger.info("SolaceSparkConnector - Cleared all messages from Offset Manager");
     }
 
     public static void resetId(String uniqueId) {
         messages.remove(uniqueId);
         lastProcessedMessageId.remove(uniqueId);
+        processedMessageIds.remove(uniqueId);
         logger.info("SolaceSparkConnector - Cleared all messages from Offset Manager for {}", uniqueId);
     }
 
