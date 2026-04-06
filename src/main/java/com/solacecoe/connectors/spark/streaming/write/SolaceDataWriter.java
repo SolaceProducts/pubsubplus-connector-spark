@@ -28,6 +28,7 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
@@ -37,8 +38,8 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final Map<String, String> properties;
     private SolaceBroker solaceBroker;
     private final transient UnsafeProjection projection;
-    private final Map<String, SolaceDataWriterCommitMessage> commitMessages;
-    private final Map<String, SolaceAbortMessage> abortedMessages;
+    private final ConcurrentHashMap<String, SolaceDataWriterCommitMessage> commitMessages;
+    private final ConcurrentHashMap<String, SolaceAbortMessage> abortedMessages;
     private Exception exception;
     private final boolean includeHeaders;
     private final boolean hasDefaultTopic;
@@ -63,8 +64,8 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         }
 
         this.projection = createProjection();
-        this.commitMessages = new HashMap<>();
-        this.abortedMessages = new HashMap<>();
+        this.commitMessages = new ConcurrentHashMap<>();
+        this.abortedMessages = new ConcurrentHashMap<>();
     }
 
     private void publishMessages(UnsafeRow projectedRow) {
@@ -197,14 +198,14 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
         return new JCSMPStreamingPublishCorrelatingEventHandler() {
             @Override
             public void responseReceivedEx(Object o) {
-                log.info("SolaceSparkConnector - Message published successfully to Solace");
+                log.info("SolaceSparkConnector - Message published successfully to Solace on topic {}", topic);
                 SolaceDataWriterCommitMessage solaceWriterCommitMessage = new SolaceDataWriterCommitMessage(SolacePublishStatus.SUCCESS, "");
                 commitMessages.put(o.toString(), solaceWriterCommitMessage);
             }
 
             @Override
             public void handleErrorEx(Object o, JCSMPException e, long l) {
-                log.error("SolaceSparkConnector - Exception when publishing message to Solace", e);
+                log.error("SolaceSparkConnector - Exception when publishing message to Solace on topic {}", topic, e);
                 StringWriter sw = new StringWriter();
                 PrintWriter pw = new PrintWriter(sw);
                 e.printStackTrace(pw);

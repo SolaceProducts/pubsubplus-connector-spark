@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 public class SempV2Api {
     private final com.solace.semp.v2.config.client.AllApi configApi;
     private final com.solace.semp.v2.monitor.client.AllApi monitorApi;
+    private final com.solace.semp.v2.action.client.AllApi actionApi;
     private static final Logger LOG = LoggerFactory.getLogger(SempV2Api.class);
 
     public SempV2Api(String mgmtHost, String mgmtUsername, String mgmtPassword) {
@@ -22,6 +23,12 @@ public class SempV2Api {
         monitorApiClient.setUsername(mgmtUsername);
         monitorApiClient.setPassword(mgmtPassword);
         this.monitorApi = new com.solace.semp.v2.monitor.client.AllApi(monitorApiClient);
+
+        com.solace.semp.v2.action.ApiClient actionApiClient = new com.solace.semp.v2.action.ApiClient();
+        actionApiClient.setBasePath(String.format("%s/SEMP/v2/action", mgmtHost));
+        actionApiClient.setUsername(mgmtUsername);
+        actionApiClient.setPassword(mgmtPassword);
+        this.actionApi = new com.solace.semp.v2.action.client.AllApi(actionApiClient);
     }
 
     public com.solace.semp.v2.config.client.AllApi config() {
@@ -30,5 +37,9 @@ public class SempV2Api {
 
     public com.solace.semp.v2.monitor.client.AllApi monitor() {
         return this.monitorApi;
+    }
+
+    public com.solace.semp.v2.action.client.AllApi action() {
+        return this.actionApi;
     }
 }

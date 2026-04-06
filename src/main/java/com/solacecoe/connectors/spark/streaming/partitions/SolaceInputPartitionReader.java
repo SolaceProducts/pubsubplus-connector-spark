@@ -83,6 +83,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         }
 
         String currentBatchId = taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
+        log.info("SolaceSparkConnector - Current batch id {} and previous batch id {}", currentBatchId, SolaceMessageTracker.getLastBatchId(this.uniqueId));
         /*
          * In case when multiple operations are performed on dataframe, input partition will be called as part of Spark scan.
          * We need to acknowledge messages only if new batch is started. In case of same batch we will return the same messages.
@@ -167,7 +168,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)).map(solaceMessage.bytesXMLMessage);
             long timestamp = solaceRecord.getSenderTimestamp();
             if (solaceRecord.getSenderTimestamp() == 0) {
-                timestamp = System.currentTimeMillis();
+                timestamp = solaceRecord.getReceiveTimestamp();
             }
             InternalRow row;
             if (this.includeHeaders) {
@@ -234,7 +235,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         if (batchSize > 0) {
                             messages++;
                         }
-                        if (isMessageAlreadyProcessed(solaceMessage)) {
+                        if (isMessageProcessed(solaceMessage)) {
                             log.info("Message is added to previous partitions for processing. Moving to next message");
                         } else {
                             return solaceMessage;
@@ -260,7 +261,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                         if (batchSize > 0) {
                             messages++;
                         }
-                        if (isMessageAlreadyProcessed(solaceMessage)) {
+                        if (isMessageProcessed(solaceMessage)) {
                             log.info("Message is added to previous partitions for processing. Moving to next message");
                         } else {
                             return solaceMessage;
@@ -277,7 +278,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                                 if (batchSize > 0) {
                                     messages++;
                                 }
-                                if (isMessageAlreadyProcessed(solaceMessage)) {
+                                if (isMessageProcessed(solaceMessage)) {
                                     log.info("Message is added to previous partitions for processing. Moving to next message");
                                 } else {
                                     return solaceMessage;
@@ -301,12 +302,12 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         return null;
     }
 
-    private boolean isMessageAlreadyProcessed(SolaceMessage solaceMessage) throws SDTException {
+    private boolean isMessageProcessed(SolaceMessage solaceMessage) throws SDTException {
         String messageId = SolaceUtils.getMessageID(
                 solaceMessage.bytesXMLMessage,
                 this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)
         );
-        return SolaceMessageTracker.containsMessageID(messageId);
+        return SolaceMessageTracker.isMessageProcessed(this.uniqueId, messageId);
     }
 
     private boolean shouldProcessMoreMessages(int batchSize, int messages) {

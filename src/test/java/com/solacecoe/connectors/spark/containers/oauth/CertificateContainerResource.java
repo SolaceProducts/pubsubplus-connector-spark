@@ -1,4 +1,4 @@
-package com.solacecoe.connectors.spark.oauth;
+package com.solacecoe.connectors.spark.containers.oauth;
 
 import org.testcontainers.shaded.org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.testcontainers.shaded.org.bouncycastle.openssl.PEMParser;
@@ -10,11 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 
@@ -58,12 +55,13 @@ public class CertificateContainerResource {
 
     private static void writeTrustStore() {
         Path resources = Paths.get("src", "test", "resources");
+        Path tmp = Paths.get(System.getProperty("java.io.tmpdir"));
         String absolutePath = resources.toFile().getAbsolutePath();
         File file = new File(absolutePath + "/MyRootCaCert.pem");
         File keyFile = new File(absolutePath + "/MyRootCaKey.key");
         try {
-            String path = absolutePath +"/solace.jks";
-            File yourFile = new File(absolutePath +"/solace.jks");
+            String path = tmp.toFile().getAbsolutePath() +"/solace.jks";
+            File yourFile = new File(path);
             if(!yourFile.exists()) {
                 yourFile.createNewFile();
             }
@@ -77,11 +75,12 @@ public class CertificateContainerResource {
 
     private static void writeKeyStore() {
         Path resources = Paths.get("src", "test", "resources");
+        Path tmp = Paths.get(System.getProperty("java.io.tmpdir"));
         String absolutePath = resources.toFile().getAbsolutePath();
         File file = new File(absolutePath + "/clientCert1.pem");
         File keyFile = new File(absolutePath + "/client1.key");
         try {
-            File yourFile = new File(absolutePath +"/solace_keystore.jks");
+            File yourFile = new File(tmp.toFile().getAbsolutePath() +"/solace_keystore.jks");
             if(!yourFile.exists()) {
                 yourFile.createNewFile();
             }

@@ -4,6 +4,8 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaderMeta;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
 import com.solacesystems.jcsmp.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -13,7 +15,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class SolaceUtils {
-
+    private static final Logger log = LoggerFactory.getLogger(SolaceUtils.class);
     public static void validateCommonProperties(Map<String, String> properties) {
         // User configuration validation
         if(!properties.containsKey(SolaceSparkStreamingProperties.HOST) || properties.get(SolaceSparkStreamingProperties.HOST) == null || properties.get(SolaceSparkStreamingProperties.HOST).isEmpty()) {
@@ -96,6 +98,7 @@ public class SolaceUtils {
                            boolean convertNonSerializableHeadersToString) throws SDTException {
         XMLMessage xmlMessage;
         SDTMap metadata = map(headers, excludedHeaders, convertNonSerializableHeadersToString);
+        log.info("SolaceSparkConnector - Created user properties map with {} properties", metadata.size());
 //        rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
         if (payload instanceof byte[]) {

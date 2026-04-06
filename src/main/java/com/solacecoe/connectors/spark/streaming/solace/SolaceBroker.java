@@ -66,7 +66,7 @@ public class SolaceBroker implements Serializable {
             jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, 50); // default window size for publishing
             jcsmpProperties.setProperty(JCSMPProperties.HOST, properties.get(SolaceSparkStreamingProperties.HOST));            // host:port
             jcsmpProperties.setProperty(JCSMPProperties.VPN_NAME, properties.get(SolaceSparkStreamingProperties.VPN));    // message-vpn
-
+            jcsmpProperties.setProperty(JCSMPProperties.GENERATE_RCV_TIMESTAMPS, true);
             String authenticationScheme = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_API_PROPERTIES_PREFIX + JCSMPProperties.AUTHENTICATION_SCHEME, null);
             if(authenticationScheme != null && authenticationScheme.equals(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2)) {
                 isOAuth = true;
@@ -398,6 +398,7 @@ public class SolaceBroker implements Serializable {
     public XMLMessage createMessage(String applicationMessageId, String partitionKey, Object msg, long timestamp, UnsafeMapData headersMap) {
         Map<String, Object> headers = new HashMap<>();
         if(headersMap != null && headersMap.numElements() > 0) {
+            log.info("SolaceSparkConnector - Need to set message headers. Number of headers are {}", headersMap.numElements());
             for (int i = 0; i < headersMap.numElements(); i++) {
                 headers.put(headersMap.keyArray().get(i, DataTypes.StringType).toString(),
                         headersMap.valueArray().get(i, DataTypes.BinaryType));
@@ -422,8 +423,8 @@ public class SolaceBroker implements Serializable {
         if (timestamp > 0L) {
             // Spark TimestampType by default return's in microseconds(https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/types/TimestampType.html) whether it is millis or seconds. So division by 1000 is required
             // as microseconds format will be too long to parse
-            long senderTimestamp = timestamp/1000;
-            xmlMessage.setSenderTimestamp(senderTimestamp);
+//            long senderTimestamp = timestamp/1000;
+            xmlMessage.setSenderTimestamp(timestamp);
         }
         xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
 

@@ -198,7 +198,7 @@ Solace Spark Connector transforms the incoming message to Spark row with below s
 
 | Id
 | String
-| Represents Message ID present in message. This value is based on Offset_Indicator option. By, default it returns replication group message id.
+| Represents replication group message id of incoming message.
 
 | Payload
 | Binary
