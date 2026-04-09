@@ -103,6 +103,8 @@ public class SolaceMicroBatch implements MicroBatchStream, ReportsSourceMetrics 
         acknowledgements = SparkSession.getActiveSession().get().sparkContext().longAccumulator("acknowledgements");
         collectionAccumulator = SparkSession.getActiveSession().get().sparkContext().collectionAccumulator("solaceMetrics");
 
+        resetAccumulators();
+        
         log.info("SolaceSparkConnector - Initialization Completed");
 
         solaceMetrics = new SolaceMetrics();
@@ -322,10 +324,7 @@ public class SolaceMicroBatch implements MicroBatchStream, ReportsSourceMetrics 
     public void stop() {
         log.info("SolaceSparkConnector - Closing Spark Connector");
         checkException();
-        collectionAccumulator.reset();
-        messagesConsumed.reset();
-        acknowledgements.reset();
-        pendingAcknowledgements.reset();
+        resetAccumulators();
         this.solaceBroker.close();
     }
 
@@ -377,5 +376,12 @@ public class SolaceMicroBatch implements MicroBatchStream, ReportsSourceMetrics 
 
         result.put("solaceMetrics", String.valueOf(collectionAccumulator.value()));
         return result;
+    }
+
+    private void resetAccumulators() {
+        collectionAccumulator.reset();
+        messagesConsumed.reset();
+        acknowledgements.reset();
+        pendingAcknowledgements.reset();
     }
 }
