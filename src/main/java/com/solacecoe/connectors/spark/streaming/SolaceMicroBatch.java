@@ -58,6 +58,7 @@ public class SolaceMicroBatch implements MicroBatchStream, ReportsSourceMetrics 
     private final String checkpointLocation;
     private final List<String> partitionIds = new ArrayList<>();
     private final SolaceMetrics solaceMetrics;
+    private int batchId = -1;
     private final CollectionAccumulator<Map<String, String>> collectionAccumulator;
     private final LongAccumulator messagesConsumed;
     private final LongAccumulator pendingAcknowledgements;
@@ -102,9 +103,9 @@ public class SolaceMicroBatch implements MicroBatchStream, ReportsSourceMetrics 
         pendingAcknowledgements = SparkSession.getActiveSession().get().sparkContext().longAccumulator("pendingAcknowledgements");
         acknowledgements = SparkSession.getActiveSession().get().sparkContext().longAccumulator("acknowledgements");
         collectionAccumulator = SparkSession.getActiveSession().get().sparkContext().collectionAccumulator("solaceMetrics");
-
+        // safe reset if spark restart's with old session. This can happen in case of dedicated clusters where spark session may be not killed.
         resetAccumulators();
-        
+
         log.info("SolaceSparkConnector - Initialization Completed");
 
         solaceMetrics = new SolaceMetrics();
@@ -363,15 +364,20 @@ public class SolaceMicroBatch implements MicroBatchStream, ReportsSourceMetrics 
     public Map<String, String> metrics(Optional<Offset> latestConsumedOffset) {
         Map<String, String> result = new HashMap<>();
         collectionAccumulator.value().forEach(item -> {
-            messagesConsumed.add(Long.valueOf(item.get("messagesConsumed")));
-            acknowledgements.add(Long.valueOf(item.get("acknowledgements")));
-            pendingAcknowledgements.setValue(Long.parseLong(item.get("pendingAcknowledgements")));
+            int currentBatchId = Integer.parseInt(item.get("batchId"));
+            if(batchId != currentBatchId) {
+                messagesConsumed.add(Long.valueOf(item.get("messagesConsumed")));
+                acknowledgements.add(Long.valueOf(item.get("acknowledgements")));
+                pendingAcknowledgements.setValue(Long.parseLong(item.get("pendingAcknowledgements")));
 
-            item.put("messagesConsumed", String.valueOf(messagesConsumed.value()));
-            item.put("acknowledgements", String.valueOf(acknowledgements.value()));
-            item.put("pendingAcknowledgements", String.valueOf(pendingAcknowledgements.value()));
+                item.put("messagesConsumed", String.valueOf(messagesConsumed.value()));
+                item.put("acknowledgements", String.valueOf(acknowledgements.value()));
+                item.put("pendingAcknowledgements", String.valueOf(pendingAcknowledgements.value()));
 
-            solaceMetrics.sessionStats("source").setValue(item);
+                solaceMetrics.sessionStats("source").setValue(item);
+            }
+
+            batchId = currentBatchId;
         });
 
         result.put("solaceMetrics", String.valueOf(collectionAccumulator.value()));

@@ -1,5 +1,7 @@
 package com.solacecoe.connectors.spark;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.semp.v2.config.ApiException;
 import com.solace.semp.v2.config.client.model.MsgVpnQueue;
 import com.solace.semp.v2.config.client.model.MsgVpnQueueSubscription;
@@ -15,7 +17,11 @@ import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.solace.Service;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -288,6 +294,49 @@ public class SolaceSparkStreamingSourceIT {
             System.out.println("Total " + msgVpnQueueTxFlowResponse.getData().size() + " consumers with different client names");
         }
 //        streamingQuery.stop();
+    }
+
+    @Test
+    @Order(4)
+    void shouldValidateMetricsJson() throws Exception {
+        executeScript("");
+        assertResult(true,null);
+        String url = "http://localhost:4040/metrics/json";
+        URL obj = new URL(url);
+        HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
+
+        connection.setRequestMethod("GET");
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(5000);
+
+        int statusCode = connection.getResponseCode();
+        assertEquals(200, statusCode);
+
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(connection.getInputStream())
+        );
+
+        StringBuilder response = new StringBuilder();
+        String line;
+
+        while ((line = reader.readLine()) != null) {
+            response.append(line);
+        }
+        reader.close();
+
+        // Parse JSON
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode json = mapper.readTree(response.toString());
+
+        json.get("gauges").fields().forEachRemaining(item -> {
+            if(item.getKey().contains("solace")) {
+                assertTrue(item.getValue().get("value").has("batchId"));
+                assertTrue(item.getValue().get("value").has("acknowledgements"));
+                assertTrue(item.getValue().get("value").has("sessionName"));
+                assertTrue(item.getValue().get("value").has("pendingAcknowledgements"));
+                assertTrue(item.getValue().get("value").has("messagesConsumed"));
+            }
+        });
     }
 
     @Test
