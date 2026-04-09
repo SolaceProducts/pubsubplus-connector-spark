@@ -6,3 +6,4 @@ build/classes/*
 build/scripts/*
 build/staged/*
 build/tmp/*
+*LocalTest.java

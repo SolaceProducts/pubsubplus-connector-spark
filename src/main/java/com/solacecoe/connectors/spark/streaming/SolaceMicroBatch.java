@@ -3,6 +3,7 @@ package com.solacecoe.connectors.spark.streaming;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
+import com.solacecoe.connectors.spark.SolaceMetrics;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSourceOffset;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.partitions.SolaceDataSourceReaderFactory;
@@ -15,13 +16,17 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.SparkEnv;
 import org.apache.spark.scheduler.ExecutorCacheTaskLocation;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream;
 import org.apache.spark.sql.connector.read.streaming.Offset;
+import org.apache.spark.sql.connector.read.streaming.ReportsSourceMetrics;
 import org.apache.spark.storage.BlockManager;
 import org.apache.spark.storage.BlockManagerId;
 import org.apache.spark.storage.BlockManagerMaster;
+import org.apache.spark.util.CollectionAccumulator;
+import org.apache.spark.util.LongAccumulator;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
@@ -36,7 +41,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class SolaceMicroBatch implements MicroBatchStream {
+public class SolaceMicroBatch implements MicroBatchStream, ReportsSourceMetrics {
     private static final Logger log = LogManager.getLogger(SolaceMicroBatch.class);
     private int lastKnownOffsetId = 0;
     private int latestOffsetId = 0;
@@ -52,6 +57,11 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> currentCheckpoint = new CopyOnWriteArrayList<>();
     private final String checkpointLocation;
     private final List<String> partitionIds = new ArrayList<>();
+    private final SolaceMetrics solaceMetrics;
+    private final CollectionAccumulator<Map<String, String>> collectionAccumulator;
+    private final LongAccumulator messagesConsumed;
+    private final LongAccumulator pendingAcknowledgements;
+    private final LongAccumulator acknowledgements;
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
         this.properties = properties;
 
@@ -87,7 +97,16 @@ public class SolaceMicroBatch implements MicroBatchStream {
 //        this.solaceBroker.addLVQReceiver(lvqEventListener);
         this.solaceBroker.createLVQIfNotExist();
         this.solaceBroker.initProducer();
+
+        messagesConsumed = SparkSession.getActiveSession().get().sparkContext().longAccumulator("messagesConsumed");
+        pendingAcknowledgements = SparkSession.getActiveSession().get().sparkContext().longAccumulator("pendingAcknowledgements");
+        acknowledgements = SparkSession.getActiveSession().get().sparkContext().longAccumulator("acknowledgements");
+        collectionAccumulator = SparkSession.getActiveSession().get().sparkContext().collectionAccumulator("solaceMetrics");
+
         log.info("SolaceSparkConnector - Initialization Completed");
+
+        solaceMetrics = new SolaceMetrics();
+        SparkEnv.get().metricsSystem().registerSource(solaceMetrics);
     }
 
     @Override
@@ -195,7 +214,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if(currentCheckpoint != null && currentCheckpoint.isEmpty()) {
             currentCheckpoint = this.getCheckpoint();
         }
-        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, currentCheckpoint, this.checkpointLocation);
+        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, currentCheckpoint, this.checkpointLocation, this.collectionAccumulator);
     }
 
     @Override
@@ -295,12 +314,18 @@ public class SolaceMicroBatch implements MicroBatchStream {
             checkException();
             offsetToCommit.clear();
         }
+
+        collectionAccumulator.reset();
     }
 
     @Override
     public void stop() {
         log.info("SolaceSparkConnector - Closing Spark Connector");
         checkException();
+        collectionAccumulator.reset();
+        messagesConsumed.reset();
+        acknowledgements.reset();
+        pendingAcknowledgements.reset();
         this.solaceBroker.close();
     }
 
@@ -335,4 +360,22 @@ public class SolaceMicroBatch implements MicroBatchStream {
         return checkpointLocation;
     }
 
+    @Override
+    public Map<String, String> metrics(Optional<Offset> latestConsumedOffset) {
+        Map<String, String> result = new HashMap<>();
+        collectionAccumulator.value().forEach(item -> {
+            messagesConsumed.add(Long.valueOf(item.get("messagesConsumed")));
+            acknowledgements.add(Long.valueOf(item.get("acknowledgements")));
+            pendingAcknowledgements.setValue(Long.parseLong(item.get("pendingAcknowledgements")));
+
+            item.put("messagesConsumed", String.valueOf(messagesConsumed.value()));
+            item.put("acknowledgements", String.valueOf(acknowledgements.value()));
+            item.put("pendingAcknowledgements", String.valueOf(pendingAcknowledgements.value()));
+
+            solaceMetrics.sessionStats("source").setValue(item);
+        });
+
+        result.put("solaceMetrics", String.valueOf(collectionAccumulator.value()));
+        return result;
+    }
 }

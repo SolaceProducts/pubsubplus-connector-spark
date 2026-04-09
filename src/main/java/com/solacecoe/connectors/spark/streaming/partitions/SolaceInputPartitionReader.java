@@ -25,6 +25,7 @@ import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
 import org.apache.spark.sql.execution.streaming.StreamExecution;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.apache.spark.util.CollectionAccumulator;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -57,11 +58,13 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     private SolaceMessage solaceMessage;
     private SolaceBroker solaceBroker;
     private int messages = 0;
+    private int acks = 0;
     private Iterator<SolaceMessage> iterator;
     private boolean shouldTrackMessage = true;
     private boolean isPartitionQueue = false;
+    private final CollectionAccumulator<Map<String, String>> collectionAccumulator;
     public SolaceInputPartitionReader(SolaceInputPartition inputPartition, boolean includeHeaders, Map<String, String> properties,
-                                      TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation) {
+                                      TaskContext taskContext, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation, CollectionAccumulator<Map<String, String>> collectionAccumulator) {
 
         log.info("SolaceSparkConnector - Initializing Solace Input Partition reader with id {}", inputPartition.getId());
 
@@ -73,6 +76,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         this.taskId = taskContext.taskAttemptId();
         this.checkpoints = checkpoints;
         this.checkpointLocation = checkpointLocation;
+        this.collectionAccumulator = collectionAccumulator;
         this.batchSize = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT));
         this.receiveWaitTimeout = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT, SolaceSparkStreamingProperties.QUEUE_RECEIVE_WAIT_TIMEOUT_DEFAULT));
         this.closeReceiversOnPartitionClose = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE, SolaceSparkStreamingProperties.CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT));
@@ -96,9 +100,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             isCommitTriggered = true;
             log.info("SolaceSparkConnector - Acknowledging any processed messages to Solace as commit is successful");
             long startTime = System.currentTimeMillis();
-            SolaceMessageTracker.ackMessages(uniqueId);
+            acks = SolaceMessageTracker.ackMessages(uniqueId);
             log.info("SolaceSparkConnector - Total time taken to acknowledge messages {} ms", (System.currentTimeMillis() - startTime));
         } else {
+            collectionAccumulator.reset();
             log.info("SolaceSparkConnector - Spark Batch with id {} is requesting data again. It may be because of multiple operations on same dataframe.", currentBatchId);
             isCommitTriggered = false;
             CopyOnWriteArrayList<SolaceMessage> messageList = SolaceMessageTracker.getMessages(uniqueId);
@@ -115,10 +120,8 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
             }
         }
-
+        String lastBatchId = SolaceMessageTracker.getLastBatchId(this.uniqueId);
         SolaceMessageTracker.setLastBatchId(this.uniqueId, currentBatchId);
-
-
 
         log.info("SolaceSparkConnector - Checking for connection {}", inputPartition.getId());
 
@@ -159,6 +162,18 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             throw new RuntimeException("Task was interrupted.");
         }
         solaceMessage = getNextMessage();
+
+        // update metrics
+        Map<String, String> result = new HashMap<>();
+        result.put("sessionName", String.valueOf(solaceBroker.getUniqueName()));
+        result.put("batchId", String.valueOf(TaskContext.get().getLocalProperty(MicroBatchExecution.BATCH_ID_KEY())));
+        result.put("messagesConsumed", String.valueOf(messages));
+        result.put("pendingAcknowledgements", String.valueOf(messages));
+        result.put("acknowledgements", String.valueOf(acks));
+        List<Map<String, String>> list = new ArrayList<>();
+        list.add(result);
+        collectionAccumulator.setValue(list);
+
         return solaceMessage != null;
     }
 
@@ -374,7 +389,6 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                 }
 
                 log.info("SolaceSparkConnector - Total time taken by executor is {} ms for Task {}", context.taskMetrics().executorRunTime(), uniqueId);
-
                 if (closeReceiversOnPartitionClose) {
                     solaceBroker.closeReceivers();
                 }

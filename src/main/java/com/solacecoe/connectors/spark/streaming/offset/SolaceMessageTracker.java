@@ -3,6 +3,7 @@ package com.solacecoe.connectors.spark.streaming.offset;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.SDTException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,18 +46,22 @@ public final class SolaceMessageTracker implements Serializable {
         messages.put(uniqueId, messageList);
     }
 
-    public static void ackMessages(String uniqueId) {
+    public static int ackMessages(String uniqueId) {
+        int count = 0;
         if(messages.containsKey(uniqueId)) {
-            messages.get(uniqueId).forEach(message -> {
+            for(SolaceMessage message : messages.get(uniqueId)) {
                 try {
                     message.bytesXMLMessage.ackMessage();
+                    count++;
                 } catch (IllegalStateException e) {
                     logger.error("SolaceSparkConnector - Exception encountered while acknowledging message to Solace. This may be due to the connection closing from inactivity in a long-running cluster. This can be safely ignored, as messages will be redelivered.", e);
                 }
-            });
+            };
             logger.info("SolaceSparkConnector - Acknowledged {} messages ", messages.get(uniqueId).size());
             messages.remove(uniqueId);
         }
+
+        return count;
     }
 
     public static CopyOnWriteArrayList<SolaceMessage> getMessages(String uniqueId) {

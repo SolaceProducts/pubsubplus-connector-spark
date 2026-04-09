@@ -10,6 +10,7 @@ import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.connector.read.PartitionReaderFactory;
 import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
 import org.apache.spark.sql.execution.streaming.StreamExecution;
+import org.apache.spark.util.CollectionAccumulator;
 
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -21,11 +22,14 @@ public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
     private final Map<String, String> properties;
     private final String checkpointLocation;
     private final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
-    public SolaceDataSourceReaderFactory(boolean includeHeaders, Map<String, String> properties, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation) {
+    private final CollectionAccumulator<Map<String, String>> collectionAccumulator;
+    public SolaceDataSourceReaderFactory(boolean includeHeaders, Map<String, String> properties, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints,
+                                         String checkpointLocation, CollectionAccumulator<Map<String, String>> collectionAccumulator) {
         this.includeHeaders = includeHeaders;
         this.properties = properties;
         this.checkpoints = checkpoints;
         this.checkpointLocation = checkpointLocation;
+        this.collectionAccumulator = collectionAccumulator;
         log.info("SolaceSparkConnector - Initializing Partition reader factory");
     }
 
@@ -37,7 +41,7 @@ public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
             String batchId = taskCtx.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
             SolaceInputPartition solaceInputPartition = (SolaceInputPartition) partition;
             log.info("SolaceSparkConnector - Creating reader for input partition reader factory with query id {}, batch id {}, task id {} and partition id {}", queryId, batchId, taskCtx.taskAttemptId(), taskCtx.partitionId());
-            return new SolaceInputPartitionReader(solaceInputPartition, includeHeaders, properties, taskCtx, checkpoints, checkpointLocation);
+            return new SolaceInputPartitionReader(solaceInputPartition, includeHeaders, properties, taskCtx, checkpoints, checkpointLocation, collectionAccumulator);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
