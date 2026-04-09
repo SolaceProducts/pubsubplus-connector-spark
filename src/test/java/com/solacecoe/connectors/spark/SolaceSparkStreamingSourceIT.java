@@ -298,10 +298,10 @@ public class SolaceSparkStreamingSourceIT {
 
     @Test
     @Order(4)
-    void shouldValidateMetricsJson() throws Exception {
+    void Should_Validate_SolaceSourceMetrics() throws Exception {
         executeScript("");
-        assertResult(true,null);
-        String url = "http://localhost:4040/metrics/json";
+        assertResult(true,"solaceMetrics");
+        String url = String.format("http://%s:%s/metrics/json", sparkContainer.getHost(), sparkContainer.getMappedPort(4040));
         URL obj = new URL(url);
         HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
 
