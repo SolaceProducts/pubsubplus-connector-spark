@@ -15,6 +15,7 @@ permissions:
   issues: write
   checks: write
   statuses: write
+  packages: read        # required to pull ghcr.io image in fossa-guard composite action
 
 jobs:
   fossa_scan:
