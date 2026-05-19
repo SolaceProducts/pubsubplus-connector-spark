@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark;
 
 import com.solacecoe.connectors.spark.streaming.SolaceMicroBatch;
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import org.apache.spark.sql.connector.read.Batch;
 import org.apache.spark.sql.connector.read.Scan;
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream;
@@ -41,6 +42,15 @@ public class SolaceScan implements Scan {
 
     @Override
     public MicroBatchStream toMicroBatchStream(String checkpointLocation) {
-        return new SolaceMicroBatch(properties, checkpointLocation);
+        boolean isDatabricks = false;
+        boolean isUCVolume = false;
+        if(this.properties.getOrDefault(SolaceSparkStreamingProperties.RUNTIME_PLATFORM, SolaceSparkStreamingProperties.RUNTIME_PLATFORM_DEFAULT).equals(SolaceSparkStreamingProperties.RUNTIME_PLATFORM_DEFAULT)) {
+            isDatabricks = true;
+
+            if(checkpointLocation.contains(SolaceSparkStreamingProperties.DATABRICKS_VOLUME_PREFIX)) {
+                isUCVolume = true;
+            }
+        }
+        return new SolaceMicroBatch(properties, checkpointLocation, isDatabricks, isUCVolume);
     }
 }

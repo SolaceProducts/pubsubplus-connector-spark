@@ -161,6 +161,13 @@
             <artifactId>spark-sql_2.12</artifactId>
             <version>3.5.2</version>
         </dependency>
+        <!-- Source: https://mvnrepository.com/artifact/com.databricks/databricks-sdk-java -->
+        <dependency>
+            <groupId>com.databricks</groupId>
+            <artifactId>databricks-sdk-java</artifactId>
+            <version>0.108.0</version>
+            <scope>compile</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>

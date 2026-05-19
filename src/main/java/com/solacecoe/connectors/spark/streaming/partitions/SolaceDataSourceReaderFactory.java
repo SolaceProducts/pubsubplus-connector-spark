@@ -18,11 +18,15 @@ public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
 
     private static final Logger log = LogManager.getLogger(SolaceDataSourceReaderFactory.class);
     private final boolean includeHeaders;
+    private final boolean isDatabricks;
+    private final boolean isUCVolume;
     private final Map<String, String> properties;
     private final String checkpointLocation;
     private final CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
-    public SolaceDataSourceReaderFactory(boolean includeHeaders, Map<String, String> properties, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation) {
+    public SolaceDataSourceReaderFactory(boolean includeHeaders, boolean isDatabricks, boolean isUCVolume, Map<String, String> properties, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String checkpointLocation) {
         this.includeHeaders = includeHeaders;
+        this.isDatabricks = isDatabricks;
+        this.isUCVolume = isUCVolume;
         this.properties = properties;
         this.checkpoints = checkpoints;
         this.checkpointLocation = checkpointLocation;
@@ -37,7 +41,7 @@ public class SolaceDataSourceReaderFactory implements PartitionReaderFactory {
             String batchId = taskCtx.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
             SolaceInputPartition solaceInputPartition = (SolaceInputPartition) partition;
             log.info("SolaceSparkConnector - Creating reader for input partition reader factory with query id {}, batch id {}, task id {} and partition id {}", queryId, batchId, taskCtx.taskAttemptId(), taskCtx.partitionId());
-            return new SolaceInputPartitionReader(solaceInputPartition, includeHeaders, properties, taskCtx, checkpoints, checkpointLocation);
+            return new SolaceInputPartitionReader(solaceInputPartition, includeHeaders, isDatabricks, isUCVolume, properties, taskCtx, checkpoints, checkpointLocation);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
