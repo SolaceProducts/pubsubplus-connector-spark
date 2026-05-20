@@ -57,11 +57,14 @@ public class SolaceSparkStreamingProperties {
     public static final String OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT = "60";
     public static final String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT = "solace.oauth.client.token.fetch.timeout";
     public static final String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT = "100";
-    public static final String DATABRICKS_VOLUME_PREFIX = "/Volumes";
+    public static final String DATABRICKS_VOLUME_PREFIX = "Volumes";
     public static final String RUNTIME_PLATFORM = "RUNTIME_PLATFORM";
     public static final String RUNTIME_PLATFORM_DEFAULT = "DATABRICKS";
-    public static final String DATABRICKS_SCOPE = "DATABRICKS_SCOPE";
+    public static final String DATABRICKS_SECRET_SCOPE = "DATABRICKS_SECRET_SCOPE";
     public static final String DATABRICKS_CLIENT_ID = "DATABRICKS_CLIENT_ID";
+    public static final String DATABRICKS_HOST = "DATABRICKS_HOST";
+    public static final String DATABRICKS_SERVICE_PRINCIPAL_ID = "DATABRICKS_SERVICE_PRINCIPAL_ID";
+    public static final String DATABRICKS_ACCOUNT_ID = "DATABRICKS_ACCOUNT_ID";
     public static final String DATABRICKS_CLIENT_SECRET = "DATABRICKS_CLIENT_SECRET";
     public static final String DATABRICKS_CLIENT_SECRET_LIFETIME = "DATABRICKS_CLIENT_SECRET_LIFETIME";
     public static final String DATABRICKS_ROTATE_CLIENT_SECRET = "DATABRICKS_ROTATE_CLIENT_SECRET";

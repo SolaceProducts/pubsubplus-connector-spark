@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.solacecoe.connectors</groupId>
   <artifactId>pubsubplus-connector-spark</artifactId>
-  <version>3.1.7-SNAPSHOT</version>
+  <version>3.1.9</version>
   <name>pubsubplus-connector-spark</name>
   <description>Solace PubSub+ Connector for Spark streams data from Solace PubSub+ broker to Spark Data Sources.</description>
   <url>https://solace.com/integration-hub/apache-spark</url>
@@ -43,12 +43,12 @@
     <shared-remote-resources.build.main.processed.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/target/shared-remote-resources/build/main/processed</shared-remote-resources.build.main.processed.directory>
     <shared-remote-resources.process.asciidoctor-resources.skip>false</shared-remote-resources.process.asciidoctor-resources.skip>
     <release-notes.url>https://solace.com/integration-hub/apache-spark</release-notes.url>
-    <changelist>-SNAPSHOT</changelist>
+    <changelist></changelist>
     <maven.compiler.target>8</maven.compiler.target>
     <shared-remote-resources.build.main.raw.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/target/shared-remote-resources/build/main/raw</shared-remote-resources.build.main.raw.directory>
     <docs.build.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/target/generated-docs</docs.build.directory>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <revision>3.1.7</revision>
+    <revision>3.1.9</revision>
     <sha1></sha1>
     <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
     <generated-filtered-resource.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/target/generated-filtered-resources</generated-filtered-resource.directory>
@@ -71,6 +71,51 @@
         <groupId>com.google.protobuf</groupId>
         <artifactId>protobuf-java</artifactId>
         <version>3.25.5</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro</artifactId>
+        <version>1.11.5</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>32.0.0-jre</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec-http2</artifactId>
+        <version>4.1.132.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.zookeeper</groupId>
+        <artifactId>zookeeper</artifactId>
+        <version>3.8.6</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec-http</artifactId>
+        <version>4.1.132.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>io.airlift</groupId>
+        <artifactId>aircompressor</artifactId>
+        <version>2.0.3</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>3.18.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.ivy</groupId>
+        <artifactId>ivy</artifactId>
+        <version>2.5.2</version>
+      </dependency>
+      <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-core</artifactId>
+        <version>1.5.25</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -100,15 +145,21 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
+      <groupId>com.databricks</groupId>
+      <artifactId>databricks-sdk-java</artifactId>
+      <version>0.108.0</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-api</artifactId>
-      <version>2.25.2</version>
+      <version>2.25.3</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
-      <version>2.25.2</version>
+      <version>2.25.3</version>
       <scope>compile</scope>
     </dependency>
     <dependency>

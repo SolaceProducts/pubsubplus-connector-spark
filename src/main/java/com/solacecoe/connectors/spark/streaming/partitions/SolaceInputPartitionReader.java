@@ -3,9 +3,6 @@ package com.solacecoe.connectors.spark.streaming.partitions;
 import com.databricks.sdk.WorkspaceClient;
 import com.databricks.sdk.core.DatabricksConfig;
 import com.databricks.sdk.service.files.UploadRequest;
-import com.databricks.sdk.service.iam.CreateServicePrincipalRequest;
-import com.databricks.sdk.service.iam.ServicePrincipal;
-import com.databricks.sdk.service.oauth2.CreateServicePrincipalSecretRequest;
 import com.google.gson.Gson;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
@@ -31,7 +28,6 @@ import org.apache.spark.sql.connector.read.PartitionReader;
 import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
 import org.apache.spark.sql.execution.streaming.StreamExecution;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -94,8 +90,10 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         
         if(this.isDatabricks && this.isUCVolume) {
             DatabricksConfig databricksConfig = new DatabricksConfig();
-            databricksConfig.setClientId(this.properties.get("databricks_clientid"));
-            databricksConfig.setClientSecret(this.properties.get("databricks_clientsecret"));
+            databricksConfig.setHost(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_HOST));
+            databricksConfig.setAccountId(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_ACCOUNT_ID));
+            databricksConfig.setClientId(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID));
+            databricksConfig.setClientSecret(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET));
 
             workspaceClient = new WorkspaceClient(databricksConfig);
         }
