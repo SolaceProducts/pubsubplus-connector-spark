@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.solacecoe.connectors</groupId>
   <artifactId>pubsubplus-connector-spark</artifactId>
-  <version>3.1.9</version>
+  <version>3.1.8</version>
   <name>pubsubplus-connector-spark</name>
   <description>Solace PubSub+ Connector for Spark streams data from Solace PubSub+ broker to Spark Data Sources.</description>
   <url>https://solace.com/integration-hub/apache-spark</url>
@@ -48,7 +48,7 @@
     <shared-remote-resources.build.main.raw.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/target/shared-remote-resources/build/main/raw</shared-remote-resources.build.main.raw.directory>
     <docs.build.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/target/generated-docs</docs.build.directory>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <revision>3.1.9</revision>
+    <revision>3.1.8</revision>
     <sha1></sha1>
     <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
     <generated-filtered-resource.directory>/Users/sravanthotakura/Work/tech-coe/connectors/solace-dev/latest/spark-connector-v2/target/generated-filtered-resources</generated-filtered-resource.directory>

@@ -44,7 +44,7 @@ public class SolaceScan implements Scan {
     public MicroBatchStream toMicroBatchStream(String checkpointLocation) {
         boolean isDatabricks = false;
         boolean isUCVolume = false;
-        if(this.properties.getOrDefault(SolaceSparkStreamingProperties.RUNTIME_PLATFORM, SolaceSparkStreamingProperties.RUNTIME_PLATFORM_DEFAULT).equals(SolaceSparkStreamingProperties.RUNTIME_PLATFORM_DEFAULT)) {
+        if(this.properties.getOrDefault(SolaceSparkStreamingProperties.SPARK_RUNTIME_PLATFORM, SolaceSparkStreamingProperties.SPARK_RUNTIME_PLATFORM_DEFAULT).equals(SolaceSparkStreamingProperties.SPARK_RUNTIME_PLATFORM_DEFAULT)) {
             isDatabricks = true;
 
             if(checkpointLocation.contains(SolaceSparkStreamingProperties.DATABRICKS_VOLUME_PREFIX)) {

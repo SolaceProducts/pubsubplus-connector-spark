@@ -216,12 +216,6 @@ NOTE: This property will be void if replay strategy is enabled.
 | 1
 | Sets the number of consumers for configured queue. If more the one worker node is present, consumers are split across worker nodes for efficient processing. If set to 0 the connector will create consumers equal to number of worker nodes and will scale if more worker nodes are added.
 
-| createFlowsOnSameSession(deprecated)
-| boolean
-| true or false
-| false
-| If enabled consumer flows are enabled on same session. The number of consumer flows is equal to number of partitions configured. This is helpful when users want to optimize on number of connections created from Spark. By default, the connector creates a new connection for each consumer.
-
 | lvq.name
 | string
 | valid lvq name configured on solace broker
@@ -233,5 +227,57 @@ NOTE: This property will be void if replay strategy is enabled.
 | valid solace topic
 | empty
 | Set the name of the topic subscribed by LVQ on solace broker. Each worker node publishes checkpoint information to LVQ on this topic.
+
+| spark_runtime_platform
+| string
+| DATABRICKS, OTHER
+| DATABRICKS
+| This configuration is required when a Databricks Unity Catalog Volume is used as the checkpoint location. When the platform is set to DATABRICKS and the checkpoint path contains Volumes, the connector automatically identifies and applies the necessary Unity Catalog Volume configuration for checkpointing. For all other platforms, this check is not performed.
+
+| databricks_host
+| string
+| valid databricks host url
+| empty
+| The host URL of the Databricks workspace used for unified authentication when accessing Unity Catalog Volumes. This value is retrieved from the configured Databricks secret scope and is required when platform = DATABRICKS and the checkpoint location is a Unity Catalog Volume path.
+
+| databricks_secret_scope
+| string
+| valid databricks secret scope name
+| empty
+| Specifies the Databricks secret scope used to retrieve authentication credentials for accessing Unity Catalog Volumes as the checkpoint location.
+
+In Databricks, executor nodes do not have direct access to Unity Catalog Volumes and require unified authentication for secure access. When the checkpoint location is configured to use a Unity Catalog Volume, the connector uses the specified secret scope to retrieve the necessary credentials and establish authenticated access.
+
+| databricks_client_id
+| string
+| valid databricks client id
+| empty
+| The client ID of the Databricks service principal used for unified authentication when accessing Unity Catalog Volumes. This value is retrieved from the configured Databricks secret scope and is required when platform = DATABRICKS and the checkpoint location is a Unity Catalog Volume path.
+
+NOTE: Ensure, the service principal has access to configured Unity Catalog volume path.
+
+| databricks_client_secret
+| string
+| valid databricks client secret
+| empty
+| The client secret of the Databricks service principal used for unified authentication when accessing Unity Catalog Volumes. This value is retrieved from the configured Databricks secret scope and is required when platform = DATABRICKS and the checkpoint location is a Unity Catalog Volume path.
+
+NOTE: The client secret must be stored securely and never exposed in plain text. Always use Databricks secret scopes to manage this credential.
+
+IMPORTANT: Secret rotation is not managed by the connector. It is the responsibility of the consuming application or platform administrator to rotate the client secret in accordance with your organization security policy and update the corresponding value in the Databricks secret scope. The connector will automatically fetch the updated secret from the configured secret scope based on the interval specified in `databricks_client_secret_refresh_interval`. No restart is required.
+
+| databricks_client_secret_refresh_interval
+| long
+| valid refresh interval in minutes
+| 1440
+| Specifies how frequently the connector fetches the latest client secret from the configured Databricks secret scope. Since the connector cannot detect secret rotations automatically, this interval should be configured based on your organization's secret rotation frequency to ensure the connector always operates with valid credentials.
+
+Configuration guidance:
+
+Set this value slightly higher than your organization's secret rotation period. This ensures the connector fetches the new secret shortly after rotation occurs, regardless of when within the rotation period it happens.
+
+For example, if secrets are rotated every 60 minutes, setting the refresh interval to 65 minutes ensures the connector fetches the new secret within 65 minutes of rotation — before the old secret expires or access is revoked.
+
+WARNING: If the refresh interval is significantly longer than the secret rotation period, the connector may attempt to authenticate with an expired secret, causing access failures to Unity Catalog Volumes until the next refresh cycle.
 
 |===

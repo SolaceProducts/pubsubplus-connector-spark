@@ -3,10 +3,6 @@ package com.solacecoe.connectors.spark.streaming;
 import com.databricks.sdk.WorkspaceClient;
 import com.databricks.sdk.service.files.CreateDirectoryRequest;
 import com.databricks.sdk.service.files.DownloadResponse;
-import com.databricks.sdk.service.oauth2.CreateServicePrincipalSecretRequest;
-import com.databricks.sdk.service.oauth2.CreateServicePrincipalSecretResponse;
-import com.databricks.sdk.service.oauth2.DeleteServicePrincipalSecretRequest;
-import com.databricks.sdk.service.oauth2.SecretInfo;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
@@ -40,10 +36,8 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -57,7 +51,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private final boolean includeHeaders;
     private final boolean isDatabricks;
     private final boolean isUCVolume;
-    private boolean rotateSecret;
+//    private boolean rotateSecret;
 //    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
     private Map<String, String> properties = new HashMap<>();
     private final SolaceBroker solaceBroker;
@@ -67,11 +61,16 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private final String checkpointLocation;
     private final List<String> partitionIds = new ArrayList<>();
     private WorkspaceClient workspaceClient;
+    private ScheduledExecutorService databricksSecretRefresh;
+    private ScheduledFuture refreshTask;
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation, boolean isDatabricks, boolean isUCVolume) {
         this.properties = new HashMap<>(properties);;
 
         this.isDatabricks = isDatabricks;
         this.isUCVolume = isUCVolume;
+
+        SolaceUtils.validateCommonProperties(properties);
+
         log.info("SolaceSparkConnector - isDatabricks {} and isUCVolume {}", isDatabricks, isUCVolume);
 
         if(isDatabricks && isUCVolume) {
@@ -79,45 +78,48 @@ public class SolaceMicroBatch implements MicroBatchStream {
                 throw new RuntimeException("SolaceSparkConnector - DATABRICKS_HOST property is required when using Unity Catalog Volumes as checkpoint location");
             }
 
-            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_ACCOUNT_ID, "").isEmpty()) {
-                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_ACCOUNT_ID property is required when using Unity Catalog Volumes as checkpoint location");
-            }
+//            rotateSecret = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_ROTATE_CLIENT_SECRET, SolaceSparkStreamingProperties.DATABRICKS_ROTATE_CLIENT_SECRET_DEFAULT));
+
+//            if(rotateSecret) {
+//                if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID, "").isEmpty()) {
+//                    throw new RuntimeException("SolaceSparkConnector - DATABRICKS_SERVICE_PRINCIPAL_ID is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to true");
+//                }
+//
+//                if(Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_LIFETIME, "0")) <= 0) {
+//                    throw new RuntimeException("SolaceSparkConnector - Invalid DATABRICKS_CLIENT_SECRET_LIFETIME is configured and DATABRICKS_ROTATE_CLIENT_SECRET is set to true. Value should be greater than zero");
+//                }
+//
+//                String clientSecret = createSecret();
+//                this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
+//            } else {
 
             if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE, "").isEmpty()) {
                 throw new RuntimeException("SolaceSparkConnector - DATABRICKS_SECRET_SCOPE for ClientId and Client Secret is required when using Unity Catalog Volumes as checkpoint location");
             }
 
-            rotateSecret = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_ROTATE_CLIENT_SECRET, SolaceSparkStreamingProperties.DATABRICKS_ROTATE_CLIENT_SECRET_DEFAULT));
+            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID, "").isEmpty()) {
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_ID property is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to false");
+            }
+
+            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, "").isEmpty()) {
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_SECRET property is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to false");
+            }
+
             workspaceClient = new WorkspaceClient();
             this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_HOST, workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_HOST)));
-            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_ACCOUNT_ID, workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_ACCOUNT_ID)));
 
-            if(rotateSecret) {
-                if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID, "").isEmpty()) {
-                    throw new RuntimeException("SolaceSparkConnector - DATABRICKS_SERVICE_PRINCIPAL_ID is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to true");
-                }
+            this.databricksSecretRefresh = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "databricks-secret-refresh");
+                t.setDaemon(true);
+                return t;
+            });
 
-                if(Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_LIFETIME, "0")) <= 0) {
-                    throw new RuntimeException("SolaceSparkConnector - Invalid DATABRICKS_CLIENT_SECRET_LIFETIME is configured and DATABRICKS_ROTATE_CLIENT_SECRET is set to true. Value should be greater than zero");
-                }
+            String clientId = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID));
+            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID, clientId);
 
-                String clientSecret = createSecret();
-                this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
-            } else {
-                if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID, "").isEmpty()) {
-                    throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_ID property is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to false");
-                }
-
-                if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, "").isEmpty()) {
-                    throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_SECRET property is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to false");
-                }
-
-                String clientId = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID));
-                this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID, clientId);
-
-                String clientSecret = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET));
-                this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
-            }
+            refreshCredentials();
+            scheduleSecretRefresh();
+//            }
         }
 
         this.checkpointLocation = convertCheckpointURIToStringPath(checkpointLocation);
@@ -125,8 +127,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
 //        this.checkpoints = new CopyOnWriteArrayList<>();
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
-
-        SolaceUtils.validateCommonProperties(properties);
 
         if(!properties.containsKey(SolaceSparkStreamingProperties.QUEUE) || properties.get(SolaceSparkStreamingProperties.QUEUE) == null || properties.get(SolaceSparkStreamingProperties.QUEUE).isEmpty()) {
             throw new SolaceInvalidPropertyException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
@@ -260,10 +260,10 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if(currentCheckpoint != null && currentCheckpoint.isEmpty()) {
             currentCheckpoint = this.getCheckpoint();
         }
-        if(rotateSecret) {
-            String clientSecret = createSecret();
-            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
-        }
+//        if(rotateSecret) {
+//            String clientSecret = createSecret();
+//            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
+//        }
         return new SolaceDataSourceReaderFactory(this.includeHeaders, isDatabricks, isUCVolume, this.properties, currentCheckpoint, this.checkpointLocation);
     }
 
@@ -338,7 +338,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         for(String partitionId: partitionIds) {
             if(this.isDatabricks && isUCVolume) {
                 try {
-                    DownloadResponse downloadResponse = workspaceClient.files().download(this.checkpointLocation + "/random.txt");
+                    DownloadResponse downloadResponse = workspaceClient.files().download(this.checkpointLocation + "/" + partitionId + ".txt");
                     try (Stream<String> lines = new BufferedReader(
                             new InputStreamReader(downloadResponse.getContents())
                     ).lines()) {
@@ -405,6 +405,18 @@ public class SolaceMicroBatch implements MicroBatchStream {
     public void stop() {
         log.info("SolaceSparkConnector - Closing Spark Connector");
         checkException();
+        if (refreshTask != null) {
+            refreshTask.cancel(false); // don't interrupt ongoing refresh
+        }
+        this.databricksSecretRefresh.shutdown();
+        try {
+            if (!this.databricksSecretRefresh.awaitTermination(5, TimeUnit.SECONDS)) {
+                this.databricksSecretRefresh.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            this.databricksSecretRefresh.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         this.solaceBroker.close();
     }
 
@@ -451,48 +463,64 @@ public class SolaceMicroBatch implements MicroBatchStream {
         return checkpointLocation;
     }
 
-    private String createSecret() {
-        String secret = "";
-        Iterable<SecretInfo> secrets = workspaceClient.servicePrincipalSecretsProxy().list(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID));
-        if(secrets.iterator().hasNext()) {
-            for (SecretInfo s : secrets) {
-                log.info("SolaceSparkConnector - Secret ID: {}", s.getId());
-                log.info("SolaceSparkConnector - Status: {}", s.getStatus());
-                log.info("SolaceSparkConnector - Expires: {}", s.getExpireTime());
+//    private String createSecret() {
+//        String secret = "";
+//        String servicePrincipalId = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID));;
+//        Iterable<SecretInfo> secrets = workspaceClient.servicePrincipalSecretsProxy().list(servicePrincipalId);
+//        if(secrets.iterator().hasNext()) {
+//            for (SecretInfo s : secrets) {
+//                log.info("SolaceSparkConnector - Secret ID: {}", s.getId());
+//                log.info("SolaceSparkConnector - Status: {}", s.getStatus());
+//                log.info("SolaceSparkConnector - Expires: {}", s.getExpireTime());
+//
+//                Instant expiry = Instant.parse(s.getExpireTime());
+//
+//                if (expiry.isBefore(Instant.now().plus(7, ChronoUnit.DAYS))) {
+//                    log.info(
+//                            "SolaceSparkConnector - Service principal {} secret is expiring within 7 days (expiry: {}). Initiating secret rotation.",
+//                            servicePrincipalId,
+//                            expiry
+//                    );
+//                    secret = getSecret(servicePrincipalId);
+//
+//                    DeleteServicePrincipalSecretRequest deleteServicePrincipalSecretRequest = new DeleteServicePrincipalSecretRequest();
+//                    deleteServicePrincipalSecretRequest.setServicePrincipalId(servicePrincipalId);
+//                    deleteServicePrincipalSecretRequest.setSecretId(s.getId());
+//                    workspaceClient.servicePrincipalSecretsProxy().delete(deleteServicePrincipalSecretRequest);
+//                    log.info(
+//                            "SolaceSparkConnector - New Secret created successfully for service principal {} and old secret {} is deleted successfully",
+//                            servicePrincipalId,
+//                            s.getId());
+//                }
+//            }
+//        } else {
+//            secret = getSecret(servicePrincipalId);
+//        }
+//
+//        return secret;
+//    }
 
-                Instant expiry = Instant.parse(s.getExpireTime());
+//    private String getSecret(String servicePrincipalId) {
+//        CreateServicePrincipalSecretRequest createServicePrincipalSecretRequest = new CreateServicePrincipalSecretRequest();
+//        createServicePrincipalSecretRequest.setServicePrincipalId(servicePrincipalId);
+//        createServicePrincipalSecretRequest.setLifetime(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_LIFETIME));
+//        CreateServicePrincipalSecretResponse createServicePrincipalSecretResponse = workspaceClient.servicePrincipalSecretsProxy().create(createServicePrincipalSecretRequest);
+//        return createServicePrincipalSecretResponse.getSecret();
+//    }
 
-                if (expiry.isBefore(Instant.now().plus(7, ChronoUnit.DAYS))) {
-                    log.info(
-                            "SolaceSparkConnector - Service principal {} secret is expiring within 7 days (expiry: {}). Initiating secret rotation.",
-                            this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID),
-                            expiry
-                    );
-                    secret = getSecret();
-
-                    DeleteServicePrincipalSecretRequest deleteServicePrincipalSecretRequest = new DeleteServicePrincipalSecretRequest();
-                    deleteServicePrincipalSecretRequest.setServicePrincipalId(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID));
-                    deleteServicePrincipalSecretRequest.setSecretId(s.getId());
-                    workspaceClient.servicePrincipalSecretsProxy().delete(deleteServicePrincipalSecretRequest);
-                    log.info(
-                            "SolaceSparkConnector - New Secret created successfully for service principal {} and old secret {} is deleted successfully",
-                            this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID),
-                            s.getId());
-                }
-            }
-        } else {
-            secret = getSecret();
-        }
-
-        return secret;
+    private void scheduleSecretRefresh() {
+        // Schedule periodic refresh
+        refreshTask = this.databricksSecretRefresh.scheduleAtFixedRate(
+                this::refreshCredentials,
+                Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL, "1440")),
+                Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL, "1440")),
+                TimeUnit.MINUTES
+        );
     }
 
-    private String getSecret() {
-        CreateServicePrincipalSecretRequest createServicePrincipalSecretRequest = new CreateServicePrincipalSecretRequest();
-        createServicePrincipalSecretRequest.setServicePrincipalId(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID));
-        createServicePrincipalSecretRequest.setLifetime(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_LIFETIME));
-        CreateServicePrincipalSecretResponse createServicePrincipalSecretResponse = workspaceClient.servicePrincipalSecretsProxy().create(createServicePrincipalSecretRequest);
-        return createServicePrincipalSecretResponse.getSecret();
+    private void refreshCredentials() {
+        String clientSecret = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET));
+        this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
     }
 
 }

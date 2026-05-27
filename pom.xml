@@ -166,7 +166,6 @@
             <groupId>com.databricks</groupId>
             <artifactId>databricks-sdk-java</artifactId>
             <version>0.108.0</version>
-            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
