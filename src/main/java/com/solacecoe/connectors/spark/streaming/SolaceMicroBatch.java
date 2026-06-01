@@ -62,7 +62,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private final List<String> partitionIds = new ArrayList<>();
     private WorkspaceClient workspaceClient;
     private ScheduledExecutorService databricksSecretRefresh;
-    private ScheduledFuture refreshTask;
+    private ScheduledFuture<?> refreshTask;
     public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation, boolean isDatabricks, boolean isUCVolume) {
         this.properties = new HashMap<>(properties);;
 
