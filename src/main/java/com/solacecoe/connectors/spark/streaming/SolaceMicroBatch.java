@@ -74,6 +74,10 @@ public class SolaceMicroBatch implements MicroBatchStream {
         log.info("SolaceSparkConnector - isDatabricks {} and isUCVolume {}", isDatabricks, isUCVolume);
 
         if(isDatabricks && isUCVolume) {
+            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE, "").isEmpty()) {
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_SECRET_SCOPE for Databricks Host, ClientId and Client Secret is required when using Unity Catalog Volumes as checkpoint location");
+            }
+
             if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_HOST, "").isEmpty()) {
                 throw new RuntimeException("SolaceSparkConnector - DATABRICKS_HOST property is required when using Unity Catalog Volumes as checkpoint location");
             }
@@ -93,16 +97,12 @@ public class SolaceMicroBatch implements MicroBatchStream {
 //                this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
 //            } else {
 
-            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE, "").isEmpty()) {
-                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_SECRET_SCOPE for ClientId and Client Secret is required when using Unity Catalog Volumes as checkpoint location");
-            }
-
             if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID, "").isEmpty()) {
-                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_ID property is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to false");
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_ID is required when using Unity Catalog Volumes as checkpoint location");
             }
 
             if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, "").isEmpty()) {
-                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_SECRET property is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to false");
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_SECRET is required when using Unity Catalog Volumes as checkpoint location");
             }
 
             workspaceClient = new WorkspaceClient();

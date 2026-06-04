@@ -18,6 +18,12 @@ public class SolaceSparkStreamingProperties {
     public static final String PARTITIONS_DEFAULT = "1";
     public static final String OFFSET_INDICATOR = "offsetIndicator";
     public static final String OFFSET_INDICATOR_DEFAULT = "MESSAGE_ID";
+    public static final String PUBLISH_ACK_TIMEOUT = "publishAckTimeout";
+    public static final String PUBLISH_ACK_TIMEOUT_DEFAULT = "5000";
+    public static final String PUBLISH_ACK_TIMEOUT_FAIL_ON_ERROR = "publishAckTimeoutFailOnError";
+    public static final String PUBLISH_ACK_TIMEOUT_FAIL_ON_ERROR_DEFAULT = "true";
+    public static final String IGNORE_CHECKPOINT_MESSAGE_ID_COMPARISON_ERROR = "ignoreCheckpointMessageIdComparisonError";
+    public static final String IGNORE_CHECKPOINT_MESSAGE_ID_COMPARISON_ERROR_DEFAULT = "false";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_NAME = "lvq.name";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_TOPIC = "lvq.topic";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME = "solace.spark.connector.state";

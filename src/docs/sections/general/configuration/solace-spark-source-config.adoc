@@ -228,6 +228,16 @@ NOTE: This property will be void if replay strategy is enabled.
 | empty
 | Set the name of the topic subscribed by LVQ on solace broker. Each worker node publishes checkpoint information to LVQ on this topic.
 
+| ignoreCheckpointMessageIdComparisonError
+| boolean
+| true or false
+| false
+| Specifies whether the connector should ignore errors that occur when comparing an incoming message's Replication Group Message ID against the message ID stored in the checkpoint. On restart, the connector uses the checkpointed message ID to detect and skip duplicate messages. If the incoming message ID and the checkpointed message ID originate from different replication groups, they are not comparable and a JCSMPNotComparableException is thrown.
+
+When set to `false`, the connector throws a SolaceReplicationGroupMessageIdNotComparableException and stops processing.
+
+When set to `true`, the connector logs a warning, skips the comparison, and continues processing — the message is treated as a new message and will not be deduplicated.
+
 | spark_runtime_platform
 | string
 | DATABRICKS, OTHER

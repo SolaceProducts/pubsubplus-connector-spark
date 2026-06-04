@@ -6,6 +6,7 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingP
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAbortException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAckInterruptedException;
+import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAckTimeoutException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceAbortMessage;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolacePublishStatus;
@@ -28,7 +29,7 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
@@ -45,6 +46,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     private final boolean hasDefaultTopic;
     private final boolean hasDefaultMessageId;
     private int publishedMessages = 0;
+    private CompletableFuture<Void> allAcksReceived = new CompletableFuture<>();
     public SolaceDataWriter(StructType schema, Map<String, String> properties) {
         this.schema = schema;
         this.properties = properties;
@@ -130,15 +132,42 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
     @Override
     public WriterCommitMessage commit() {
         checkForException();
-        if(this.commitMessages.size() < publishedMessages) {
-            try {
-                log.info("SolaceSparkConnector - Expected acknowledgements {}, Actual acknowledgements {}", this.properties.getOrDefault(SolaceSparkStreamingProperties.BATCH_SIZE, SolaceSparkStreamingProperties.BATCH_SIZE_DEFAULT), this.commitMessages.size());
-                log.info("SolaceSparkConnector - Sleeping for 3000ms to check for pending acknowledgments");
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new SolacePublishAckInterruptedException("SolaceSparkConnector - Interrupted while waiting for pending acknowledgments", e);
+        long ackTimeout = Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.PUBLISH_ACK_TIMEOUT, SolaceSparkStreamingProperties.PUBLISH_ACK_TIMEOUT_DEFAULT));
+        boolean failOnTimeout = Boolean.parseBoolean(this.properties.getOrDefault(
+                SolaceSparkStreamingProperties.PUBLISH_ACK_TIMEOUT_FAIL_ON_ERROR,
+                SolaceSparkStreamingProperties.PUBLISH_ACK_TIMEOUT_FAIL_ON_ERROR_DEFAULT));
+        try {
+            log.info("SolaceSparkConnector - Waiting for acknowledgements. " +
+                            "Expected: {}, Received: {}",
+                    publishedMessages, this.commitMessages.size());
+
+            // Block until all acks received or timeout — no polling, no loop
+            allAcksReceived.get(ackTimeout, TimeUnit.MILLISECONDS);
+
+            log.info("SolaceSparkConnector - All acknowledgements received. " +
+                            "Expected: {}, Received: {}",
+                    publishedMessages, this.commitMessages.size());
+
+        } catch (TimeoutException e) {
+            if (failOnTimeout) {
+                // Fail the batch — throws exception and stops processing
+                throw new SolacePublishAckTimeoutException(
+                        String.format("SolaceSparkConnector - Timed out after %dms waiting for " +
+                                        "acknowledgements. Expected: %d, Received: %d",
+                                ackTimeout, publishedMessages, this.commitMessages.size()), e);
+            } else {
+                // Log and continue — does not stop processing
+                log.warn("SolaceSparkConnector - Timed out after {}ms waiting for acknowledgements. " +
+                                "Expected: {}, Received: {}. Continuing with next batch.",
+                        ackTimeout, publishedMessages, this.commitMessages.size());
             }
+        } catch (ExecutionException e) {
+            throw new SolacePublishAckInterruptedException(
+                    "SolaceSparkConnector - Error while waiting for acknowledgements", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new SolacePublishAckInterruptedException(
+                    "SolaceSparkConnector - Interrupted while waiting for acknowledgements", e);
         }
         checkForException();
         return new SolaceDataWriterCommitMessage(SolacePublishStatus.SUCCESS, "");
@@ -201,6 +230,12 @@ public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
                 log.info("SolaceSparkConnector - Message published successfully to Solace on topic {}", topic);
                 SolaceDataWriterCommitMessage solaceWriterCommitMessage = new SolaceDataWriterCommitMessage(SolacePublishStatus.SUCCESS, "");
                 commitMessages.put(o.toString(), solaceWriterCommitMessage);
+
+                // Complete the future when all expected acks have arrived
+                if (commitMessages.size() >= publishedMessages) {
+                    log.info("SolaceSparkConnector - All {} acknowledgements received", publishedMessages);
+                    allAcksReceived.complete(null);
+                }
             }
 
             @Override

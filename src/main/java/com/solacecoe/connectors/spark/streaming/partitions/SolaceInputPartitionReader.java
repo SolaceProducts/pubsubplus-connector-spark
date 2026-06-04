@@ -454,7 +454,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
         if (ackLastProcessedMessages) {
             log.info("SolaceSparkConnector - Ack last processed messages is set to true, connector will match incoming messages with checkpoint and auto acknowledge");
 //            List<String> messageIDs = Arrays.stream(this.lastKnownOffset.split(",")).collect(Collectors.toList());
-            eventListener = new EventListener(inputPartitionId, this.checkpoints, this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT));
+            eventListener = new EventListener(inputPartitionId, this.checkpoints,
+                    this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT),
+                    Boolean.parseBoolean(this.properties.getOrDefault(SolaceSparkStreamingProperties.IGNORE_CHECKPOINT_MESSAGE_ID_COMPARISON_ERROR, SolaceSparkStreamingProperties.IGNORE_CHECKPOINT_MESSAGE_ID_COMPARISON_ERROR_DEFAULT)));
         }
         // Initialize connection to Solace Broker
         solaceBroker.addReceiver(eventListener);

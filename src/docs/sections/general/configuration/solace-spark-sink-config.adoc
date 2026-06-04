@@ -165,4 +165,18 @@ solace.apiProperties.pub_ack_window_size=50
 | false
 | Set this value to true if message headers in the row need to be added to published message.
 
+| publishAckTimeout
+| long
+| timeout in milliseconds
+| 5000
+| Specifies the maximum time the connector waits for publish acknowledgements from the Solace broker after sending a batch of messages. If all acknowledgements are received before the timeout expires, the connector proceeds immediately without waiting for the full duration. If the timeout expires before all acknowledgements are received, the connector throws an exception if `publishAckTimeoutFailOnError` is set to true or logs a warning and proceeds to next batch.
+
+This value should be tuned based on the network latency between the connector and the Solace broker, the batch size configured via batch-size, and the expected broker response time under load.
+
+| publishAckTimeoutFailOnError
+| boolean
+| true or false
+| true
+| Specifies whether the connector should fail and stop processing when a publish acknowledgement timeout occurs. When set to false, the connector logs a warning and continues processing the next batch. When set to true, the connector throws a `SolacePublishAckTimeoutException` and stops processing, allowing Spark to handle the failure according to its configured retry or error handling policy.
+
 |===
