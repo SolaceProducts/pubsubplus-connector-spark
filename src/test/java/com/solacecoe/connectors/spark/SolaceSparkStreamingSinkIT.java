@@ -140,7 +140,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @AfterEach
-    public void afterEach() throws com.solace.semp.v2.action.ApiException, JCSMPException {
+    public void afterEach() throws com.solace.semp.v2.action.ApiException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
         sparkContainer.stop();
         sparkContainer.start();

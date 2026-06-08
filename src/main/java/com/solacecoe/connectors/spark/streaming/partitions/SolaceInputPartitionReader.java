@@ -179,6 +179,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
 
     @Override
     public InternalRow get() {
+        checkException();
         try {
             SolaceRecord solaceRecord = SolaceRecord.getMapper(this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT)).map(solaceMessage.bytesXMLMessage);
             long timestamp = solaceRecord.getSenderTimestamp();
@@ -332,7 +333,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
     @Override
     public void close() {
         log.info("SolaceSparkConnector - Input partition reader with ID {} with task {} is closed", this.solaceInputPartition.getId(), this.uniqueId);
-        checkException();
+        if(!TaskContext.get().isCompleted()) {
+            checkException();
+        }
     }
 
     private void logShutdownMessage(TaskContext context) {
@@ -443,7 +446,7 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
             solaceBroker.initProducer();
             createReceiver(inputPartitionId, ackLastProcessedMessages);
         } catch (Exception e) {
-            log.error("SolaceSparkConnector - Exception Initializing Solace Broker", this.solaceBroker.getException() != null ? this.solaceBroker.getException() : e);
+            log.error("SolaceSparkConnector - Exception when creating Solace consumer", this.solaceBroker.getException() != null ? this.solaceBroker.getException() : e);
             solaceBroker.close();
             throw new SolaceConsumerException(e);
         }
@@ -458,16 +461,18 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow>,
                     this.properties.getOrDefault(SolaceSparkStreamingProperties.OFFSET_INDICATOR, SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT),
                     Boolean.parseBoolean(this.properties.getOrDefault(SolaceSparkStreamingProperties.IGNORE_CHECKPOINT_MESSAGE_ID_COMPARISON_ERROR, SolaceSparkStreamingProperties.IGNORE_CHECKPOINT_MESSAGE_ID_COMPARISON_ERROR_DEFAULT)));
         }
+        eventListener.setBrokerInstance(solaceBroker);
         // Initialize connection to Solace Broker
         solaceBroker.addReceiver(eventListener);
         SolaceConnectionManager.addConnection(inputPartitionId, solaceBroker);
     }
 
     private void checkException() {
-        if (this.solaceBroker != null && this.solaceBroker.isException()) {
+        if (this.solaceBroker != null && this.solaceBroker.isException() && this.solaceBroker.getException() != null) {
             log.error("SolaceSparkConnector - Exception encountered, stopping input partition {}", this.solaceInputPartition.getId(), this.solaceBroker.getException());
+            Exception exception = this.solaceBroker.getException();
             this.solaceBroker.close();
-            throw new SolaceSessionException(this.solaceBroker.getException());
+            throw new SolaceSessionException(exception.getMessage(), this.solaceBroker.getException());
         }
     }
 }

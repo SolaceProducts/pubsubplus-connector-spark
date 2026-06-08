@@ -3,7 +3,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import current_timestamp, unix_timestamp
 
 # Initialize Spark session
-spark = SparkSession.builder.appName("SolaceSparkStreamingIntegrationTest").getOrCreate()
+spark = SparkSession.builder.appName("SolaceSparkStreamingIntegrationTest").config("spark.task.maxFailures", "1").config("spark.streaming.stopGracefullyOnShutdown", "true").config("spark.sql.streaming.stopTimeout", "10000").getOrCreate()
 
 # Define logger
 logger = spark.sparkContext._jvm.org.apache.log4j.LogManager.getLogger(__name__)

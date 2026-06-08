@@ -352,11 +352,11 @@ public class SolaceMicroBatch implements MicroBatchStream {
                         throw e;
                     }
                 }
-            }
-            Path path = Paths.get(this.checkpointLocation + "/" + partitionId + ".txt");
-            if(Files.exists(path)) {
-                try (Stream<String> lines = Files.lines(path)) {
-                    offsetToCommit = updateOffset(lines, offsetToCommit);
+            } else {
+                Path path = Paths.get(this.checkpointLocation + "/" + partitionId + ".txt");
+                if (Files.exists(path)) {
+                    try (Stream<String> lines = Files.lines(path)) {
+                        offsetToCommit = updateOffset(lines, offsetToCommit);
 //                    for(String line: lines.collect(Collectors.toList())) {
 //                        if (offsetToCommit.isEmpty()) {
 //                            offsetToCommit = new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
@@ -367,9 +367,10 @@ public class SolaceMicroBatch implements MicroBatchStream {
 //                            offsetToCommit = offsetToCommit.stream().distinct().collect(Collectors.toCollection(CopyOnWriteArrayList::new));
 //                        }
 //                    };
-                } catch (IOException e) {
-                    log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
-                    throw new RuntimeException(e);
+                    } catch (IOException e) {
+                        log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
+                        throw new RuntimeException(e);
+                    }
                 }
             }
         }
@@ -408,14 +409,16 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if (refreshTask != null) {
             refreshTask.cancel(false); // don't interrupt ongoing refresh
         }
-        this.databricksSecretRefresh.shutdown();
-        try {
-            if (!this.databricksSecretRefresh.awaitTermination(5, TimeUnit.SECONDS)) {
+        if(this.databricksSecretRefresh != null && !this.databricksSecretRefresh.isShutdown()) {
+            this.databricksSecretRefresh.shutdown();
+            try {
+                if (!this.databricksSecretRefresh.awaitTermination(5, TimeUnit.SECONDS)) {
+                    this.databricksSecretRefresh.shutdownNow();
+                }
+            } catch (InterruptedException e) {
                 this.databricksSecretRefresh.shutdownNow();
+                Thread.currentThread().interrupt();
             }
-        } catch (InterruptedException e) {
-            this.databricksSecretRefresh.shutdownNow();
-            Thread.currentThread().interrupt();
         }
         this.solaceBroker.close();
     }

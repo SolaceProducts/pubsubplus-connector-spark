@@ -11,12 +11,17 @@ import com.solacecoe.connectors.spark.containers.SparkContainer;
 import com.solacecoe.connectors.spark.containers.SparkWorkerContainer;
 import com.solacesystems.jcsmp.*;
 import org.junit.jupiter.api.*;
+import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.solace.Service;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -35,9 +40,18 @@ public class SolaceSparkStreamingSourceIT {
     @BeforeAll
     public void beforeAll() throws ApiException, IOException {
         sparkContainer = new SparkContainer(false, false);
+        Path tempCheckpoint = Paths.get(System.getProperty("java.io.tmpdir"), "checkpoint");
+        Files.createDirectories(tempCheckpoint);
+
+        tempCheckpoint.toFile().setWritable(true, false);
+        tempCheckpoint.toFile().setReadable(true, false);
+        tempCheckpoint.toFile().setExecutable(true, false);
+
+        sparkContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
         sparkContainer.start();
 
         sparkWorkerContainer = new SparkWorkerContainer(false, false);
+        sparkWorkerContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
         sparkWorkerContainer.dependsOn(sparkContainer);
         sparkWorkerContainer.start();
 
@@ -96,67 +110,59 @@ public class SolaceSparkStreamingSourceIT {
     @BeforeEach
     public void beforeEach() throws JCSMPException {
         if(solaceTestContainer.isRunning()) {
-            SolaceSession session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
-            XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-                    // not required in test
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-                    // not required in test
-                }
-            });
-
-            for (int i = 0; i < 100; i++) {
-                TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-                if(i <= 90) {
-                    textMessage.setText("Hello Spark!");
-                } else if(i <= 95) {
-                    textMessage.writeAttachment("Hello Spark!".getBytes(StandardCharsets.UTF_8));
-                } else {
-                    textMessage.writeBytes("Hello Spark!".getBytes(StandardCharsets.UTF_8));
-                }
-                textMessage.setPriority(1);
-                textMessage.setDMQEligible(true);
-                SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
-                sdtMap.putString("custom-string", "custom-value");
-                sdtMap.putBoolean("custom-boolean", true);
-                sdtMap.putString("null-custom-property", null);
-                sdtMap.putString("empty-custom-property", "");
-                sdtMap.putInteger("custom-sequence", i);
-                textMessage.setProperties(sdtMap);
-                Topic topic = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
-                messageProducer.send(textMessage, topic);
-            }
-
-            messageProducer.close();
-            session.getSession().closeSession();
+            publishMessages();
         } else {
             throw new RuntimeException("Solace Container is not started yet");
         }
     }
 
+    private void publishMessages() throws JCSMPException {
+        SolaceSession session = new SolaceSession(solaceTestContainer.getOrigin(Service.SMF), solaceTestContainer.getVpn(), solaceTestContainer.getUsername(), solaceTestContainer.getPassword());
+        XMLMessageProducer messageProducer = session.getSession().getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+            @Override
+            public void responseReceivedEx(Object o) {
+                // not required in test
+            }
+
+            @Override
+            public void handleErrorEx(Object o, JCSMPException e, long l) {
+                // not required in test
+            }
+        });
+
+        for (int i = 0; i < 100; i++) {
+            TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+            if(i <= 90) {
+                textMessage.setText("Hello Spark!");
+            } else if(i <= 95) {
+                textMessage.writeAttachment("Hello Spark!".getBytes(StandardCharsets.UTF_8));
+            } else {
+                textMessage.writeBytes("Hello Spark!".getBytes(StandardCharsets.UTF_8));
+            }
+            textMessage.setPriority(1);
+            textMessage.setDMQEligible(true);
+            SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
+            sdtMap.putString("custom-string", "custom-value");
+            sdtMap.putBoolean("custom-boolean", true);
+            sdtMap.putString("null-custom-property", null);
+            sdtMap.putString("empty-custom-property", "");
+            sdtMap.putInteger("custom-sequence", i);
+            textMessage.setProperties(sdtMap);
+            Topic topic = JCSMPFactory.onlyInstance().createTopic("solace/spark/streaming");
+            messageProducer.send(textMessage, topic);
+        }
+
+        messageProducer.close();
+        session.getSession().closeSession();
+    }
+
     @AfterEach
-    public void afterEach() throws IOException, InterruptedException {
-        sparkContainer.execInContainer(
-                "bash",
-                "-c",
-                "pkill -f spark-submit || true"
-        );
-
-        sparkContainer.execInContainer(
-                "bash",
-                "-c",
-                "rm -rf /opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint"
-        );
-
-        sparkContainer.execInContainer(
-                "bash",
-                "-c",
-                "rm -f /tmp/spark.log"
-        );
+    public void afterEach() throws com.solace.semp.v2.action.ApiException {
+        sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
+        sparkContainer.stop();
+        sparkContainer.start();
+        sparkWorkerContainer.stop();
+        sparkWorkerContainer.start();
     }
 
     private void executeScript(String envVars) throws IOException, InterruptedException {
@@ -265,8 +271,6 @@ public class SolaceSparkStreamingSourceIT {
         assertResult(true,"Write Payload is: Hello Spark!");
     }
 
-
-
     @Test
     @Order(3)
     void Should_CreateMultipleConsumersOnDifferentSessions_And_ProcessData() throws InterruptedException, com.solace.semp.v2.monitor.ApiException, IOException {
@@ -288,6 +292,161 @@ public class SolaceSparkStreamingSourceIT {
             System.out.println("Total " + msgVpnQueueTxFlowResponse.getData().size() + " consumers with different client names");
         }
 //        streamingQuery.stop();
+    }
+
+    @Test
+    @Order(4)
+    void Should_Not_Fail_If_CheckpointMessageId_Comparison_Fails() throws InterruptedException, com.solace.semp.v2.monitor.ApiException, IOException, JCSMPException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_partitions","1");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString());
+        assertResult(true,null);
+
+        sparkContainer.stop();
+        sparkWorkerContainer.stop();
+
+        publishMessages();
+
+        // Step 3 — Simulate replication group change by directly modifying
+        // the checkpoint with an ID from a different replication group
+        try {
+            injectDifferentReplicationGroupIdIntoCheckpoint();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        sparkContainer.start();
+        sparkWorkerContainer.start();
+
+        StringBuilder envVars1 = new StringBuilder();
+        env.put("solace_ackLastProcessedMessages", "true");
+        env.put("solace_ignoreCheckpointMessageIdComparisonError", "true");
+        env.forEach((k,v) -> envVars1.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars1.toString());
+
+        assertResult(true, null);
+
+    }
+
+    @Test
+    @Order(5)
+    void Should_Fail_If_CheckpointMessageId_Comparison_Fails() throws InterruptedException, com.solace.semp.v2.monitor.ApiException, IOException, JCSMPException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_partitions","1");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString());
+        assertResult(true,null);
+
+        sparkContainer.stop();
+        sparkWorkerContainer.stop();
+
+        publishMessages();
+
+        // Step 3 — Simulate replication group change by directly modifying
+        // the checkpoint with an ID from a different replication group
+        try {
+            injectDifferentReplicationGroupIdIntoCheckpoint();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        sparkContainer.start();
+        sparkWorkerContainer.start();
+
+        StringBuilder envVars1 = new StringBuilder();
+        env.put("solace_ackLastProcessedMessages", "true");
+        env.forEach((k,v) -> envVars1.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars1.toString());
+
+        assertResult(false, "Replication Group Message Id are not comparable. Messages must be published to the same broker or HA pair for their Replication Group Message Id to be comparable");
+
+    }
+
+    @Test
+    @Order(6)
+    void Should_Consider_Checkpoint_As_NativeFilePath_If_Databricks_Properties_Is_Not_Present_In_SparkConfig() throws InterruptedException, com.solace.semp.v2.monitor.ApiException, IOException, JCSMPException {
+        Map<String,String> env = new HashMap<String, String>(){
+            {
+                put("solace_partitions","1");
+            }
+        };
+
+        StringBuilder envVars = new StringBuilder();
+        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
+
+        executeScript(envVars.toString());
+        assertResult(true,"SolaceSparkConnector - SPARK_RUNTIME_PLATFORM is set to DATABRICKS but not able to find Databricks Cluster Id in default Spark Configuration. The configured checkpoint location will be considered as native file path.");
+    }
+
+    private void injectDifferentReplicationGroupIdIntoCheckpoint() throws Exception {
+        String checkpointDir = System.getProperty("java.io.tmpdir") + "/checkpoint";
+
+        File offsetsDir = new File(checkpointDir + "/offsets");
+
+        if (!offsetsDir.exists() || offsetsDir.listFiles() == null) {
+            throw new IllegalStateException(
+                    "Checkpoint offsets directory not found: " + offsetsDir.getAbsolutePath());
+        }
+
+        File latestOffsetFile = Arrays.stream(offsetsDir.listFiles())
+                .filter(File::isFile)
+                .filter(f -> !f.getName().endsWith(".crc") && !f.getName().endsWith(".tmp"))
+                .max(Comparator.comparingLong(f -> Long.parseLong(f.getName())))
+                .orElseThrow(() -> new IllegalStateException(
+                        "No offset files found in: " + offsetsDir.getAbsolutePath()));
+
+        String checkpointContent = new String(
+                Files.readAllBytes(latestOffsetFile.toPath()),
+                StandardCharsets.UTF_8);
+
+        if (checkpointContent.isEmpty()) {
+            throw new IllegalStateException(
+                    "Checkpoint file is empty: " + latestOffsetFile.getAbsolutePath());
+        }
+
+        // Replace only the replication group identifier portion (middle segment)
+        // Format: rmid1:<replication-group-id>-<sequence>
+        // Example: rmid1:485a1-e2fcad4695f-00000000-007b4fdb
+        //                 ^^^^^^^^^^^^^^^^^  ← this is the replication group identifier
+        //                                    changing this simulates a different group
+        // Use a different but valid hex value to keep the ID parseable by Solace
+        String modifiedContent = checkpointContent.replaceAll(
+                "rmid1:[a-f0-9]+-[a-f0-9]+-",  // match rmid1:<group-id>-
+                "rmid1:99999-aabbccddeef-"      // replace with different group identifier
+        );
+
+        if (modifiedContent.equals(checkpointContent)) {
+            throw new IllegalStateException(
+                    "Could not find replication group message ID pattern in checkpoint. " +
+                            "Ensure first batch completed and checkpoint contains messageIDs.");
+        }
+
+        // Write modified content back
+        Files.write(latestOffsetFile.toPath(),
+                modifiedContent.getBytes(StandardCharsets.UTF_8));
+
+        // Verify
+        String verifiedContent = new String(
+                Files.readAllBytes(latestOffsetFile.toPath()),
+                StandardCharsets.UTF_8);
+
+        assertTrue(verifiedContent.contains("rmid1:99999-aabbccddeef-"),
+                "Checkpoint should contain modified replication group identifier");
     }
 
     @Test

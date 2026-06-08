@@ -71,7 +71,7 @@ public class EventListener implements XMLMessageListener, Serializable {
                                 // Only ignored when ignoreCheckpointMessageIdComparisonError is true
                                 // This occurs when IDs originate from different replication groups
                                 if (ignoreCheckpointMessageIdComparisonError) {
-                                    log.warn("SolaceSparkConnector - Replication Group Message ID comparison " +
+                                    log.error("SolaceSparkConnector - Replication Group Message ID comparison " +
                                                     "failed between '{}' and '{}'. Treating as equal and continuing. " +
                                                     "Duplicate detection may not be accurate for these messages.",
                                             o1, o2);
@@ -79,6 +79,11 @@ public class EventListener implements XMLMessageListener, Serializable {
                                     // This means duplicate detection is skipped for these messages
                                     return 0;
                                 } else {
+                                    if(solaceBroker != null) {
+                                        solaceBroker.setException("SolaceSparkConnector - Replication Group Message ID comparison " +
+                                                "failed. Set 'ignore-checkpoint-message-id-comparison-error' to " +
+                                                "true to ignore this error.", e);
+                                    }
                                     throw new RuntimeException(
                                             "SolaceSparkConnector - Replication Group Message ID comparison " +
                                                     "failed. Set 'ignore-checkpoint-message-id-comparison-error' to " +
@@ -88,6 +93,11 @@ public class EventListener implements XMLMessageListener, Serializable {
                             } catch (InvalidPropertiesException e) {
                                 // Always throw — this is a configuration error, not a comparison error
                                 // ignoreCheckpointMessageIdComparisonError does not apply here
+                                if(solaceBroker != null) {
+                                    solaceBroker.setException(
+                                            "SolaceSparkConnector - Invalid Replication Group Message ID. " +
+                                                    "Check the checkpointed message IDs for corruption.", e);
+                                }
                                 throw new RuntimeException(
                                         "SolaceSparkConnector - Invalid Replication Group Message ID. " +
                                                 "Check the checkpointed message IDs for corruption.", e);
@@ -120,8 +130,12 @@ public class EventListener implements XMLMessageListener, Serializable {
                 this.messages.add(new SolaceMessage(msg));
             }
         } catch (Exception e) {
-            log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);
-            throw new SolaceConsumerException(e);
+            if(solaceBroker != null) {
+                solaceBroker.setException("SolaceSparkConnector - Exception connecting to Solace Queue", e);
+            } else {
+                log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);
+                throw new SolaceConsumerException(e);
+            }
         }
 
     }
@@ -161,11 +175,20 @@ public class EventListener implements XMLMessageListener, Serializable {
                 }
             } catch (JCSMPNotComparableException e) {
                 if(ignoreCheckpointMessageIdComparisonError) {
-                    log.warn("SolaceSparkConnector - Replication Group Message ID comparison " +
+                    log.error("SolaceSparkConnector - Replication Group Message ID comparison " +
                                     "failed with message id's in checkpoint." +
                                     "Ignoring the error and continuing. Duplicate detection may not be accurate for incoming messages.");
+                    this.messages.add(new SolaceMessage(msg));
                 } else {
-                    throw e;
+                    if(solaceBroker != null) {
+                        solaceBroker.setException(
+                                "SolaceSparkConnector - Replication Group Message ID comparison " +
+                                        "failed with message id's in checkpoint.", e);
+                    } else {
+                        throw new RuntimeException(
+                                "SolaceSparkConnector - Replication Group Message ID comparison " +
+                                        "failed with message id's in checkpoint.", e);
+                    }
                 }
             }
         }
@@ -174,7 +197,7 @@ public class EventListener implements XMLMessageListener, Serializable {
     @Override
     public void onException(JCSMPException e) {
         if(solaceBroker != null) {
-            solaceBroker.handleException("SolaceSparkConnector - Consumer received exception", e);
+            solaceBroker.setException("SolaceSparkConnector - Consumer received exception", e);
         } else {
             log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
             throw new SolaceConsumerException(e);
