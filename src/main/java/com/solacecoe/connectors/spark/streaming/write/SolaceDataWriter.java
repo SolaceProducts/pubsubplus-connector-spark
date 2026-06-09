@@ -43,7 +43,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
     private Exception exception;
     private final boolean includeHeaders;
     private final boolean hasDefaultTopic;
-    private final boolean hasDefaultMessageId;
+//    private final boolean hasDefaultMessageId;
     private int publishedMessages = 0;
     private CompletableFuture<Void> allAcksReceived = new CompletableFuture<>();
     public SolaceDataWriter(StructType schema, Map<String, String> properties) {
@@ -51,9 +51,9 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
         this.properties = properties;
         this.includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
-        this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
+//        this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
         hasDefaultTopic = this.topic != null;
-        hasDefaultMessageId = this.messageId != null;
+//        hasDefaultMessageId = this.messageId != null;
         try {
             this.solaceBroker = new SolaceBroker(properties, "producer");
             this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
@@ -74,9 +74,10 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
             this.topic = projectedRow.getUTF8String(3).toString();
         }
 
-        if(!hasDefaultMessageId) {
-            this.messageId = projectedRow.getUTF8String(0).toString();
-        }
+//        if(!hasDefaultMessageId) {
+//            this.messageId = projectedRow.getUTF8String(0).toString();
+//        }
+        this.messageId = projectedRow.getUTF8String(0).toString();
         byte[] payload;
         if(projectedRow.getBinary(1) != null) {
             payload = projectedRow.getBinary(1);

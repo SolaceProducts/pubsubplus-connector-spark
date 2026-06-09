@@ -57,12 +57,13 @@ public class SolaceScan implements Scan {
                     "spark.databricks.clusterUsageTags.clusterId").getOrElse(() -> null);
             if(databricksRuntime != null) {
                 isDatabricks = true;
-            } else {
-                logger.warn("SolaceSparkConnector - SPARK_RUNTIME_PLATFORM is set to DATABRICKS but not able to find Databricks Cluster Id in default Spark Configuration. The configured checkpoint location will be considered as native file path.");
             }
 
             if(checkpointLocation.contains(SolaceSparkStreamingProperties.DATABRICKS_VOLUME_PREFIX)) {
                 isUCVolume = true;
+                if(!isDatabricks) {
+                    logger.warn("SolaceSparkConnector - SPARK_RUNTIME_PLATFORM is set to DATABRICKS but not able to find Databricks Cluster Id in Spark Configuration. The configured checkpoint location will be considered as native file path instead of Databricks Unity Catalog Volume.");
+                }
             }
         }
         return new SolaceMicroBatch(properties, checkpointLocation, isDatabricks, isUCVolume);

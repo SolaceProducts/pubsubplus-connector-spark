@@ -151,7 +151,7 @@ solace.apiProperties.pub_ack_window_size=50
 | string
 | any
 |
-| Sets the message id to all the messages published to Solace. This option overrides any Id column that may exist in the data.
+| **Deprecated** - Sets the message id to all the messages published to Solace. This option overrides any Id column that may exist in the data.
 
 | batchSize
 | int

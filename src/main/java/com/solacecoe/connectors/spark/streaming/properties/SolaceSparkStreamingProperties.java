@@ -40,7 +40,6 @@ public class SolaceSparkStreamingProperties {
     public static final String CLOSE_RECEIVERS_ON_PARTITION_CLOSE = "closeReceiversOnPartitionClose";
     public static final String CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT = "false";
     public static final String TOPIC = "topic";
-    public static final String MESSAGE_ID = "id";
     public static final String REPLAY_STRATEGY = "replayStrategy";
     public static final String REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID = "replayReplicationGroupMessageId";
     public static final String REPLAY_STRATEGY_START_TIME = "replayStartTime";

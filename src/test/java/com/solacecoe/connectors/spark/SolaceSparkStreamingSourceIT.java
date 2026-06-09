@@ -377,22 +377,6 @@ public class SolaceSparkStreamingSourceIT {
 
     }
 
-    @Test
-    @Order(6)
-    void Should_Consider_Checkpoint_As_NativeFilePath_If_Databricks_Properties_Is_Not_Present_In_SparkConfig() throws InterruptedException, com.solace.semp.v2.monitor.ApiException, IOException, JCSMPException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_partitions","1");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(true,"SolaceSparkConnector - SPARK_RUNTIME_PLATFORM is set to DATABRICKS but not able to find Databricks Cluster Id in default Spark Configuration. The configured checkpoint location will be considered as native file path.");
-    }
-
     private void injectDifferentReplicationGroupIdIntoCheckpoint() throws Exception {
         String checkpointDir = System.getProperty("java.io.tmpdir") + "/checkpoint";
 

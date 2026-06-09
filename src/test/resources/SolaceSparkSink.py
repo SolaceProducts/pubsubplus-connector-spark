@@ -39,8 +39,7 @@ read_options = {
 read_options = {**common_options, **read_options}
 
 write_options = {
-    "id": "test-id",
-    "topic": "test/topic"
+    "topic": "test/topic",
 }
 
 write_options = {**common_options, **write_options}
