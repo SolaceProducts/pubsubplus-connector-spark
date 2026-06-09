@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -340,7 +341,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
                 try {
                     DownloadResponse downloadResponse = workspaceClient.files().download(this.checkpointLocation + "/" + partitionId + ".txt");
                     try (Stream<String> lines = new BufferedReader(
-                            new InputStreamReader(downloadResponse.getContents())
+                            new InputStreamReader(downloadResponse.getContents(), StandardCharsets.UTF_8)
                     ).lines()) {
                         offsetToCommit = updateOffset(lines, offsetToCommit);
                     }

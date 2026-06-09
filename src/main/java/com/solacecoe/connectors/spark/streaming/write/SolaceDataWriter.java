@@ -26,12 +26,11 @@ import scala.collection.Seq;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class SolaceDataWriter implements DataWriter<InternalRow>, Serializable {
+public class SolaceDataWriter implements DataWriter<InternalRow> {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
     private String topic;
     private String messageId;

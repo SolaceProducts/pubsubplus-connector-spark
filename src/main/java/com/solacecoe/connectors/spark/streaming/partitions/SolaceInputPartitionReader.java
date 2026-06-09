@@ -41,7 +41,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-public class SolaceInputPartitionReader implements PartitionReader<InternalRow>, Serializable {
+public class SolaceInputPartitionReader implements PartitionReader<InternalRow> {
     private final transient Logger log = LogManager.getLogger(SolaceInputPartitionReader.class);
     private final boolean includeHeaders;
     private final SolaceInputPartition solaceInputPartition;
