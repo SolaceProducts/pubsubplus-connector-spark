@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,6 +48,12 @@ public class SolaceSparkStreamingSourceIT {
         tempCheckpoint.toFile().setReadable(true, false);
         tempCheckpoint.toFile().setExecutable(true, false);
 
+        // Set POSIX permissions for Linux/GitHub Actions
+        try {
+            Files.setPosixFilePermissions(tempCheckpoint,
+                    PosixFilePermissions.fromString("rwxrwxrwx"));
+        } catch (UnsupportedOperationException ignored) {}
+        
         sparkContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
         sparkContainer.start();
 
