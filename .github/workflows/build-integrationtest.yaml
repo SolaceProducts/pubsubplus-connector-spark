@@ -114,7 +114,8 @@ jobs:
       - name: Pre-create checkpoint directory with correct user
         run: |
           mkdir -p /tmp/checkpoint/offsets
-          sudo chown -R $USER:$USER /tmp/checkpoint
+          sudo chmod -R 777 /tmp/checkpoint
+          ls -la /tmp/
 
       - name: Run Unit/Integration Tests
         env:
