@@ -50,10 +50,30 @@ public class SolaceSparkStreamingSourceIT {
         sparkContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
         sparkContainer.start();
 
+        // Fix mount point permissions inside container immediately after start
+        try {
+            sparkContainer.execInContainer(
+                    "bash", "-c",
+                    "chmod -R 777 /opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint"
+            );
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
         sparkWorkerContainer = new SparkWorkerContainer(false, false);
         sparkWorkerContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
         sparkWorkerContainer.dependsOn(sparkContainer);
         sparkWorkerContainer.start();
+
+        // Fix permissions on worker container too
+        try {
+            sparkWorkerContainer.execInContainer(
+                    "bash", "-c",
+                    "chmod -R 777 /opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint"
+            );
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
 
         Map<String, Service> topics = new HashMap<String, Service>(){
             {
