@@ -48,12 +48,6 @@ public class SolaceSparkStreamingSourceIT {
         tempCheckpoint.toFile().setReadable(true, false);
         tempCheckpoint.toFile().setExecutable(true, false);
 
-        // Set POSIX permissions for Linux/GitHub Actions
-        try {
-            Files.setPosixFilePermissions(tempCheckpoint,
-                    PosixFilePermissions.fromString("rwxrwxrwx"));
-        } catch (UnsupportedOperationException ignored) {}
-        
         sparkContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
         sparkContainer.start();
 
@@ -446,6 +440,9 @@ public class SolaceSparkStreamingSourceIT {
                     "Could not find replication group message ID pattern in checkpoint. " +
                             "Ensure first batch completed and checkpoint contains messageIDs.");
         }
+
+        Process process = Runtime.getRuntime().exec(new String[]{"sudo", "chmod", "-R", "777", offsetsDir.getAbsolutePath()});
+        process.waitFor();
 
         // Write modified content back
         Files.write(latestOffsetFile.toPath(),

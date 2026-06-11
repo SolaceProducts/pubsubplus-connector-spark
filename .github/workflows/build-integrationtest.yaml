@@ -111,12 +111,6 @@ jobs:
       - name: Check Docker status
         run: docker info
 
-      - name: Pre-create checkpoint directory with correct user
-        run: |
-          sudo mkdir -p /tmp/checkpoint/offsets
-          sudo chmod -R 777 /tmp/checkpoint
-          ls -la /tmp/checkpoint
-
       - name: Run Unit/Integration Tests
         env:
           PACKAGES_READ_USER: ${{ steps.secrets.outputs.PACKAGES_READ_USER }}
