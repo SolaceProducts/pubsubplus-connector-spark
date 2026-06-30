@@ -193,7 +193,6 @@ public class SolaceBroker implements Serializable {
             EndpointProperties endpointProps = new EndpointProperties();
             endpointProps.setAccessType(EndpointProperties.ACCESSTYPE_NONEXCLUSIVE);
 
-            eventListener.setBrokerInstance(this);
             FlowReceiver cons = this.session.createFlow(eventListener,
                     flowProp, endpointProps);
 
@@ -580,6 +579,15 @@ public class SolaceBroker implements Serializable {
             } else {
                 throw new SolaceSessionException(e);
             }
+        }
+    }
+
+    public void setException(String message, Exception e) {
+        log.info("SolaceSparkConnector - Exception handling condition isOAuth {}, isFileModified {}", isOAuth, isAccessTokenSourceModified);
+        if( !isOAuth || !isAccessTokenSourceModified || (e != null && e.getCause().toString().contains("Unauthorized"))) {
+            log.error(message, e);
+            this.isException = true;
+            this.exception = e;
         }
     }
 

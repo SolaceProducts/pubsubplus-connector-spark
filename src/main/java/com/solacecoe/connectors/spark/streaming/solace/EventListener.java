@@ -24,17 +24,19 @@ public class EventListener implements XMLMessageListener, Serializable {
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints = new CopyOnWriteArrayList<>();
     private String offsetIndicator = SolaceSparkStreamingProperties.OFFSET_INDICATOR_DEFAULT;
     private SolaceBroker solaceBroker;
+    private boolean ignoreCheckpointMessageIdComparisonError;
     public EventListener(String id) {
         this.id = id;
         this.messages = new LinkedBlockingQueue<>();
         log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
     }
 
-    public EventListener(String id, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String offsetIndicator) {
+    public EventListener(String id, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints, String offsetIndicator, boolean ignoreCheckpointMessageIdComparisonError) {
         this.id = id;
         this.messages = new LinkedBlockingQueue<>();
         this.checkpoints = checkpoints;
         this.offsetIndicator = offsetIndicator;
+        this.ignoreCheckpointMessageIdComparisonError = ignoreCheckpointMessageIdComparisonError;
         log.info("SolaceSparkConnector- Initialized Event listener for Input partition reader with ID {}", id);
     }
 
@@ -60,9 +62,45 @@ public class EventListener implements XMLMessageListener, Serializable {
                     } else {
                         lastKnownMessageIDs.sort((o1, o2) -> {
                             try {
-                                return JCSMPFactory.onlyInstance().createReplicationGroupMessageId(o1).compare(JCSMPFactory.onlyInstance().createReplicationGroupMessageId(o2));
-                            } catch (JCSMPNotComparableException | InvalidPropertiesException e) {
-                                throw new RuntimeException(e);
+                                return JCSMPFactory.onlyInstance()
+                                        .createReplicationGroupMessageId(o1)
+                                        .compare(JCSMPFactory.onlyInstance()
+                                                .createReplicationGroupMessageId(o2));
+
+                            } catch (JCSMPNotComparableException e) {
+                                // Only ignored when ignoreCheckpointMessageIdComparisonError is true
+                                // This occurs when IDs originate from different replication groups
+                                if (ignoreCheckpointMessageIdComparisonError) {
+                                    log.error("SolaceSparkConnector - Replication Group Message ID comparison " +
+                                                    "failed between '{}' and '{}'. Treating as equal and continuing. " +
+                                                    "Duplicate detection may not be accurate for these messages.",
+                                            o1, o2);
+                                    // Returning 0 treats the two IDs as equal in sort order
+                                    // This means duplicate detection is skipped for these messages
+                                    return 0;
+                                } else {
+                                    if(solaceBroker != null) {
+                                        solaceBroker.setException("SolaceSparkConnector - Replication Group Message ID comparison " +
+                                                "failed. Set 'ignore-checkpoint-message-id-comparison-error' to " +
+                                                "true to ignore this error.", e);
+                                    }
+                                    throw new RuntimeException(
+                                            "SolaceSparkConnector - Replication Group Message ID comparison " +
+                                                    "failed. Set 'ignore-checkpoint-message-id-comparison-error' to " +
+                                                    "true to ignore this error.", e);
+                                }
+
+                            } catch (InvalidPropertiesException e) {
+                                // Always throw — this is a configuration error, not a comparison error
+                                // ignoreCheckpointMessageIdComparisonError does not apply here
+                                if(solaceBroker != null) {
+                                    solaceBroker.setException(
+                                            "SolaceSparkConnector - Invalid Replication Group Message ID. " +
+                                                    "Check the checkpointed message IDs for corruption.", e);
+                                }
+                                throw new RuntimeException(
+                                        "SolaceSparkConnector - Invalid Replication Group Message ID. " +
+                                                "Check the checkpointed message IDs for corruption.", e);
                             }
                         });
                         compareMessageIds(lastKnownMessageIDs, messageID, msg);
@@ -92,8 +130,12 @@ public class EventListener implements XMLMessageListener, Serializable {
                 this.messages.add(new SolaceMessage(msg));
             }
         } catch (Exception e) {
-            log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);
-            throw new SolaceConsumerException(e);
+            if(solaceBroker != null) {
+                solaceBroker.setException("SolaceSparkConnector - Exception connecting to Solace Queue", e);
+            } else {
+                log.error("SolaceSparkConnector - Exception connecting to Solace Queue", e);
+                throw new SolaceConsumerException(e);
+            }
         }
 
     }
@@ -102,34 +144,52 @@ public class EventListener implements XMLMessageListener, Serializable {
         for(String msgID : lastKnownMessageIDs) {
             ReplicationGroupMessageId checkpointMsgId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(msgID);
             ReplicationGroupMessageId currentMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(messageID);
-
-            if ((currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) && lastKnownMessageIDs.size() == 1) {
-                msg.ackMessage();
-                log.info("SolaceSparkConnector - Acknowledged message with ID {} as user has set ackLastProcessedMessages to true in configuration", messageID);
-            } else {
-                if (lastKnownMessageIDs.size() > 1) {
-                    log.info("SolaceSparkConnector - Checkpoint has more than one message ids {}. This might be due to parallel consumers. The message {} will be acknowledged only if it is older than available message ids else will be sent for reprocessing", lastKnownMessageIDs, currentMessageId);
-                    int verificationCount = 0;
-                    for(String id: lastKnownMessageIDs) {
-                        ReplicationGroupMessageId idToReplicationGroupMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(id);
-                        if ((currentMessageId.compare(idToReplicationGroupMessageId) < 0 || currentMessageId.compare(idToReplicationGroupMessageId) == 0)) {
-                            verificationCount++;
+            try {
+                if ((currentMessageId.compare(checkpointMsgId) < 0 || currentMessageId.compare(checkpointMsgId) == 0) && lastKnownMessageIDs.size() == 1) {
+                    msg.ackMessage();
+                    log.info("SolaceSparkConnector - Acknowledged message with ID {} as user has set ackLastProcessedMessages to true in configuration", messageID);
+                } else {
+                    if (lastKnownMessageIDs.size() > 1) {
+                        log.info("SolaceSparkConnector - Checkpoint has more than one message ids {}. This might be due to parallel consumers. The message {} will be acknowledged only if it is older than available message ids else will be sent for reprocessing", lastKnownMessageIDs, currentMessageId);
+                        int verificationCount = 0;
+                        for (String id : lastKnownMessageIDs) {
+                            ReplicationGroupMessageId idToReplicationGroupMessageId = JCSMPFactory.onlyInstance().createReplicationGroupMessageId(id);
+                            if ((currentMessageId.compare(idToReplicationGroupMessageId) < 0 || currentMessageId.compare(idToReplicationGroupMessageId) == 0)) {
+                                verificationCount++;
+                            }
                         }
-                    }
 
-                    if(verificationCount == lastKnownMessageIDs.size()) {
-                        msg.ackMessage();
-                        log.info("SolaceSparkConnector - Acknowledged message with ID {} as user has set ackLastProcessedMessages to true in configuration and it is older than checkpoint message ids {}", messageID, lastKnownMessageIDs);
+                        if (verificationCount == lastKnownMessageIDs.size()) {
+                            msg.ackMessage();
+                            log.info("SolaceSparkConnector - Acknowledged message with ID {} as user has set ackLastProcessedMessages to true in configuration and it is older than checkpoint message ids {}", messageID, lastKnownMessageIDs);
+                        } else {
+                            this.messages.add(new SolaceMessage(msg));
+                            log.info("SolaceSparkConnector - Message Id {} is added for reprocessing as it failed checkpoint validation", currentMessageId);
+                        }
+                        break;
                     } else {
                         this.messages.add(new SolaceMessage(msg));
                         log.info("SolaceSparkConnector - Message Id {} is added for reprocessing as it failed checkpoint validation", currentMessageId);
                     }
-                    break;
-                } else {
-                    this.messages.add(new SolaceMessage(msg));
-                    log.info("SolaceSparkConnector - Message Id {} is added for reprocessing as it failed checkpoint validation", currentMessageId);
-                }
 
+                }
+            } catch (JCSMPNotComparableException e) {
+                if(ignoreCheckpointMessageIdComparisonError) {
+                    log.error("SolaceSparkConnector - Replication Group Message ID comparison " +
+                                    "failed with message id's in checkpoint." +
+                                    "Ignoring the error and continuing. Duplicate detection may not be accurate for incoming messages.");
+                    this.messages.add(new SolaceMessage(msg));
+                } else {
+                    if(solaceBroker != null) {
+                        solaceBroker.setException(
+                                "SolaceSparkConnector - Replication Group Message ID comparison " +
+                                        "failed with message id's in checkpoint.", e);
+                    } else {
+                        throw new RuntimeException(
+                                "SolaceSparkConnector - Replication Group Message ID comparison " +
+                                        "failed with message id's in checkpoint.", e);
+                    }
+                }
             }
         }
     }
@@ -137,7 +197,7 @@ public class EventListener implements XMLMessageListener, Serializable {
     @Override
     public void onException(JCSMPException e) {
         if(solaceBroker != null) {
-            solaceBroker.handleException("SolaceSparkConnector - Consumer received exception", e);
+            solaceBroker.setException("SolaceSparkConnector - Consumer received exception", e);
         } else {
             log.error("SolaceSparkConnector - Consumer received exception: %s%n", e);
             throw new SolaceConsumerException(e);

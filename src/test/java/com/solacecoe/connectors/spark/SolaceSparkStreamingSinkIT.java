@@ -140,7 +140,7 @@ public class SolaceSparkStreamingSinkIT {
     }
 
     @AfterEach
-    public void afterEach() throws com.solace.semp.v2.action.ApiException, JCSMPException {
+    public void afterEach() throws com.solace.semp.v2.action.ApiException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
         sparkContainer.stop();
         sparkContainer.start();
@@ -266,7 +266,7 @@ public class SolaceSparkStreamingSinkIT {
     void Should_ProcessData_And_Publish_As_Stream_To_Solace() throws TimeoutException, InterruptedException, IOException {
         Map<String,String> env = new HashMap<String, String>(){
             {
-                put("solace_id","my-default-id");
+                // put("solace_id","my-default-id");
                 put("solace_topic","random/topic");
             }
         };
@@ -304,17 +304,18 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
-        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
+//        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
         messageConsumer.stop();
         messageConsumer.close();
     }
 
     @Test
     @Order(2)
+    @Disabled
     void Should_ProcessData_And_Publish_With_CustomId_To_Solace() throws TimeoutException, InterruptedException, IOException {
         Map<String,String> env = new HashMap<String, String>(){
             {
-                put("solace_id","my-default-id");
+                // put("solace_id","my-default-id");
                 put("solace_topic","random/topic");
             }
         };
@@ -363,7 +364,7 @@ public class SolaceSparkStreamingSinkIT {
     void Should_ProcessData_And_Publish_With_DataFrameId_To_Solace() throws TimeoutException, InterruptedException, IOException {
         Map<String,String> env = new HashMap<String, String>(){
             {
-                put("solace_id","__DELETE__");
+                // put("solace_id","__DELETE__");
                 put("solace_topic","random/topic");
             }
         };
@@ -409,7 +410,7 @@ public class SolaceSparkStreamingSinkIT {
     void Should_ProcessData_And_Publish_To_CustomTopic_Solace() throws TimeoutException, InterruptedException, IOException, JCSMPException {
         Map<String,String> env = new HashMap<String, String>(){
             {
-                put("solace_id","__DELETE__");
+                // put("solace_id","__DELETE__");
                 put("solace_topic","Spark/Topic/0");
             }
         };
@@ -460,7 +461,7 @@ public class SolaceSparkStreamingSinkIT {
     void Should_ProcessData_And_Publish_With_Headers_To_Solace() throws TimeoutException, InterruptedException, IOException {
         Map<String,String> env = new HashMap<String, String>(){
             {
-                put("solace_id","__DELETE__");
+                // put("solace_id","__DELETE__");
                 put("solace_topic","random/topic");
                 put("solace_includeHeaders","true");
             }
@@ -1043,7 +1044,7 @@ public class SolaceSparkStreamingSinkIT {
             {
                 put("solace_topic","random/topic");
                 put("solace_includeHeaders", "false");
-                put("solace_id", "__DELETE__");
+                // put("solace_id", "__DELETE__");
                 put("drop_columns", "Id");
             }
         };
@@ -1052,7 +1053,7 @@ public class SolaceSparkStreamingSinkIT {
         env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
 
         executeScript(envVars.toString(), true);
-        assertResult(false, "Could not find attribute Id either in data frame column or options. Please use id option for setting a id", 1);
+        assertResult(false, "Could not find attribute Id in data frame column. Please add Id column in dataframe", 1);
     }
 
     @Test

@@ -1,5 +1,8 @@
 package com.solacecoe.connectors.spark.streaming;
 
+import com.databricks.sdk.WorkspaceClient;
+import com.databricks.sdk.service.files.CreateDirectoryRequest;
+import com.databricks.sdk.service.files.DownloadResponse;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
@@ -25,14 +28,17 @@ import org.apache.spark.storage.BlockManagerMaster;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -44,24 +50,84 @@ public class SolaceMicroBatch implements MicroBatchStream {
     private int partitions;
     private final int batchSize;
     private final boolean includeHeaders;
+    private final boolean isDatabricks;
+    private final boolean isUCVolume;
+//    private boolean rotateSecret;
 //    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
-    private final Map<String, String> properties;
+    private Map<String, String> properties = new HashMap<>();
     private final SolaceBroker solaceBroker;
     private String lastKnownMessageIds = "";
     private String queueName = "";
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> currentCheckpoint = new CopyOnWriteArrayList<>();
     private final String checkpointLocation;
     private final List<String> partitionIds = new ArrayList<>();
-    public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation) {
-        this.properties = properties;
+    private WorkspaceClient workspaceClient;
+    private ScheduledExecutorService databricksSecretRefresh;
+    private ScheduledFuture<?> refreshTask;
+    public SolaceMicroBatch(Map<String, String> properties, String checkpointLocation, boolean isDatabricks, boolean isUCVolume) {
+        this.properties = new HashMap<>(properties);;
+
+        this.isDatabricks = isDatabricks;
+        this.isUCVolume = isUCVolume;
+
+        SolaceUtils.validateCommonProperties(properties);
+
+        log.info("SolaceSparkConnector - isDatabricks {} and isUCVolume {}", isDatabricks, isUCVolume);
+
+        if(isDatabricks && isUCVolume) {
+            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE, "").isEmpty()) {
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_SECRET_SCOPE for Databricks Host, ClientId and Client Secret is required when using Unity Catalog Volumes as checkpoint location");
+            }
+
+            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_HOST, "").isEmpty()) {
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_HOST property is required when using Unity Catalog Volumes as checkpoint location");
+            }
+
+//            rotateSecret = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_ROTATE_CLIENT_SECRET, SolaceSparkStreamingProperties.DATABRICKS_ROTATE_CLIENT_SECRET_DEFAULT));
+
+//            if(rotateSecret) {
+//                if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID, "").isEmpty()) {
+//                    throw new RuntimeException("SolaceSparkConnector - DATABRICKS_SERVICE_PRINCIPAL_ID is required when using Unity Catalog Volumes as checkpoint location and DATABRICKS_ROTATE_CLIENT_SECRET is set to true");
+//                }
+//
+//                if(Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_LIFETIME, "0")) <= 0) {
+//                    throw new RuntimeException("SolaceSparkConnector - Invalid DATABRICKS_CLIENT_SECRET_LIFETIME is configured and DATABRICKS_ROTATE_CLIENT_SECRET is set to true. Value should be greater than zero");
+//                }
+//
+//                String clientSecret = createSecret();
+//                this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
+//            } else {
+
+            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID, "").isEmpty()) {
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_ID is required when using Unity Catalog Volumes as checkpoint location");
+            }
+
+            if(properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, "").isEmpty()) {
+                throw new RuntimeException("SolaceSparkConnector - DATABRICKS_CLIENT_SECRET is required when using Unity Catalog Volumes as checkpoint location");
+            }
+
+            workspaceClient = new WorkspaceClient();
+            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_HOST, workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_HOST)));
+
+            this.databricksSecretRefresh = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "databricks-secret-refresh");
+                t.setDaemon(true);
+                return t;
+            });
+
+            String clientId = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID));
+            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID, clientId);
+
+            refreshCredentials();
+            scheduleSecretRefresh();
+//            }
+        }
 
         this.checkpointLocation = convertCheckpointURIToStringPath(checkpointLocation);
         log.info("SolaceSparkConnector - Configured Checkpoint location {}", checkpointLocation);
 //        this.checkpoints = new CopyOnWriteArrayList<>();
         log.info("SolaceSparkConnector - Initializing Solace Spark Connector");
         // Initialize classes required for Solace connectivity
-
-        SolaceUtils.validateCommonProperties(properties);
 
         if(!properties.containsKey(SolaceSparkStreamingProperties.QUEUE) || properties.get(SolaceSparkStreamingProperties.QUEUE) == null || properties.get(SolaceSparkStreamingProperties.QUEUE).isEmpty()) {
             throw new SolaceInvalidPropertyException("SolaceSparkConnector - Please provide Solace Queue in configuration options");
@@ -195,7 +261,11 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if(currentCheckpoint != null && currentCheckpoint.isEmpty()) {
             currentCheckpoint = this.getCheckpoint();
         }
-        return new SolaceDataSourceReaderFactory(this.includeHeaders, this.properties, currentCheckpoint, this.checkpointLocation);
+//        if(rotateSecret) {
+//            String clientSecret = createSecret();
+//            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
+//        }
+        return new SolaceDataSourceReaderFactory(this.includeHeaders, isDatabricks, isUCVolume, this.properties, currentCheckpoint, this.checkpointLocation);
     }
 
     @Override
@@ -267,22 +337,41 @@ public class SolaceMicroBatch implements MicroBatchStream {
         log.info("SolaceSparkConnector - Commit triggered");
         CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> offsetToCommit = new CopyOnWriteArrayList<>();
         for(String partitionId: partitionIds) {
-            Path path = Paths.get(this.checkpointLocation + "/" + partitionId + ".txt");
-            if(Files.exists(path)) {
-                try (Stream<String> lines = Files.lines(path)) {
-                    for(String line: lines.collect(Collectors.toList())) {
-                        if (offsetToCommit.isEmpty()) {
-                            offsetToCommit = new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
-                            }.getType());
-                        } else {
-                            offsetToCommit.addAll(new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
-                            }.getType()));
-                            offsetToCommit = offsetToCommit.stream().distinct().collect(Collectors.toCollection(CopyOnWriteArrayList::new));
-                        }
-                    };
-                } catch (IOException e) {
-                    log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
-                    throw new RuntimeException(e);
+            if(this.isDatabricks && isUCVolume) {
+                try {
+                    DownloadResponse downloadResponse = workspaceClient.files().download(this.checkpointLocation + "/" + partitionId + ".txt");
+                    try (Stream<String> lines = new BufferedReader(
+                            new InputStreamReader(downloadResponse.getContents(), StandardCharsets.UTF_8)
+                    ).lines()) {
+                        offsetToCommit = updateOffset(lines, offsetToCommit);
+                    }
+                } catch (Exception e) {
+                    // NOT_FOUND = file doesn't exist
+                    if (e.getMessage().contains("NOT_FOUND")) {
+                        log.warn("SolaceSparkConnector - File {} doesn't exist. Ignoring the error {}", this.checkpointLocation + "/" + partitionId + ".txt", e.getMessage());
+                    } else {
+                        throw e;
+                    }
+                }
+            } else {
+                Path path = Paths.get(this.checkpointLocation + "/" + partitionId + ".txt");
+                if (Files.exists(path)) {
+                    try (Stream<String> lines = Files.lines(path)) {
+                        offsetToCommit = updateOffset(lines, offsetToCommit);
+//                    for(String line: lines.collect(Collectors.toList())) {
+//                        if (offsetToCommit.isEmpty()) {
+//                            offsetToCommit = new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
+//                            }.getType());
+//                        } else {
+//                            offsetToCommit.addAll(new Gson().fromJson(line, new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
+//                            }.getType()));
+//                            offsetToCommit = offsetToCommit.stream().distinct().collect(Collectors.toCollection(CopyOnWriteArrayList::new));
+//                        }
+//                    };
+                    } catch (IOException e) {
+                        log.error("SolaceSparkConnector - Exception when creating checkpoint to store in Solace LVQ", e);
+                        throw new RuntimeException(e);
+                    }
                 }
             }
         }
@@ -297,10 +386,41 @@ public class SolaceMicroBatch implements MicroBatchStream {
         }
     }
 
+    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> updateOffset(Stream<String> lines, CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> offsetToCommit) {
+        Gson gson = new Gson();
+        lines.forEach(line -> {
+            CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> parsed =
+                    gson.fromJson(
+                            line,
+                            new TypeToken<CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint>>() {
+                            }.getType()
+                    );
+            offsetToCommit.addAll(parsed);
+        });
+
+        return offsetToCommit.stream()
+                .distinct()
+                .collect(Collectors.toCollection(CopyOnWriteArrayList::new));
+    }
+
     @Override
     public void stop() {
         log.info("SolaceSparkConnector - Closing Spark Connector");
         checkException();
+        if (refreshTask != null) {
+            refreshTask.cancel(false); // don't interrupt ongoing refresh
+        }
+        if(this.databricksSecretRefresh != null && !this.databricksSecretRefresh.isShutdown()) {
+            this.databricksSecretRefresh.shutdown();
+            try {
+                if (!this.databricksSecretRefresh.awaitTermination(5, TimeUnit.SECONDS)) {
+                    this.databricksSecretRefresh.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                this.databricksSecretRefresh.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
         this.solaceBroker.close();
     }
 
@@ -317,22 +437,94 @@ public class SolaceMicroBatch implements MicroBatchStream {
     }
 
     private String convertCheckpointURIToStringPath(String checkpointLocation) {
-        if (checkpointLocation.startsWith("dbfs:/")) {
-            // Strip "dbfs:/" and prepend "/dbfs/"
-            String dbfsPath = checkpointLocation.replaceFirst("dbfs:/+", "");
-            checkpointLocation = String.valueOf(Paths.get("/dbfs", dbfsPath));
-        } else if (checkpointLocation.startsWith("file:/")) {
-            // Parse as standard URI
-            URI fileUri = null;
-            try {
-                fileUri = new URI(checkpointLocation);
-            } catch (URISyntaxException e) {
-                throw new RuntimeException(e);
+        if(this.isDatabricks && this.isUCVolume) {
+            log.info("SolaceSparkConnector - Runtime platform is Databricks and Unity Catalog Volume is configured as checkpoint location");
+            log.info("SolaceSparkConnector - Initializing Databricks SDK to connect to Unity Catalog Volume");
+
+            checkpointLocation = checkpointLocation.replaceFirst("dbfs:/+", "/");
+
+            CreateDirectoryRequest createDirectoryRequest = new CreateDirectoryRequest();
+            createDirectoryRequest.setDirectoryPath(checkpointLocation);
+            // Creates directory or returns success on existing directory
+            workspaceClient.files().createDirectory(createDirectoryRequest);
+        } else {
+            if (checkpointLocation.startsWith("dbfs:/")) {
+                // Strip "dbfs:/" and prepend "/dbfs/"
+                String dbfsPath = checkpointLocation.replaceFirst("dbfs:/+", "");
+                checkpointLocation = String.valueOf(Paths.get("/dbfs", dbfsPath));
+            } else if (checkpointLocation.startsWith("file:/")) {
+                // Parse as standard URI
+                URI fileUri = null;
+                try {
+                    fileUri = new URI(checkpointLocation);
+                } catch (URISyntaxException e) {
+                    throw new RuntimeException(e);
+                }
+                checkpointLocation = String.valueOf(Paths.get(fileUri));
             }
-            checkpointLocation = String.valueOf(Paths.get(fileUri));
         }
 
         return checkpointLocation;
+    }
+
+//    private String createSecret() {
+//        String secret = "";
+//        String servicePrincipalId = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID));;
+//        Iterable<SecretInfo> secrets = workspaceClient.servicePrincipalSecretsProxy().list(servicePrincipalId);
+//        if(secrets.iterator().hasNext()) {
+//            for (SecretInfo s : secrets) {
+//                log.info("SolaceSparkConnector - Secret ID: {}", s.getId());
+//                log.info("SolaceSparkConnector - Status: {}", s.getStatus());
+//                log.info("SolaceSparkConnector - Expires: {}", s.getExpireTime());
+//
+//                Instant expiry = Instant.parse(s.getExpireTime());
+//
+//                if (expiry.isBefore(Instant.now().plus(7, ChronoUnit.DAYS))) {
+//                    log.info(
+//                            "SolaceSparkConnector - Service principal {} secret is expiring within 7 days (expiry: {}). Initiating secret rotation.",
+//                            servicePrincipalId,
+//                            expiry
+//                    );
+//                    secret = getSecret(servicePrincipalId);
+//
+//                    DeleteServicePrincipalSecretRequest deleteServicePrincipalSecretRequest = new DeleteServicePrincipalSecretRequest();
+//                    deleteServicePrincipalSecretRequest.setServicePrincipalId(servicePrincipalId);
+//                    deleteServicePrincipalSecretRequest.setSecretId(s.getId());
+//                    workspaceClient.servicePrincipalSecretsProxy().delete(deleteServicePrincipalSecretRequest);
+//                    log.info(
+//                            "SolaceSparkConnector - New Secret created successfully for service principal {} and old secret {} is deleted successfully",
+//                            servicePrincipalId,
+//                            s.getId());
+//                }
+//            }
+//        } else {
+//            secret = getSecret(servicePrincipalId);
+//        }
+//
+//        return secret;
+//    }
+
+//    private String getSecret(String servicePrincipalId) {
+//        CreateServicePrincipalSecretRequest createServicePrincipalSecretRequest = new CreateServicePrincipalSecretRequest();
+//        createServicePrincipalSecretRequest.setServicePrincipalId(servicePrincipalId);
+//        createServicePrincipalSecretRequest.setLifetime(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_LIFETIME));
+//        CreateServicePrincipalSecretResponse createServicePrincipalSecretResponse = workspaceClient.servicePrincipalSecretsProxy().create(createServicePrincipalSecretRequest);
+//        return createServicePrincipalSecretResponse.getSecret();
+//    }
+
+    private void scheduleSecretRefresh() {
+        // Schedule periodic refresh
+        refreshTask = this.databricksSecretRefresh.scheduleAtFixedRate(
+                this::refreshCredentials,
+                Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL, "1440")),
+                Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL, "1440")),
+                TimeUnit.MINUTES
+        );
+    }
+
+    private void refreshCredentials() {
+        String clientSecret = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET));
+        this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
     }
 
 }

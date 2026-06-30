@@ -18,6 +18,12 @@ public class SolaceSparkStreamingProperties {
     public static final String PARTITIONS_DEFAULT = "1";
     public static final String OFFSET_INDICATOR = "offsetIndicator";
     public static final String OFFSET_INDICATOR_DEFAULT = "MESSAGE_ID";
+    public static final String PUBLISH_ACK_TIMEOUT = "publishAckTimeout";
+    public static final String PUBLISH_ACK_TIMEOUT_DEFAULT = "5000";
+    public static final String PUBLISH_ACK_TIMEOUT_FAIL_ON_ERROR = "publishAckTimeoutFailOnError";
+    public static final String PUBLISH_ACK_TIMEOUT_FAIL_ON_ERROR_DEFAULT = "true";
+    public static final String IGNORE_CHECKPOINT_MESSAGE_ID_COMPARISON_ERROR = "ignoreCheckpointMessageIdComparisonError";
+    public static final String IGNORE_CHECKPOINT_MESSAGE_ID_COMPARISON_ERROR_DEFAULT = "false";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_NAME = "lvq.name";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_TOPIC = "lvq.topic";
     public static final String SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME = "solace.spark.connector.state";
@@ -34,7 +40,6 @@ public class SolaceSparkStreamingProperties {
     public static final String CLOSE_RECEIVERS_ON_PARTITION_CLOSE = "closeReceiversOnPartitionClose";
     public static final String CLOSE_RECEIVERS_ON_PARTITION_CLOSE_DEFAULT = "false";
     public static final String TOPIC = "topic";
-    public static final String MESSAGE_ID = "id";
     public static final String REPLAY_STRATEGY = "replayStrategy";
     public static final String REPLAY_STRATEGY_REPLICATION_GROUP_MESSAGE_ID = "replayReplicationGroupMessageId";
     public static final String REPLAY_STRATEGY_START_TIME = "replayStartTime";
@@ -57,4 +62,16 @@ public class SolaceSparkStreamingProperties {
     public static final String OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL_DEFAULT = "60";
     public static final String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT = "solace.oauth.client.token.fetch.timeout";
     public static final String OAUTH_CLIENT_TOKEN_FETCH_TIMEOUT_DEFAULT = "100";
+    public static final String DATABRICKS_VOLUME_PREFIX = "Volumes";
+    public static final String SPARK_RUNTIME_PLATFORM = "spark_runtime_platform";
+    public static final String SPARK_RUNTIME_PLATFORM_DEFAULT = "DATABRICKS";
+    public static final String DATABRICKS_SECRET_SCOPE = "databricks_secret_scope";
+    public static final String DATABRICKS_CLIENT_ID = "databricks_client_id";
+    public static final String DATABRICKS_HOST = "databricks_host";
+//    public static final String DATABRICKS_SERVICE_PRINCIPAL_ID = "DATABRICKS_SERVICE_PRINCIPAL_ID";
+    public static final String DATABRICKS_CLIENT_SECRET = "databricks_client_secret";
+    public static final String DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL = "databricks_client_secret_refresh_interval";
+//    public static final String DATABRICKS_CLIENT_SECRET_LIFETIME = "DATABRICKS_CLIENT_SECRET_LIFETIME";
+//    public static final String DATABRICKS_ROTATE_CLIENT_SECRET = "DATABRICKS_ROTATE_CLIENT_SECRET";
+//    public static final String DATABRICKS_ROTATE_CLIENT_SECRET_DEFAULT = "false";
 }

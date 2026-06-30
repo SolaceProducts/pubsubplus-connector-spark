@@ -1,4 +1,5 @@
 import os
+import uuid
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import current_timestamp, unix_timestamp, unix_millis, unix_seconds
 
@@ -75,8 +76,7 @@ read_options = {
 read_options = {**common_options, **read_options}
 
 write_options = {
-    "id": "test-id",
-    "topic": "test/topic"
+    "topic": "test/topic",
 }
 
 write_options = {**common_options, **write_options}

@@ -1,5 +1,6 @@
 package com.solacecoe.connectors.spark.streaming.write;
 
+import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProperties;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.Expression;
 import org.apache.spark.sql.catalyst.expressions.Literal;
@@ -27,7 +28,11 @@ public class SolaceRowExpression {
     public Expression getExpression() {
         Attribute attribute = this.attributes.find(field -> field.name().equals(attributeName)).getOrElse(() -> this.defaultValue);
         if(isMandatory && attribute == null) {
-            throw new RuntimeException("SolaceSparkConnector - Could not find attribute " + attributeName + " either in data frame column or options. Please use "+ attributeName.toLowerCase(Locale.ROOT) +" option for setting a " + attributeName.toLowerCase(Locale.ROOT));
+            if(attributeName.equals(SolaceSparkSchemaProperties.id().name())) {
+                throw new RuntimeException("SolaceSparkConnector - Could not find attribute " + attributeName + " in data frame column. Please add " + attributeName + " column in dataframe");
+            } else {
+                throw new RuntimeException("SolaceSparkConnector - Could not find attribute " + attributeName + " either in data frame column or options. Please use " + attributeName.toLowerCase(Locale.ROOT) + " option for setting a " + attributeName.toLowerCase(Locale.ROOT));
+            }
         }
         if(isMandatory && !DataTypeUtils.sameType(attribute.dataType(), this.dataType)) {
             throw new IllegalArgumentException("SolaceSparkConnector - Attribute " + attributeName + " is not of type " + dataType);

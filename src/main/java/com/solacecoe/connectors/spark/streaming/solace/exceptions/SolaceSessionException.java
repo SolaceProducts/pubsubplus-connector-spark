@@ -8,4 +8,8 @@ public class SolaceSessionException extends RuntimeException{
     public SolaceSessionException(String message) {
         super(message);
     }
+
+    public SolaceSessionException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }
