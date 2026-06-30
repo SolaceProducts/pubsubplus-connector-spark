@@ -1,6 +1,7 @@
 package com.solacecoe.connectors.spark.streaming;
 
 import com.databricks.sdk.WorkspaceClient;
+import com.databricks.sdk.core.DatabricksConfig;
 import com.databricks.sdk.service.files.CreateDirectoryRequest;
 import com.databricks.sdk.service.files.DownloadResponse;
 import com.google.gson.Gson;
@@ -107,16 +108,20 @@ public class SolaceMicroBatch implements MicroBatchStream {
             }
 
             workspaceClient = new WorkspaceClient();
-            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_HOST, workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_HOST)));
 
-            this.databricksSecretRefresh = Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "databricks-secret-refresh");
-                t.setDaemon(true);
-                return t;
-            });
-
+            DatabricksConfig databricksConfig = new DatabricksConfig();
+            String host = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_HOST));
             String clientId = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID));
-            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID, clientId);
+            databricksConfig.setHost(host);
+            databricksConfig.setClientId(clientId);
+            databricksConfig.setClientSecret(workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET)));
+            // re-initialize with oauth-m2m as it is supported authentication mechanism.
+            workspaceClient = new WorkspaceClient(databricksConfig);
+            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_HOST + "_value", host);
+
+            this.databricksSecretRefresh = Executors.newScheduledThreadPool(1);
+
+            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID + "_value", clientId);
 
             refreshCredentials();
             scheduleSecretRefresh();
@@ -261,10 +266,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
         if(currentCheckpoint != null && currentCheckpoint.isEmpty()) {
             currentCheckpoint = this.getCheckpoint();
         }
-//        if(rotateSecret) {
-//            String clientSecret = createSecret();
-//            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
-//        }
         return new SolaceDataSourceReaderFactory(this.includeHeaders, isDatabricks, isUCVolume, this.properties, currentCheckpoint, this.checkpointLocation);
     }
 
@@ -467,64 +468,32 @@ public class SolaceMicroBatch implements MicroBatchStream {
         return checkpointLocation;
     }
 
-//    private String createSecret() {
-//        String secret = "";
-//        String servicePrincipalId = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_SERVICE_PRINCIPAL_ID));;
-//        Iterable<SecretInfo> secrets = workspaceClient.servicePrincipalSecretsProxy().list(servicePrincipalId);
-//        if(secrets.iterator().hasNext()) {
-//            for (SecretInfo s : secrets) {
-//                log.info("SolaceSparkConnector - Secret ID: {}", s.getId());
-//                log.info("SolaceSparkConnector - Status: {}", s.getStatus());
-//                log.info("SolaceSparkConnector - Expires: {}", s.getExpireTime());
-//
-//                Instant expiry = Instant.parse(s.getExpireTime());
-//
-//                if (expiry.isBefore(Instant.now().plus(7, ChronoUnit.DAYS))) {
-//                    log.info(
-//                            "SolaceSparkConnector - Service principal {} secret is expiring within 7 days (expiry: {}). Initiating secret rotation.",
-//                            servicePrincipalId,
-//                            expiry
-//                    );
-//                    secret = getSecret(servicePrincipalId);
-//
-//                    DeleteServicePrincipalSecretRequest deleteServicePrincipalSecretRequest = new DeleteServicePrincipalSecretRequest();
-//                    deleteServicePrincipalSecretRequest.setServicePrincipalId(servicePrincipalId);
-//                    deleteServicePrincipalSecretRequest.setSecretId(s.getId());
-//                    workspaceClient.servicePrincipalSecretsProxy().delete(deleteServicePrincipalSecretRequest);
-//                    log.info(
-//                            "SolaceSparkConnector - New Secret created successfully for service principal {} and old secret {} is deleted successfully",
-//                            servicePrincipalId,
-//                            s.getId());
-//                }
-//            }
-//        } else {
-//            secret = getSecret(servicePrincipalId);
-//        }
-//
-//        return secret;
-//    }
-
-//    private String getSecret(String servicePrincipalId) {
-//        CreateServicePrincipalSecretRequest createServicePrincipalSecretRequest = new CreateServicePrincipalSecretRequest();
-//        createServicePrincipalSecretRequest.setServicePrincipalId(servicePrincipalId);
-//        createServicePrincipalSecretRequest.setLifetime(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_LIFETIME));
-//        CreateServicePrincipalSecretResponse createServicePrincipalSecretResponse = workspaceClient.servicePrincipalSecretsProxy().create(createServicePrincipalSecretRequest);
-//        return createServicePrincipalSecretResponse.getSecret();
-//    }
-
     private void scheduleSecretRefresh() {
         // Schedule periodic refresh
-        refreshTask = this.databricksSecretRefresh.scheduleAtFixedRate(
+        refreshTask = this.databricksSecretRefresh.scheduleWithFixedDelay(
                 this::refreshCredentials,
                 Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL, "1440")),
                 Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL, "1440")),
                 TimeUnit.MINUTES
         );
+        log.info("SolaceSparkConnector - Scheduled Databricks Client Secret refresh from secret scope {} with name {} for every {} minutes",
+                properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE),
+                properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET),
+                properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL, "1440"));
     }
 
     private void refreshCredentials() {
-        String clientSecret = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET));
-        this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET, clientSecret);
+        try {
+            String clientSecret = workspaceClient.secrets().get(properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET));
+            this.properties.put(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET + "_value", clientSecret);
+            log.info("SolaceSparkConnector - Refreshed Databricks client secret from secret scope {} with name {}", properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE), properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET));
+        } catch (Exception e) {
+            log.error("SolaceSparkConnector - Failed to refresh Databricks client secret " +
+                            "from secret scope '{}'. Retaining existing secret until next refresh cycle in {} minutes." +
+                            "If the existing secret expires before the next refresh cycle, " +
+                            "the connector will fail on the next Databricks Unity Catalog Volume access. ",
+                    properties.get(SolaceSparkStreamingProperties.DATABRICKS_SECRET_SCOPE),
+                    properties.getOrDefault(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET_REFRESH_INTERVAL, "1440"), e);
+        }
     }
-
 }

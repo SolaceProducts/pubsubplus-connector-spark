@@ -90,10 +90,9 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow> 
         
         if(this.isDatabricks && this.isUCVolume) {
             DatabricksConfig databricksConfig = new DatabricksConfig();
-            databricksConfig.setHost(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_HOST));
-            databricksConfig.setClientId(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID));
-            databricksConfig.setClientSecret(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET));
-
+            databricksConfig.setHost(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_HOST + "_value"));
+            databricksConfig.setClientId(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_ID + "_value"));
+            databricksConfig.setClientSecret(this.properties.get(SolaceSparkStreamingProperties.DATABRICKS_CLIENT_SECRET + "_value"));
             workspaceClient = new WorkspaceClient(databricksConfig);
         }
 
