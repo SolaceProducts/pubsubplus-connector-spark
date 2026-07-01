@@ -239,7 +239,7 @@ a| Specifies whether to ignore errors when comparing an incoming message's Repli
 
 NOTE: This error typically occurs when messages originate from different replication groups.
 
-| spark_runtime_platform
+| sparkRuntimePlatform[[spark-runtime-platform]]
 | string
 | DATABRICKS, OTHER
 | DATABRICKS
@@ -248,37 +248,41 @@ a| Runtime platform on which the Spark application is deployed. Required when a 
 * `DATABRICKS` — enables Unity Catalog Volume support for checkpointing.
 * `OTHER` — disables the Unity Catalog Volume check.
 
-| databricks_secret_scope
+| databricksSecretScope[[databricks-secret-scope]]
 | string
 | valid secret scope name
 | empty
 | Databricks secret scope used to retrieve authentication credentials for accessing Unity Catalog Volumes as the checkpoint location.
 
-| databricks_host
+| databricksHost[[databricks-host]]
 | string
 | valid secret name
 | empty
 a| Secret name within the configured secret scope that holds the Databricks workspace host URL. Required when `spark_runtime_platform` is `DATABRICKS` and the checkpoint path contains `Volumes`.
 
-Format: `https://<workspace-id>.azuredatabricks.net`
+Refer to https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m#step-2-use-oauth-authorization[Databricks OAuth Workspace level Environment Variables] for valid host value
 
-| databricks_client_id
+| databricksClientId[[databricks-client-id]]
 | string
 | valid secret name
 | empty
 a| Secret name within the configured secret scope that holds the Databricks service principal client ID. Required when `spark_runtime_platform` is `DATABRICKS` and the checkpoint path contains `Volumes`.
 
-NOTE: Ensure the service principal has access to the configured Unity Catalog Volume path.
+For relevant value refer to https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m#step-2-use-oauth-authorization[Databricks OAuth Workspace level Environment Variables] for valid client id value
 
-| databricks_client_secret
+NOTE: Ensure the service principal has access to the configured Unity Catalog Volume checkpoint path and Databricks secret scope.
+
+| databricksClientSecret[[databricks-client-secret]]
 | string
 | valid secret name
 | empty
 a| Secret name within the configured secret scope that holds the Databricks service principal client secret. Required when `spark_runtime_platform` is `DATABRICKS` and the checkpoint path is `Unity Catalog Volume`.
 
+For relevant values refer to https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m#step-2-use-oauth-authorization[Databricks OAuth Workspace level Environment Variables] for valid client secret value
+
 See <<databricks-client-secret-notes>>.
 
-| databricks_client_secret_refresh_interval
+| databricksClientSecretRefreshInterval[[databricks-client-secret-refresh-interval]]
 | long
 | positive integer (minutes)
 | 1440

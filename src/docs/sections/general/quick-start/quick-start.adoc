@@ -19,7 +19,7 @@ Solace Spark Connector is available in maven central with below coordinates.
 
 Steps to deploy the connector
 
-. Create a Databricks Cluster with Spark Version 3.5.1 and Scala 2.12
+. Create a Databricks Cluster with Spark Version 3.5.2 and Scala 2.12
 . Once the cluster is started choose libraries and select maven as connector source. Enter above maven coordinates to download connector from maven central.
 
 NOTE: Before installing latest version of connector make sure earlier versions of solace spark connector are completely deleted from cluster. This is to ensure there are no version conflicts to start the connector.

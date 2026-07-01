@@ -73,20 +73,6 @@ Starting from version 3.1.0 connector, solace connection is now executed on work
 
 NOTE: In case of recovery, connector uses offset state from LVQ to identify last successfully processed messages. Hence, it is recommended not to delete or modify offset state in LVQ. In some cases, there might be checkpoint failures as spark may fail to write to checkpoint during instance crash or unavailability or other reasons. Though the connector will handle duplicates in most cases, we recommend to keep your downstream systems idempotent.
 
-**Checkpoint Storage**
-
-The connector supports multiple checkpoint storage options depending on the deployment platform. When running on Databricks, Unity Catalog Volumes can be used as the checkpoint location. Since Databricks executor nodes do not have direct access to Unity Catalog Volumes, the connector uses https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m[unified authentication] via a `Databricks workspace level service principal` to establish secure access. Ensure the Databricks workspace level service principal has access to Unity Catalog Volume configured as checkpoint storage.
-
-To enable this, the following must be configured:
-
-* Runtime Platform — Set to DATABRICKS to enable Unity Catalog Volume support
-* Secret Scope — A Databricks secret scope containing the workspace level service principal credentials (databricks_host, databricks_client_id, databricks_client_secret)
-* Client Secret Refresh Interval — Controls how frequently the connector fetches updated client secret from the secret scope to handle client secret rotation without requiring a restart
-
-IMPORTANT: Both client secret rotation and the connector's client secret refresh must complete before the secret expires. The refresh interval must be configured to trigger after rotation completes and before the existing secret expires. See the configuration section for detailed guidance on configuring the refresh interval correctly.
-
-Refer to the Source Configuration section for a complete list of properties, accepted values for Databricks unified authentication.
-
 ==== Prerequisites for LVQ creation
 The following prerequisites are applicable for LVQ that are provisioned by Solace Administrator.
 
@@ -102,6 +88,20 @@ The following pre-requisites are applicable if the micro integration need to cre
 1. Ensure the Client Profile applied to the user has "Allow Client to Create Endpoints" enabled.
 2. Ensure the ACL applied to the user has publish and subscribe access to the topic subscribed by LVQ. The Subscribe access is required to programmatically apply the topic subscription to LVQ.
 3. The Micro Integration will create a LVQ with pre-requisites mentioned in above section.
+
+=== Checkpoint Storage
+
+The connector supports multiple checkpoint storage options depending on the deployment platform. When running on Databricks, Unity Catalog Volumes can be used as the checkpoint location. Since Databricks executor nodes do not have direct access to Unity Catalog Volumes, the connector uses https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m[unified authentication] via a `Databricks workspace level service principal` to establish secure access. Ensure the Databricks workspace level service principal has access to Unity Catalog Volume configured as checkpoint storage and the https://docs.databricks.com/aws/en/security/secrets/?language=Secrets%C2%A0utility%C2%A0%28dbutils.secrets%29#grant-a-user-permissions-on-a-secret-scope[secret scope].
+
+To enable this, the following must be configured:
+
+* <<spark-runtime-platform, Spark Runtime Platform>> — Set to DATABRICKS to enable Unity Catalog Volume support
+* <<databricks-secret-scope, Secret Scope>> — A https://docs.databricks.com/aws/en/security/secrets/?language=Databricks%C2%A0CLI#create-a-secret-scope[Databricks secret scope] containing the workspace level service principal credentials (<<databricks-host, databricks_host>>, <<databricks-client-id, databricks_client_id>>, <<databricks-client-secret, databricks_client_secret>>)
+* <<databricks-client-secret-refresh-interval, Client Secret Refresh Interval>> — Controls how frequently the connector fetches updated client secret from the secret scope to handle client secret rotation without requiring a restart
+
+IMPORTANT: Both client secret rotation and the connector's client secret refresh must complete before the secret expires. The refresh interval must be configured to trigger after rotation completes and before the existing secret expires. See the configuration section for detailed guidance on configuring the refresh interval correctly.
+
+Refer to the Source Configuration section for a complete list of properties, accepted values for Databricks unified authentication.
 
 === User Authentication
 
