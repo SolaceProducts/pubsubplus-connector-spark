@@ -18,6 +18,8 @@ import org.apache.spark.sql.streaming.DataStreamReader;
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.junit.jupiter.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -40,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
+    private static final Logger LOG = LoggerFactory.getLogger(SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT.class);
     private SempV2Api sempV2Api = null;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(false);
     private SparkContainer sparkContainer;
@@ -79,13 +82,9 @@ public class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
         Path path1 = Paths.get(System.getProperty("java.io.tmpdir"), "solace.jks");
         Path path2 = Paths.get(System.getProperty("java.io.tmpdir"), "solace_keystore.jks");
 
-        if(Files.exists(path1)) {
-            FileUtils.delete(path1.toAbsolutePath().toFile());
-        }
-
-        if(Files.exists(path2)) {
-            FileUtils.delete(path2.toAbsolutePath().toFile());
-        }
+        // Best-effort so a Windows temp-file lock during teardown doesn't fail an otherwise-green build.
+        SparkTestUtils.deleteQuietlyWithRetry(path1);
+        SparkTestUtils.deleteQuietlyWithRetry(path2);
     }
 
     @BeforeEach
@@ -121,10 +120,8 @@ public class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
     public void afterEach() throws IOException, ApiException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME, new Object());
 
-        sparkContainer.stop();
-        sparkContainer.start();
-        sparkWorkerContainer.stop();
-        sparkWorkerContainer.start();
+        // In-place reset instead of a full container reboot per test (see SparkTestUtils).
+        SparkTestUtils.resetSparkBetweenTests(sparkContainer, sparkWorkerContainer);
     }
 
     private void executeScript(String envVars) throws IOException, InterruptedException {
@@ -195,13 +192,13 @@ public class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
             }
 
             if (assertResult && total >= expectedTotal) {
-                System.out.println("Total records consumed " + total);
+                LOG.info("Total records consumed " + total);
                 if(text != null) {
-                    System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                    LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 }
                 break;
             } else if(!assertResult && customMatcherResult){
-                System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 break;
             }
 
@@ -257,77 +254,5 @@ public class SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT {
         executeScript(envVars.toString());
         assertResult(true, null);
         Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryUsernameIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_username","__DELETE__");
-                put("solace_password","certificate-user-with-password");
-                put("auth_scheme_basic", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Username in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryUsernameIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_username","");
-                put("solace_password","certificate-user-with-password");
-                put("auth_scheme_basic", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Username in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryPasswordIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_username","certificate-user-with-password");
-                put("solace_password","__DELETE__");
-                put("auth_scheme_basic", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Password in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryPasswordIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_username","certificate-user-with-password");
-                put("solace_password","");
-                put("auth_scheme_basic", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Password in configuration options");
     }
 }

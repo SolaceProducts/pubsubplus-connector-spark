@@ -35,6 +35,9 @@
         <shared-remote-resources.directory>${project.build.directory}/shared-remote-resources</shared-remote-resources.directory>
         <shared-remote-resources.build.main.raw.directory>${shared-remote-resources.directory}/build/main/raw</shared-remote-resources.build.main.raw.directory>
         <shared-remote-resources.build.main.processed.directory>${shared-remote-resources.directory}/build/main/processed</shared-remote-resources.build.main.processed.directory>
+        <argLine/>
+        <spark.module.opts/>
+        <docker.api.version>1.44</docker.api.version>
 
         <!-- Shared Resources: User Docs -->
         <shared-remote-resources.process.asciidoctor-resources.skip>false</shared-remote-resources.process.asciidoctor-resources.skip>
@@ -77,6 +80,13 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>5.11.4</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-compress</artifactId>
@@ -210,7 +220,7 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>solace</artifactId>
-            <version>1.20.6</version>
+            <version>1.21.4</version>
             <scope>test</scope>
         </dependency>
 
@@ -218,19 +228,17 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>1.20.6</version>
+            <version>1.21.4</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.10.3</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-suite</artifactId>
-            <version>1.11.4</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -463,6 +471,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>3.2.3</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <api.version>${docker.api.version}</api.version>
+                    </systemPropertyVariables>
+                    <argLine>@{argLine} ${spark.module.opts}</argLine>
+                </configuration>
                 <executions>
                     <execution>
                         <id>integration-test</id>
@@ -639,6 +653,30 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>java9plus</id>
+            <activation>
+                <jdk>[9,)</jdk>
+            </activation>
+            <properties>
+                <spark.module.opts>-XX:+IgnoreUnrecognizedVMOptions
+                    --add-opens=java.base/java.lang=ALL-UNNAMED
+                    --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+                    --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                    --add-opens=java.base/java.io=ALL-UNNAMED
+                    --add-opens=java.base/java.net=ALL-UNNAMED
+                    --add-opens=java.base/java.nio=ALL-UNNAMED
+                    --add-opens=java.base/java.util=ALL-UNNAMED
+                    --add-opens=java.base/java.util.concurrent=ALL-UNNAMED
+                    --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+                    --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+                    --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
+                    --add-opens=java.base/sun.security.action=ALL-UNNAMED
+                    --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
+                    --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED
+                    -Djdk.reflect.useDirectMethodHandle=false</spark.module.opts>
+            </properties>
+        </profile>
         <profile>
             <id>releaseCentral</id>
             <activation>

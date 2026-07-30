@@ -16,6 +16,8 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.streaming.DataStreamReader;
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.junit.jupiter.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -42,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingTLSClientCertificateCNIT {
+    private static final Logger LOG = LoggerFactory.getLogger(SolaceSparkStreamingTLSClientCertificateCNIT.class);
     private SempV2Api sempV2Api = null;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(true);
     private SparkContainer sparkContainer;
@@ -81,13 +84,9 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
         Path path1 = Paths.get(System.getProperty("java.io.tmpdir"), "solace.jks");
         Path path2 = Paths.get(System.getProperty("java.io.tmpdir"), "solace_keystore.jks");
 
-        if(Files.exists(path1)) {
-            FileUtils.delete(path1.toAbsolutePath().toFile());
-        }
-
-        if(Files.exists(path2)) {
-            FileUtils.delete(path2.toAbsolutePath().toFile());
-        }
+        // Best-effort so a Windows temp-file lock during teardown doesn't fail an otherwise-green build.
+        SparkTestUtils.deleteQuietlyWithRetry(path1);
+        SparkTestUtils.deleteQuietlyWithRetry(path2);
     }
 
     @BeforeEach
@@ -123,10 +122,8 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
     public void afterEach() throws IOException, ApiException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME, new Object());
 
-        sparkContainer.stop();
-        sparkContainer.start();
-        sparkWorkerContainer.stop();
-        sparkWorkerContainer.start();
+        // In-place reset instead of a full container reboot per test (see SparkTestUtils).
+        SparkTestUtils.resetSparkBetweenTests(sparkContainer, sparkWorkerContainer);
     }
 
     private void executeScript(String envVars) throws IOException, InterruptedException {
@@ -161,7 +158,7 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
             );
 
             String logs = logResult.getStdout();
-            System.out.println(logs);
+            LOG.info(logs);
             // 4️⃣ Extract batchIds and numInputRows
             Matcher batchMatcher = batchPattern.matcher(logs);
             Matcher rowsMatcher = rowsPattern.matcher(logs);
@@ -197,13 +194,13 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
             }
 
             if (assertResult && total >= expectedTotal) {
-                System.out.println("Total records consumed " + total);
+                LOG.info("Total records consumed " + total);
                 if(text != null) {
-                    System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                    LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 }
                 break;
             } else if(!assertResult && customMatcherResult){
-                System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 break;
             }
 

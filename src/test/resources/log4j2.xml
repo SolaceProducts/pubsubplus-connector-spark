@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Test-scoped logging configuration (src/test/resources).
+    Only affects test/integration-test runs, never the shipped connector.
+    log4j2 is the active SLF4J provider for this project; without this file it
+    defaults to ERROR, which is why integration tests appeared to run silently.
+-->
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level [%t] %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+
+    <Loggers>
+        <!-- This connector's own code: full detail during tests -->
+        <Logger name="com.solacecoe.connectors" level="DEBUG"/>
+
+        <!-- Testcontainers: container lifecycle, image pulls, Ryuk, waits -->
+        <Logger name="org.testcontainers" level="INFO"/>
+        <Logger name="tc" level="INFO"/><!-- container stdout/stderr stream -->
+        <Logger name="com.github.dockerjava" level="WARN"/>
+
+        <!-- Solace JCSMP client -->
+        <Logger name="com.solacesystems" level="INFO"/>
+        <Logger name="com.solace" level="INFO"/>
+
+        <!-- Spark & friends are extremely chatty at INFO; keep them to WARN -->
+        <Logger name="org.apache.spark" level="WARN"/>
+        <Logger name="org.sparkproject" level="WARN"/>
+        <Logger name="org.apache.hadoop" level="WARN"/>
+
+        <Root level="INFO">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>

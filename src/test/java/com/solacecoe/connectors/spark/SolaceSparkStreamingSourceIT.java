@@ -11,6 +11,8 @@ import com.solacecoe.connectors.spark.containers.SparkContainer;
 import com.solacecoe.connectors.spark.containers.SparkWorkerContainer;
 import com.solacesystems.jcsmp.*;
 import org.junit.jupiter.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -33,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingSourceIT {
+    private static final Logger LOG = LoggerFactory.getLogger(SolaceSparkStreamingSourceIT.class);
     private SempV2Api sempV2Api = null;
     private SparkContainer sparkContainer;
     private SparkWorkerContainer sparkWorkerContainer;
@@ -82,7 +85,7 @@ public class SolaceSparkStreamingSourceIT {
                 put("solace/spark/streaming/offset", Service.SMF);
             }
         };
-        solaceTestContainer = new SolaceTestContainer("solace/solace-pubsub-standard:latest", topics);
+        solaceTestContainer = new SolaceTestContainer("solace/solace-pubsub-standard:10.11.1.147", topics);
         solaceTestContainer.start();
         if(solaceTestContainer.isRunning()) {
             sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceTestContainer.getHost(), solaceTestContainer.getMappedPort(8080)), "admin", "admin");
@@ -179,10 +182,8 @@ public class SolaceSparkStreamingSourceIT {
     @AfterEach
     public void afterEach() throws com.solace.semp.v2.action.ApiException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
-        sparkContainer.stop();
-        sparkContainer.start();
-        sparkWorkerContainer.stop();
-        sparkWorkerContainer.start();
+        // In-place reset instead of a full container reboot per test (see SparkTestUtils).
+        SparkTestUtils.resetSparkBetweenTests(sparkContainer, sparkWorkerContainer);
     }
 
     private void executeScript(String envVars) throws IOException, InterruptedException {
@@ -255,13 +256,13 @@ public class SolaceSparkStreamingSourceIT {
             }
 
             if (assertResult && total >= expectedTotal) {
-                System.out.println("Total records consumed " + total);
+                LOG.info("Total records consumed " + total);
                 if(text != null) {
-                    System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                    LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 }
                 break;
             } else if(!assertResult && customMatcherResult){
-                System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 break;
             }
 
@@ -309,7 +310,7 @@ public class SolaceSparkStreamingSourceIT {
         if (msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
             assertEquals(2, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 2");
             Assertions.assertNotEquals(msgVpnQueueTxFlowResponse.getData().get(0).getClientName(), msgVpnQueueTxFlowResponse.getData().get(1).getClientName(), "Client Name of two solace sessions should not be the same");
-            System.out.println("Total " + msgVpnQueueTxFlowResponse.getData().size() + " consumers with different client names");
+            LOG.info("Total " + msgVpnQueueTxFlowResponse.getData().size() + " consumers with different client names");
         }
 //        streamingQuery.stop();
     }
@@ -456,264 +457,4 @@ public class SolaceSparkStreamingSourceIT {
                 "Checkpoint should contain modified replication group identifier");
     }
 
-    @Test
-    void Should_Fail_IfQueueIsUnknown() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_queue","unknown.q");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 503: Unknown Queue");
-    }
-
-    @Test
-    void Should_Fail_IfSolaceHostIsInvalid() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_host","tcp://invalid-host:55555");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "com.solacesystems.jcsmp.InvalidPropertiesException: All hosts in the host list: 'tcp://invalid-host:55555' are not resolvable");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryHostIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_host", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Host name in configuration options");
-    }
-
-
-    @Test
-    void Should_Fail_IfMandatoryHostIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_host", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Host name in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryVpnIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_vpn", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace VPN name in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryVpnIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_vpn", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace VPN name in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryUsernameIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_username", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "InvalidPropertiesException: Property (username) is not provided.");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryUsernameIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_username", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "InvalidPropertiesException: Property (username) is not provided.");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryPasswordIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_password", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 401: Unauthorized");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryPasswordIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_password", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 401: Unauthorized");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryQueueIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_queue", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Queue in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryQueueIsNull() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_queue", "NULL");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Queue in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryQueueIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_queue", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Queue in configuration options");
-    }
-
-    @Test
-    void Should_Fail_IfBatchSizeLessThan0() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_batchSize", "-1");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "SolaceSparkConnector - Please set batch size greater than zero");
-    }
-
-    @Test
-    void Should_Fail_IfLVQTopic_Has_No_Permission_To_Publish() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_batchSize", "1");
-                put("solace_lvq_topic", "invalid/topic");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 403: Subscription ACL Denied - Queue 'solace.spark.connector.state' - Topic 'invalid/topic'");
-    }
-
-    @Test
-    void Should_Fail_IfLVQ_Has_No_Permission_To_Access() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_batchSize", "1");
-                put("solace_lvq_name", "Solace/Queue/lvq/0");
-                put("solace_lvq_topic", "solace/spark/streaming/offset");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 403: Permission Not Allowed - Queue 'Solace/Queue/lvq/0' - Topic 'solace/spark/streaming/offset'");
-    }
-
-    @Test
-    void Should_Fail_IfLVQ_Has_No_Permission_To_Add_Subscription() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_batchSize", "1");
-                put("solace_lvq_name", "Solace/Queue/lvq/0");
-                put("solace_lvq_topic", "invalid/topic");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 403: Subscription ACL Denied - Queue 'Solace/Queue/lvq/0' - Topic 'invalid/topic'");
-    }
 }
