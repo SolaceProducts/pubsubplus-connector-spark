@@ -102,11 +102,11 @@ jobs:
           PACKAGES_READ_TOKEN: ${{ steps.secrets.outputs.PACKAGES_READ_TOKEN }}
         run: mvn -B compile process-classes pmd:aggregate-pmd-check spotbugs:check  --settings "${GITHUB_WORKSPACE}/maven/settings.xml"
 
-      - name: Unit/Integration Tests JDK 8 (zulu)
+      - name: Unit/Integration Tests JDK 11 (zulu)
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           distribution: zulu
-          java-version: 8
+          java-version: 11
 
       - name: Check Docker status
         run: docker info

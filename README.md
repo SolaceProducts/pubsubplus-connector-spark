@@ -22,14 +22,18 @@ The connector is available in maven central as [pubsubplus-connector-spark](http
 
 # Build the connector
 
+The connector requires **JDK 11 or later** to build and to run. It targets Java 11 bytecode
+(`maven.compiler.release=11`), stays on Apache Spark 3.5.2 / Scala 2.12, and is validated on
+JDK 11.
+
 `mvn clean install` to build connector with integration tests
 `mvn clean install -DskipTests ` to build connector without integration tests.
 
 ## Running the integration tests on Windows
 
 Most integration tests run Spark inside Docker containers, but the configuration-validation
-suites (`SolaceSparkSourceValidationIT`, `SolaceSparkSinkValidationIT`) start a local
-`SparkSession` in the test JVM so they don't pay a `spark-submit` startup per test. On Windows,
+suite (`SolaceSparkValidationIT`) starts a local `SparkSession` in the test JVM so it doesn't pay
+a `spark-submit` startup per test. On Windows,
 Spark's checkpointing goes through Hadoop, which needs the Hadoop Windows native helpers:
 
 1. Obtain `winutils.exe` and `hadoop.dll` for Hadoop 3.3.x (Spark 3.5.2 bundles Hadoop 3.3.4).
@@ -40,7 +44,7 @@ Spark's checkpointing goes through Hadoop, which needs the Hadoop Windows native
 4. Copy `hadoop.dll` into `C:\Windows\System32` as well; some code paths load it from the default
    library path rather than from `HADOOP_HOME`.
 
-Without this, those tests fail with
+Without this, that suite fails with
 `java.io.FileNotFoundException: HADOOP_HOME and hadoop.home.dir are unset`.
 
 Linux and CI need no extra setup. Docker must be running for all integration tests.
