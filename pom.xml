@@ -215,6 +215,10 @@
             <artifactId>spark-sql_2.12</artifactId>
             <version>3.5.2</version>
         </dependency>
+        <dependency>
+            <groupId>at.yawk.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+        </dependency>
         <!-- Source: https://mvnrepository.com/artifact/com.databricks/databricks-sdk-java -->
         <dependency>
             <groupId>com.databricks</groupId>
