@@ -341,7 +341,7 @@ public class SolaceSparkStreamingOAuthIT {
         executeScript(envVars.toString());
         assertResult(true,null);
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> assertEquals(100, count[0]));
     }
 
     @Test

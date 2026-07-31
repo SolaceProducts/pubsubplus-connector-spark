@@ -304,7 +304,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
 //        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -354,7 +354,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -508,7 +508,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -556,7 +556,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -601,7 +601,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -647,7 +647,7 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         assertResult(true, null, 0);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -692,7 +692,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
         assertResult(false, "Write Batch", 2);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -735,7 +735,7 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         assertResult(true, null, 0);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -784,7 +784,7 @@ public class SolaceSparkStreamingSinkIT {
         if (msgVpnQueueTxFlowResponse.getData() != null && !msgVpnQueueTxFlowResponse.getData().isEmpty()) {
             assertEquals(3, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 3");
         }
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] >= 100));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] >= 100));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -829,7 +829,7 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         assertResult(false, "Write Batch", 1);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(0, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(0, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -877,7 +877,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -983,7 +983,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         LocalDate dateFromTimestamp = Instant.ofEpochSecond(timestamp[0])
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate();

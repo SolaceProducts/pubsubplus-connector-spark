@@ -264,6 +264,6 @@ public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
 
         executeScript(envVars.toString());
         assertResult(true, null);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
     }
 }

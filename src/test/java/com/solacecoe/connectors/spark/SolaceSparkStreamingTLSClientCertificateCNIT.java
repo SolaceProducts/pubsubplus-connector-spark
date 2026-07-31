@@ -280,7 +280,7 @@ public class SolaceSparkStreamingTLSClientCertificateCNIT {
 //                .option("checkpointLocation", writePath.toAbsolutePath().toString())
 //                .format("solace").start();
 //
-//        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
+//        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
 //        Thread.sleep(3000); // add timeout to ack messages on queue
 //        streamingQuery.stop();
 
