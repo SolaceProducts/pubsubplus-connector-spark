@@ -258,7 +258,7 @@ a| Runtime platform on which the Spark application is deployed. Required when a 
 | string
 | valid secret name
 | empty
-a| Secret name within the configured secret scope that holds the Databricks workspace host URL. Required when `spark_runtime_platform` is `DATABRICKS` and the checkpoint path contains `Volumes`.
+a| Secret name within the configured secret scope that holds the Databricks workspace host URL. Required when `sparkRuntimePlatform` is `DATABRICKS` and the checkpoint path contains `Volumes`.
 
 Refer to https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m#step-2-use-oauth-authorization[Databricks OAuth Workspace level Environment Variables] for valid host value
 
@@ -266,7 +266,7 @@ Refer to https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth
 | string
 | valid secret name
 | empty
-a| Secret name within the configured secret scope that holds the Databricks service principal client ID. Required when `spark_runtime_platform` is `DATABRICKS` and the checkpoint path contains `Volumes`.
+a| Secret name within the configured secret scope that holds the Databricks service principal client ID. Required when `sparkRuntimePlatform` is `DATABRICKS` and the checkpoint path contains `Volumes`.
 
 For relevant value refer to https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m#step-2-use-oauth-authorization[Databricks OAuth Workspace level Environment Variables] for valid client id value
 
@@ -276,7 +276,7 @@ NOTE: Ensure the service principal has access to the configured Unity Catalog Vo
 | string
 | valid secret name
 | empty
-a| Secret name within the configured secret scope that holds the Databricks service principal client secret. Required when `spark_runtime_platform` is `DATABRICKS` and the checkpoint path is `Unity Catalog Volume`.
+a| Secret name within the configured secret scope that holds the Databricks service principal client secret. Required when `sparkRuntimePlatform` is `DATABRICKS` and the checkpoint path is `Unity Catalog Volume`.
 
 For relevant values refer to https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m#step-2-use-oauth-authorization[Databricks OAuth Workspace level Environment Variables] for valid client secret value
 
@@ -302,4 +302,4 @@ Databricks Client Secret — Important Notes
 
 NOTE: Always manage this credential using Databricks secret scopes. Never expose it in plain text.
 
-IMPORTANT: Secret rotation is not managed by the connector. The platform administrator is responsible for rotating the secret and updating it in the secret scope. The connector fetches the updated secret automatically based on the interval configured in `databricks_client_secret_refresh_interval`. No restart is required.
+IMPORTANT: Secret rotation is not managed by the connector. The platform administrator is responsible for rotating the secret and updating it in the secret scope. The connector fetches the updated secret automatically based on the interval configured in `databricksClientSecretRefreshInterval`. No restart is required.
