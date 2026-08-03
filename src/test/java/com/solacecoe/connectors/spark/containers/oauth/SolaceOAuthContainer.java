@@ -526,7 +526,7 @@ public class SolaceOAuthContainer extends GenericContainer<SolaceOAuthContainer>
         }
 
         public static void main(String[] args) {
-            SolaceOAuthContainer solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:latest");
+            SolaceOAuthContainer solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:10.11.1.147");
             solaceOAuthContainer.withCredentials("user", "pass")
                     .withClientCert(MountableFile.forClasspathResource("solace.pem"),
                             MountableFile.forClasspathResource("keycloak.crt"), false)

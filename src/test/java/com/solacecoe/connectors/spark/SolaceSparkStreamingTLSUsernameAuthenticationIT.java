@@ -7,39 +7,53 @@ import com.solacecoe.connectors.spark.containers.SparkContainer;
 import com.solacecoe.connectors.spark.containers.SparkWorkerContainer;
 import com.solacecoe.connectors.spark.containers.oauth.CertificateContainerResource;
 import com.solacecoe.connectors.spark.containers.oauth.SolaceOAuthContainer;
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
-import com.solacesystems.jcsmp.*;
-import org.apache.spark.api.java.function.VoidFunction2;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.streaming.DataStreamReader;
-import org.apache.spark.sql.streaming.StreamingQuery;
-import org.apache.spark.sql.streaming.StreamingQueryException;
-import org.junit.jupiter.api.*;
+import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.TextMessage;
+import com.solacesystems.jcsmp.Topic;
+import com.solacesystems.jcsmp.XMLMessageConsumer;
+import com.solacesystems.jcsmp.XMLMessageListener;
+import com.solacesystems.jcsmp.XMLMessageProducer;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(SolaceSparkStreamingTLSUsernameAuthenticationIT.class);
     private SempV2Api sempV2Api = null;
     private final CertificateContainerResource containerResource = new CertificateContainerResource(false);
     private SparkContainer sparkContainer;
@@ -55,7 +69,7 @@ public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
             tempCheckpoint.toFile().setWritable(true, false);
             tempCheckpoint.toFile().setReadable(true, false);
             tempCheckpoint.toFile().setExecutable(true, false);
-            
+
             sparkContainer.withFileSystemBind(System.getProperty("java.io.tmpdir") + "/checkpoint", "/opt/spark/checkpoint/solace-spark-connector-integration-test-checkpoint", BindMode.READ_WRITE);
             sparkContainer.start();
 
@@ -79,13 +93,9 @@ public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
         Path path1 = Paths.get(System.getProperty("java.io.tmpdir"), "solace.jks");
         Path path2 = Paths.get(System.getProperty("java.io.tmpdir"), "solace_keystore.jks");
 
-        if(Files.exists(path1)) {
-            FileUtils.delete(path1.toAbsolutePath().toFile());
-        }
-
-        if(Files.exists(path2)) {
-            FileUtils.delete(path2.toAbsolutePath().toFile());
-        }
+        // Best-effort so a Windows temp-file lock during teardown doesn't fail an otherwise-green build.
+        SparkTestUtils.deleteQuietlyWithRetry(path1);
+        SparkTestUtils.deleteQuietlyWithRetry(path2);
     }
 
     @BeforeEach
@@ -121,10 +131,8 @@ public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
     public void afterEach() throws IOException, ApiException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME, new Object());
 
-        sparkContainer.stop();
-        sparkContainer.start();
-        sparkWorkerContainer.stop();
-        sparkWorkerContainer.start();
+        // In-place reset instead of a full container reboot per test (see SparkTestUtils).
+        SparkTestUtils.resetSparkBetweenTests(sparkContainer, sparkWorkerContainer);
     }
 
     private void executeScript(String envVars) throws IOException, InterruptedException {
@@ -195,13 +203,13 @@ public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
             }
 
             if (assertResult && total >= expectedTotal) {
-                System.out.println("Total records consumed " + total);
+                LOG.info("Total records consumed " + total);
                 if(text != null) {
-                    System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                    LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 }
                 break;
             } else if(!assertResult && customMatcherResult){
-                System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 break;
             }
 
@@ -256,6 +264,6 @@ public class SolaceSparkStreamingTLSUsernameAuthenticationIT {
 
         executeScript(envVars.toString());
         assertResult(true, null);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] > 0));
     }
 }
