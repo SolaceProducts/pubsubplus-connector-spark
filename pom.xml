@@ -186,11 +186,6 @@
                 <artifactId>aircompressor</artifactId>
                 <version>2.0.3</version>
             </dependency>
-            <dependency>
-                <groupId>at.yawk.lz4</groupId>
-                <artifactId>lz4-java</artifactId>
-                <version>1.11.1</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -210,12 +205,6 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_2.13</artifactId>
             <version>4.0.3</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.lz4</groupId>
-                    <artifactId>lz4-java</artifactId>
-                </exclusion>
-            </exclusions>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -259,6 +248,11 @@
             <artifactId>pubsubplus-connector-asciidoctor-resource-bundle</artifactId>
             <version>2.6.0</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+            <version>1.8.1</version>
         </dependency>
 
         <!-- test dependencies -->

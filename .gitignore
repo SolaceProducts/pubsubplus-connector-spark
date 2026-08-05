@@ -11,3 +11,9 @@ build/tmp/*
 .docs/
 .scripts/
 scripts/
+
+# Local working notes, not part of the released documentation set.
+# Leading slash anchors this to the repository root - an unanchored "docs/" would
+# also match src/docs/, which holds the published .adoc documentation.
+/docs/
+src/docs/spark4-*.md
