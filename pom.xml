@@ -26,7 +26,7 @@
         <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
 
 
-        <maven.compiler.release>11</maven.compiler.release>
+        <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- An extra resources directory to add filtered resources using @-delimiters -->
@@ -37,6 +37,7 @@
         <shared-remote-resources.build.main.processed.directory>${shared-remote-resources.directory}/build/main/processed</shared-remote-resources.build.main.processed.directory>
         <argLine/>
         <spark.module.opts/>
+        <af-unix.tmpdir.opt/>
         <docker.api.version>1.44</docker.api.version>
 
         <!-- Shared Resources: User Docs -->
@@ -104,7 +105,7 @@
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava-bom</artifactId>
-                <version>32.1.3-jre</version>
+                <version>33.6.0-jre</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -143,17 +144,17 @@
             <dependency>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
-                <version>1.11.5</version>
+                <version>1.12.1</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro-mapred</artifactId>
-                <version>1.11.5</version>
+                <version>1.12.1</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro-ipc</artifactId>
-                <version>1.11.5</version>
+                <version>1.12.1</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
@@ -173,17 +174,17 @@
             <dependency>
                 <groupId>org.apache.zookeeper</groupId>
                 <artifactId>zookeeper</artifactId>
-                <version>3.8.6</version>
+                <version>3.9.5</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.zookeeper</groupId>
+                <artifactId>zookeeper-jute</artifactId>
+                <version>3.9.5</version>
             </dependency>
             <dependency>
                 <groupId>io.airlift</groupId>
                 <artifactId>aircompressor</artifactId>
                 <version>2.0.3</version>
-            </dependency>
-            <dependency>
-                <groupId>at.yawk.lz4</groupId>
-                <artifactId>lz4-java</artifactId>
-                <version>1.11.1</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -196,28 +197,21 @@
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-streaming_2.12</artifactId>
-            <version>3.5.2</version>
+            <artifactId>spark-streaming_2.13</artifactId>
+            <version>4.0.0</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-core_2.12</artifactId>
-            <version>3.5.8</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.lz4</groupId>
-                    <artifactId>lz4-java</artifactId>
-                </exclusion>
-            </exclusions>
+            <artifactId>spark-core_2.13</artifactId>
+            <version>4.0.0</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-sql_2.12</artifactId>
-            <version>3.5.2</version>
-        </dependency>
-        <dependency>
-            <groupId>at.yawk.lz4</groupId>
-            <artifactId>lz4-java</artifactId>
+            <artifactId>spark-sql_2.13</artifactId>
+            <version>4.0.0</version>
+            <scope>provided</scope>
         </dependency>
         <!-- Source: https://mvnrepository.com/artifact/com.databricks/databricks-sdk-java -->
         <dependency>
@@ -226,12 +220,10 @@
             <version>0.138.0</version>
         </dependency>
         <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.16</version>
+            <scope>provided</scope>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.nimbusds/oauth2-oidc-sdk -->
         <dependency>
@@ -245,16 +237,17 @@
             <artifactId>fastutil</artifactId>
             <version>8.5.19</version>
         </dependency>
-
         <dependency>
             <groupId>com.github.spotbugs</groupId>
             <artifactId>spotbugs-annotations</artifactId>
             <version>4.10.3</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.solace.connector.core.resource</groupId>
             <artifactId>pubsubplus-connector-asciidoctor-resource-bundle</artifactId>
             <version>2.6.0</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- test dependencies -->
@@ -515,7 +508,7 @@
                     <systemPropertyVariables>
                         <api.version>${docker.api.version}</api.version>
                     </systemPropertyVariables>
-                    <argLine>@{argLine} ${spark.module.opts}</argLine>
+                    <argLine>@{argLine} ${spark.module.opts} ${af-unix.tmpdir.opt}</argLine>
                 </configuration>
                 <executions>
                     <execution>
@@ -715,6 +708,17 @@
                     --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
                     --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED
                     -Djdk.reflect.useDirectMethodHandle=false</spark.module.opts>
+            </properties>
+        </profile>
+        <profile>
+            <id>windows-af-unix-tmpdir</id>
+            <activation>
+                <os>
+                    <family>windows</family>
+                </os>
+            </activation>
+            <properties>
+                <af-unix.tmpdir.opt>-Djdk.net.unixdomain.tmpdir=${project.build.directory}</af-unix.tmpdir.opt>
             </properties>
         </profile>
         <profile>

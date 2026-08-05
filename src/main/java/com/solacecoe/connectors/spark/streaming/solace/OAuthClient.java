@@ -5,6 +5,7 @@ import com.nimbusds.oauth2.sdk.auth.ClientAuthentication;
 import com.nimbusds.oauth2.sdk.auth.ClientSecretBasic;
 import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.http.HTTPRequest;
+import com.nimbusds.oauth2.sdk.http.HTTPResponse;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.token.AccessToken;
 import com.nimbusds.oauth2.sdk.util.tls.TLSUtils;
@@ -34,6 +35,7 @@ import java.util.Set;
 
 public class OAuthClient implements Serializable {
     private static final Logger log = LoggerFactory.getLogger(OAuthClient.class);
+    private static final int MAX_ERROR_BODY_CHARS = 512;
     private Scope scope;
     private URI tokenEndpoint;
     private transient HTTPRequest httpRequest;
@@ -119,6 +121,7 @@ public class OAuthClient implements Serializable {
         TokenRequest request = new TokenRequest(tokenEndpoint, clientAuth, clientGrant, scope);
         try {
             httpRequest = request.toHTTPRequest();
+            httpRequest.setAccept("application/json");
             httpRequest.setConnectTimeout(timeout);
             SSLSocketFactory sslSocketFactory;
             if(validateSSLCertificate) {
@@ -186,12 +189,14 @@ public class OAuthClient implements Serializable {
     public AccessToken getAccessToken() {
         TokenResponse response = null;
         try {
-            response = TokenResponse.parse(httpRequest.send());
+            HTTPResponse httpResponse = httpRequest.send();
+            response = TokenResponse.parse(httpResponse);
             if (! response.indicatesSuccess()) {
                 // We got an error response...
                 TokenErrorResponse errorResponse = response.toErrorResponse();
-                log.error("SolaceSparkConnector - Exception when fetching access token: {}", errorResponse.getErrorObject());
-                throw new IOException(errorResponse.getErrorObject().toString());
+                String detail = describeTokenError(errorResponse.getErrorObject(), httpResponse);
+                log.error("SolaceSparkConnector - Exception when fetching access token: {}", detail);
+                throw new IOException(detail);
             }
 
             AccessTokenResponse successResponse = response.toSuccessResponse();
@@ -202,6 +207,33 @@ public class OAuthClient implements Serializable {
             log.error("SolaceSparkConnector - Exception occurred when fetching access token", e);
             throw new SolaceSecurityException(e);
         }
+    }
+
+    private static String describeTokenError(ErrorObject error, HTTPResponse httpResponse) {
+        String code = error == null ? null : error.getCode();
+        String description = error == null ? null : error.getDescription();
+
+        // Normal case: the server returned a parseable OAuth error. Report it as-is.
+        if (code != null) {
+            return description != null ? code + " - " + description : code;
+        }
+
+        // Degenerate case: nothing parseable. Report the HTTP status, plus whatever the server
+        // actually sent, so the cause is not reduced to the literal string "null".
+        StringBuilder message = new StringBuilder("HTTP ").append(httpResponse.getStatusCode());
+        if (description != null) {
+            message.append(": ").append(description);
+            return message.toString();
+        }
+        String body = httpResponse.getBody();
+        if (body != null && !body.trim().isEmpty()) {
+            body = body.trim();
+            if (body.length() > MAX_ERROR_BODY_CHARS) {
+                body = body.substring(0, MAX_ERROR_BODY_CHARS) + "...(truncated)";
+            }
+            message.append(": ").append(body);
+        }
+        return message.toString();
     }
 
     private String getTrustStoreName() {

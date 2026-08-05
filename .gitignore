@@ -7,3 +7,7 @@ build/classes/*
 build/scripts/*
 build/staged/*
 build/tmp/*
+
+.docs/
+.scripts/
+scripts/

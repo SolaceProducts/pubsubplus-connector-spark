@@ -2,8 +2,12 @@
 <!--
     Test-scoped logging configuration (src/test/resources).
     Only affects test/integration-test runs, never the shipped connector.
-    log4j2 is the active SLF4J provider for this project; without this file it
-    defaults to ERROR, which is why integration tests appeared to run silently.
+
+    Main and test code both log through the SLF4J facade only. No logging backend is
+    declared in pom.xml; Log4j 2 is the active SLF4J provider here because Spark brings
+    it in transitively at `provided` scope, which is also what binds it at runtime on a
+    real cluster. Without this file the provider defaults to ERROR, which is why
+    integration tests appeared to run silently.
 -->
 <Configuration status="WARN">
     <Appenders>
