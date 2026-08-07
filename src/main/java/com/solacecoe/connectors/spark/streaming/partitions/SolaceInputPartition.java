@@ -1,14 +1,14 @@
 package com.solacecoe.connectors.spark.streaming.partitions;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.spark.sql.connector.read.InputPartition;
 
 import java.io.Serializable;
 
 public class SolaceInputPartition implements InputPartition, Serializable {
 
-    private static final Logger log = LogManager.getLogger(SolaceInputPartition.class);
+    private static final Logger log = LoggerFactory.getLogger(SolaceInputPartition.class);
     private final String id;
     private final String preferredLocation;
     public SolaceInputPartition(int partitionHashCode, String preferredLocation) {

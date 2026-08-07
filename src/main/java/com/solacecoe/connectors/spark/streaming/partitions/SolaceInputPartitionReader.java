@@ -8,15 +8,17 @@ import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
 import com.solacecoe.connectors.spark.streaming.offset.SolaceSparkPartitionCheckpoint;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceHeaders;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
-import com.solacecoe.connectors.spark.streaming.solace.*;
+import com.solacecoe.connectors.spark.streaming.properties.SparkStreamingTaskProperties;
 import com.solacecoe.connectors.spark.streaming.solace.EventListener;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceRecord;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumerException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceMessageException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSessionException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
 import com.solacesystems.jcsmp.SDTException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.spark.TaskContext;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
@@ -25,24 +27,30 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.catalyst.util.GenericArrayData;
 import org.apache.spark.sql.catalyst.util.MapData;
 import org.apache.spark.sql.connector.read.PartitionReader;
-import org.apache.spark.sql.execution.streaming.MicroBatchExecution;
-import org.apache.spark.sql.execution.streaming.StreamExecution;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.sql.Timestamp;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 public class SolaceInputPartitionReader implements PartitionReader<InternalRow> {
-    private final transient Logger log = LogManager.getLogger(SolaceInputPartitionReader.class);
+    private final transient Logger log = LoggerFactory.getLogger(SolaceInputPartitionReader.class);
     private final boolean includeHeaders;
     private final SolaceInputPartition solaceInputPartition;
     private final Map<String, String> properties;
@@ -96,13 +104,13 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow> 
             workspaceClient = new WorkspaceClient(databricksConfig);
         }
 
-        String currentBatchId = taskContext.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY());
+        String currentBatchId = taskContext.getLocalProperty(SparkStreamingTaskProperties.BATCH_ID_KEY);
         log.info("SolaceSparkConnector - Current batch id {} and previous batch id {}", currentBatchId, SolaceMessageTracker.getLastBatchId(this.uniqueId));
         /*
          * In case when multiple operations are performed on dataframe, input partition will be called as part of Spark scan.
          * We need to acknowledge messages only if new batch is started. In case of same batch we will return the same messages.
          */
-        if (!currentBatchId.equals(SolaceMessageTracker.getLastBatchId(this.uniqueId))) {
+        if (!Objects.equals(currentBatchId, SolaceMessageTracker.getLastBatchId(this.uniqueId))) {
             /* Currently solace can ack messages on consumer flow. So ack previous messages before starting to process new ones.
              * If Spark starts new input partition it indicates previous batch of data is successful. So we can acknowledge messages here.
              * Solace connection is always active and acknowledgements should be successful. It might throw exception if connection is lost
@@ -338,8 +346,8 @@ public class SolaceInputPartitionReader implements PartitionReader<InternalRow> 
     }
 
     private void logShutdownMessage(TaskContext context) {
-        log.info("SolaceSparkConnector - Closing connections to Solace as task {} is interrupted or failed", String.join(",", context.getLocalProperty(StreamExecution.QUERY_ID_KEY()),
-                context.getLocalProperty(MicroBatchExecution.BATCH_ID_KEY()),
+        log.info("SolaceSparkConnector - Closing connections to Solace as task {} is interrupted or failed", String.join(",", context.getLocalProperty(SparkStreamingTaskProperties.QUERY_ID_KEY),
+                context.getLocalProperty(SparkStreamingTaskProperties.BATCH_ID_KEY),
                 Integer.toString(context.stageId()),
                 Integer.toString(context.partitionId())));
         SolaceConnectionManager.close(this.solaceInputPartition.getId());
