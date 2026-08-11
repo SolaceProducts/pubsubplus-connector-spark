@@ -10,8 +10,8 @@
 <!--        <version>${revision}${sha1}${changelist}</version>-->
 <!--    </parent>-->
 
-    <groupId>com.solacecoe.connectors</groupId>
-    <artifactId>pubsubplus-connector-spark</artifactId>
+    <groupId>com.solace</groupId>
+    <artifactId>solace-connector-spark-4</artifactId>
     <version>${revision}${sha1}${changelist}</version>
 
     <properties>
@@ -20,7 +20,7 @@
         Project Versioning Properties
         ===================================
         -->
-        <revision>4.0.1</revision>
+        <revision>1.0.0</revision>
         <sha1/> <!-- Doesn't actually need to be a sha1, this is just another version modifier variable -->
         <changelist>-SNAPSHOT</changelist>
         <next-revision>${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}</next-revision>
@@ -755,8 +755,10 @@
                         <extensions>true</extensions>
                         <configuration>
                             <publishingServerId>central</publishingServerId>
-                            <autoPublish>true</autoPublish>
-                            <waitUntil>published</waitUntil>
+                            <!-- Staged review: the deployment is uploaded and validated but not
+                                 published. Release it manually from the Central Portal. -->
+                            <autoPublish>false</autoPublish>
+                            <waitUntil>validated</waitUntil>
                         </configuration>
                     </plugin>
                     <plugin>

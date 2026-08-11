@@ -11,8 +11,8 @@ Solace Spark Connector is available in maven central with below coordinates.
 [source,xml,subs="+attributes"]
 ----
 <dependency>
-    <groupId>com.solacecoe.connectors</groupId>
-    <artifactId>pubsubplus-connector-spark</artifactId>
+    <groupId>com.solace</groupId>
+    <artifactId>solace-connector-spark-4</artifactId>
     <version>{version}</version>
 </dependency>
 ----
