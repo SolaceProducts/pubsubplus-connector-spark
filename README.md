@@ -18,7 +18,7 @@ For complete user guide, please check the connector page on [Solace Integration 
 
 ## Maven Central
 
-The connector is available in maven central as [pubsubplus-connector-spark](https://mvnrepository.com/artifact/com.solacecoe.connectors/pubsubplus-connector-spark)
+The connector is available in maven central as [solace-connector-spark-4](https://mvnrepository.com/artifact/com.solace/solace-connector-spark-4)
 
 # Build the connector
 
