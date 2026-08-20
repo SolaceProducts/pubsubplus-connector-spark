@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkSchemaProperties;
 import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
+import com.solacecoe.connectors.spark.streaming.solace.SolaceConnectionManager;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAbortException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAckInterruptedException;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolacePublishAckTimeoutException;
@@ -32,10 +33,19 @@ import java.util.concurrent.*;
 
 public class SolaceDataWriter implements DataWriter<InternalRow> {
     private static final Logger log = LoggerFactory.getLogger(SolaceDataWriter.class);
+    // Prefix keeps producer connections in their own namespace within SolaceConnectionManager's shared
+    // map, so a writer's partitionId can never collide with a consumer's hash-derived partition key.
+    private static final String CONNECTION_ID_PREFIX = "producer-";
     private String topic;
     private String messageId;
     private final StructType schema;
     private final Map<String, String> properties;
+    // JCSMP producer sessions are expensive to create (DNS resolution, TLS handshake) and Spark calls
+    // DataWriterFactory.createWriter() once per partition per micro-batch. Caching per partition via
+    // SolaceConnectionManager - the same mechanism already used for consumer connections - is safe
+    // because Spark never runs two writers for the same partition concurrently: successive epochs for
+    // a given partition execute sequentially, so at most one writer per connection id is ever live.
+    private final String connectionId;
     private SolaceBroker solaceBroker;
     private final transient UnsafeProjection projection;
     private final ConcurrentHashMap<String, SolaceDataWriterCommitMessage> commitMessages;
@@ -46,27 +56,64 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
 //    private final boolean hasDefaultMessageId;
     private int publishedMessages = 0;
     private CompletableFuture<Void> allAcksReceived = new CompletableFuture<>();
-    public SolaceDataWriter(StructType schema, Map<String, String> properties) {
+    public SolaceDataWriter(StructType schema, Map<String, String> properties, int partitionId) {
         this.schema = schema;
         this.properties = properties;
+        this.connectionId = CONNECTION_ID_PREFIX + partitionId;
         this.includeHeaders = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.INCLUDE_HEADERS, SolaceSparkStreamingProperties.INCLUDE_HEADERS_DEFAULT));
         this.topic = properties.getOrDefault(SolaceSparkStreamingProperties.TOPIC, null);
 //        this.messageId = properties.getOrDefault(SolaceSparkStreamingProperties.MESSAGE_ID, null);
         hasDefaultTopic = this.topic != null;
 //        hasDefaultMessageId = this.messageId != null;
         try {
-            this.solaceBroker = new SolaceBroker(properties, "producer");
+            this.solaceBroker = acquireBroker(connectionId, properties);
             this.solaceBroker.initProducer(getJCSMPStreamingPublishCorrelatingEventHandler());
         } catch (Exception e) {
+            SolaceConnectionManager.removeConnection(connectionId);
             if(this.solaceBroker != null) {
                 this.solaceBroker.close();
             }
-            throw new SolacePublishException(e.getCause());
+            throw new SolacePublishException(e.getCause() != null ? e.getCause() : e);
         }
 
         this.projection = createProjection();
         this.commitMessages = new ConcurrentHashMap<>();
         this.abortedMessages = new ConcurrentHashMap<>();
+    }
+
+    private static SolaceBroker acquireBroker(String connectionId, Map<String, String> properties) {
+        SolaceBroker cached = SolaceConnectionManager.getConnection(connectionId);
+        if (cached != null && cached.isConnected()) {
+            log.info("SolaceSparkConnector - Reusing existing producer session for connection {}", connectionId);
+            return cached;
+        }
+        if (cached != null) {
+            log.info("SolaceSparkConnector - Cached producer session for connection {} is no longer connected (idle timeout or prior failure). Establishing a new one.", connectionId);
+            SolaceConnectionManager.removeConnection(connectionId);
+        }
+
+        int maxRetries = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.PRODUCER_SESSION_CREATE_RETRIES, SolaceSparkStreamingProperties.PRODUCER_SESSION_CREATE_RETRIES_DEFAULT));
+        long backoff = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.PRODUCER_SESSION_CREATE_RETRY_INTERVAL, SolaceSparkStreamingProperties.PRODUCER_SESSION_CREATE_RETRY_INTERVAL_DEFAULT));
+        for (int attempt = 0; ; attempt++) {
+            try {
+                SolaceBroker broker = new SolaceBroker(properties, "producer");
+                SolaceConnectionManager.addConnection(connectionId, broker);
+                return broker;
+            } catch (Exception e) {
+                if (attempt == maxRetries) {
+                    throw e;
+                }
+                log.warn("SolaceSparkConnector - Exception creating producer session for connection {} (attempt {}/{}). Retrying in {} ms",
+                        connectionId, attempt + 1, maxRetries + 1, backoff, e);
+                try {
+                    Thread.sleep(backoff);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new SolacePublishException(ie);
+                }
+                backoff *= 2;
+            }
+        }
     }
 
     private void publishMessages(UnsafeRow projectedRow) {
@@ -101,8 +148,13 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
             this.solaceBroker.publishMessage(this.messageId, this.topic,
                     partitionKey, payload, timestamp, headersMap);
             publishedMessages++;
+            // Marks the session as active so the existing connectIdleTimeoutInMillis/
+            // connectIdleTimeoutCheckInMillis watchdog (already used to bound idle consumer
+            // connections) also bounds idle cached producer connections, instead of leaving one
+            // standing connection per partition open indefinitely for the life of the query.
+            this.solaceBroker.setLastMessageTimestamp(System.currentTimeMillis());
         } catch (Exception e) {
-            this.solaceBroker.close();
+            SolaceConnectionManager.close(connectionId);
             throw new SolacePublishException(e.getCause());
         }
     }
@@ -186,7 +238,10 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
         log.info("SolaceSparkConnector - SolaceDataWriter Closed");
         commitMessages.clear();
         abortedMessages.clear();
-        this.solaceBroker.close();
+        // Deliberately not closing solaceBroker here — the underlying producer session is cached in
+        // SolaceConnectionManager and reused across micro-batches for this partition (see acquireBroker).
+        // It is torn down by SolaceConnectionManager's shutdown hooks on executor exit, by the idle
+        // timeout watchdog (see setLastMessageTimestamp above), or evicted on publish failure.
     }
 
     private UnsafeProjection createProjection() {

@@ -45,6 +45,13 @@ public class SolaceBroker implements Serializable {
     private XMLMessageProducer producer;
     private long lastMessageTimestamp = 0;
     private boolean isShuttingDown = false;
+    private final int lvqPublishRetries;
+    private final long lvqPublishRetryIntervalMillis;
+    private final int queueFullCheckWaitTimeout;
+    private final int queueFullCheckRetries;
+    private final boolean reuseBrowserConnections;
+    private transient Browser lvqBrowser;
+    private transient Browser queueBrowser;
 
     private Queue lvq;
 
@@ -55,6 +62,11 @@ public class SolaceBroker implements Serializable {
         this.lvqName = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_NAME, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_NAME);
         this.lvqTopic = properties.getOrDefault(SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_TOPIC, SolaceSparkStreamingProperties.SOLACE_SPARK_CONNECTOR_LVQ_DEFAULT_TOPIC);
         this.queue = properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE, "");
+        this.lvqPublishRetries = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.LVQ_PUBLISH_RETRIES, SolaceSparkStreamingProperties.LVQ_PUBLISH_RETRIES_DEFAULT));
+        this.lvqPublishRetryIntervalMillis = Long.parseLong(properties.getOrDefault(SolaceSparkStreamingProperties.LVQ_PUBLISH_RETRY_INTERVAL, SolaceSparkStreamingProperties.LVQ_PUBLISH_RETRY_INTERVAL_DEFAULT));
+        this.queueFullCheckWaitTimeout = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_FULL_CHECK_WAIT_TIMEOUT, SolaceSparkStreamingProperties.QUEUE_FULL_CHECK_WAIT_TIMEOUT_DEFAULT));
+        this.queueFullCheckRetries = Integer.parseInt(properties.getOrDefault(SolaceSparkStreamingProperties.QUEUE_FULL_CHECK_RETRIES, SolaceSparkStreamingProperties.QUEUE_FULL_CHECK_RETRIES_DEFAULT));
+        this.reuseBrowserConnections = Boolean.parseBoolean(properties.getOrDefault(SolaceSparkStreamingProperties.REUSE_BROWSER_CONNECTIONS, SolaceSparkStreamingProperties.REUSE_BROWSER_CONNECTIONS_DEFAULT));
         try {
             JCSMPProperties jcsmpProperties = new JCSMPProperties();
             // get api properties
@@ -242,15 +254,14 @@ public class SolaceBroker implements Serializable {
     }
 
     public CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> browseLVQ() {
-        BrowserProperties br_prop = new BrowserProperties();
-        br_prop.setEndpoint(lvq);
-        br_prop.setTransportWindowSize(1);
-        br_prop.setWaitTimeout(1000);
+        Browser myBrowser = null;
         try {
-            Browser myBrowser = session.createBrowser(br_prop);
-            BytesXMLMessage rx_msg = null;
+            myBrowser = reuseBrowserConnections ? getOrCreateLvqBrowser() : newLvqBrowser();
             log.info("SolaceSparkConnector - Browsing checkpoint from LVQ {}", this.lvqName);
-            rx_msg = myBrowser.getNext();
+            // Bounded getNext(timeout) rather than the no-arg getNext() — makes the wait explicit and
+            // independent of whatever internal state the Browser/BrowserProperties are in, instead of
+            // relying on getNext() to correctly thread through BrowserProperties.waitTimeout every time.
+            BytesXMLMessage rx_msg = myBrowser.getNext(1000);
             if (rx_msg != null) {
                 log.info("SolaceSparkConnector - Browsed checkpoint from LVQ {}", this.lvqName);
                 byte[] msgData = new byte[0];
@@ -265,12 +276,50 @@ public class SolaceBroker implements Serializable {
             } else {
                 log.info("SolaceSparkConnector - No checkpoint available in LVQ {}", this.lvqName);
             }
-            myBrowser.close();
             return lastKnownCheckpoint;
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Exception browsing LVQ {}", this.lvqName, e);
+            closeLvqBrowser();
             close();
             throw new RuntimeException(e);
+        } finally {
+            // In non-reuse mode myBrowser is never cached, so it must be torn down after every poll -
+            // otherwise the flow leaks on the broker instead of being provisioned fresh next time.
+            if (!reuseBrowserConnections && myBrowser != null) {
+                try {
+                    myBrowser.close();
+                } catch (Exception e) {
+                    log.warn("SolaceSparkConnector - Exception closing LVQ browser {}", this.lvqName, e);
+                }
+            }
+        }
+    }
+
+    private Browser newLvqBrowser() throws JCSMPException {
+        BrowserProperties br_prop = new BrowserProperties();
+        br_prop.setEndpoint(lvq);
+        br_prop.setTransportWindowSize(1);
+        br_prop.setWaitTimeout(1000);
+        return session.createBrowser(br_prop);
+    }
+
+    private Browser getOrCreateLvqBrowser() throws JCSMPException {
+        // Reused across micro-batches instead of provisioning/tearing down a broker-side flow every
+        // call - only ever invoked sequentially from the driver's offset thread, so no locking needed.
+        if (lvqBrowser == null) {
+            lvqBrowser = newLvqBrowser();
+        }
+        return lvqBrowser;
+    }
+
+    private void closeLvqBrowser() {
+        if (lvqBrowser != null) {
+            try {
+                lvqBrowser.close();
+            } catch (Exception e) {
+                log.warn("SolaceSparkConnector - Exception closing LVQ browser {}", this.lvqName, e);
+            }
+            lvqBrowser = null;
         }
     }
 
@@ -310,38 +359,72 @@ public class SolaceBroker implements Serializable {
 //    }
 
     public boolean isQueueFull() {
+        Browser browser = null;
         try {
-            BrowserProperties br_prop = new BrowserProperties();
-            br_prop.setEndpoint(JCSMPFactory.onlyInstance().createQueue(this.queue));
-            br_prop.setTransportWindowSize(1);
-            br_prop.setWaitTimeout(1000);
-            Browser queueBrowser = session.createBrowser(br_prop);
-            int retryCount = 0;
-            BytesXMLMessage rx_msg = null;
-            do {
-                rx_msg = queueBrowser.getNext();
+            browser = reuseBrowserConnections ? getOrCreateQueueBrowser() : newQueueBrowser();
+            for (int attempt = 1; attempt <= queueFullCheckRetries; attempt++) {
+                // Bounded getNext(timeout) rather than the no-arg getNext() — makes the wait explicit
+                // instead of relying on getNext() to correctly thread through BrowserProperties.waitTimeout.
+                // Independently reproduced root cause of the driver's offset thread hanging for 80+ minutes.
+                BytesXMLMessage rx_msg = browser.getNext(queueFullCheckWaitTimeout);
                 if (rx_msg != null) {
-                    queueBrowser.close();
                     return true;
-                } else {
-                    if(retryCount == 5) {
-                        queueBrowser.close();
-                        return false;
-                    }
                 }
-
-                retryCount++;
-            } while (true);
+            }
+            return false;
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Exception creating monitoring consumer on queue {}", this.queue, e);
+            closeQueueBrowser();
             close();
             handleException("SolaceSparkConnector - Exception creating monitoring consumer on queue " + this.queue, e);
             return false;
+        } finally {
+            // In non-reuse mode browser is never cached, so it must be torn down after every poll -
+            // otherwise the flow leaks on the broker instead of being provisioned fresh next time.
+            if (!reuseBrowserConnections && browser != null) {
+                try {
+                    browser.close();
+                } catch (Exception e) {
+                    log.warn("SolaceSparkConnector - Exception closing queue browser {}", this.queue, e);
+                }
+            }
+        }
+    }
+
+    private Browser newQueueBrowser() throws JCSMPException {
+        BrowserProperties br_prop = new BrowserProperties();
+        br_prop.setEndpoint(JCSMPFactory.onlyInstance().createQueue(this.queue));
+        br_prop.setTransportWindowSize(1);
+        br_prop.setWaitTimeout(queueFullCheckWaitTimeout);
+        return session.createBrowser(br_prop);
+    }
+
+    private Browser getOrCreateQueueBrowser() throws JCSMPException {
+        // Reused across micro-batches instead of provisioning/tearing down a broker-side flow every
+        // call - only ever invoked sequentially from the driver's offset thread, so no locking needed.
+        if (queueBrowser == null) {
+            queueBrowser = newQueueBrowser();
+        }
+        return queueBrowser;
+    }
+
+    private void closeQueueBrowser() {
+        if (queueBrowser != null) {
+            try {
+                queueBrowser.close();
+            } catch (Exception e) {
+                log.warn("SolaceSparkConnector - Exception closing queue browser {}", this.queue, e);
+            }
+            queueBrowser = null;
         }
     }
 
     public void initProducer(JCSMPStreamingPublishCorrelatingEventHandler jcsmpStreamingPublishCorrelatingEventHandler) {
         try {
+            // Close any previously bound producer first — this session/broker may be reused across
+            // micro-batches (see SolaceDataWriter's per-partition broker cache), and each reuse rebinds
+            // a fresh producer + ack-correlation handler scoped to the new writer instance.
+            closeProducer();
             this.producer = this.session.getMessageProducer(jcsmpStreamingPublishCorrelatingEventHandler);
         } catch (JCSMPException e) {
             log.error("SolaceSparkConnector - Error creating publisher to Solace", e);
@@ -374,12 +457,33 @@ public class SolaceBroker implements Serializable {
         xmlMessage.writeBytes(msg.toString().getBytes(StandardCharsets.UTF_8));
         xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
         Destination destination = JCSMPFactory.onlyInstance().createTopic(topic);
-        try {
-            this.producer.send(xmlMessage, destination);
-            log.info("SolaceSparkConnector - Published checkpoint to LVQ topic {}", topic);
-        } catch (JCSMPException e) {
-            log.error("SolaceSparkConnector - Exception publishing lvq message to Solace", e);
-            handleException("SolaceSparkConnector - Exception publishing lvq message to Solace ", e);
+        // A transport-level disconnect (e.g. "Channel is closed by peer") is a routine, recoverable
+        // event over a multi-day session - the JCSMP session already auto-reconnects in the background
+        // per the configured reconnectRetries/reconnectRetryWaitInMillis channel properties. Retry with
+        // backoff here gives that reconnect time to complete instead of failing the query fatally.
+        long backoff = lvqPublishRetryIntervalMillis;
+        for (int attempt = 0; attempt <= lvqPublishRetries; attempt++) {
+            try {
+                this.producer.send(xmlMessage, destination);
+                log.info("SolaceSparkConnector - Published checkpoint to LVQ topic {}", topic);
+                return;
+            } catch (JCSMPException e) {
+                if (attempt == lvqPublishRetries) {
+                    log.error("SolaceSparkConnector - Exception publishing lvq message to Solace after {} attempt(s)", attempt + 1, e);
+                    handleException("SolaceSparkConnector - Exception publishing lvq message to Solace ", e);
+                    return;
+                }
+                log.warn("SolaceSparkConnector - Exception publishing checkpoint to LVQ (attempt {}/{}). Retrying in {} ms to allow session to reconnect",
+                        attempt + 1, lvqPublishRetries + 1, backoff, e);
+                try {
+                    Thread.sleep(backoff);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    handleException("SolaceSparkConnector - Interrupted while retrying LVQ publish", ie);
+                    return;
+                }
+                backoff *= 2;
+            }
         }
     }
 
@@ -459,6 +563,8 @@ public class SolaceBroker implements Serializable {
             shutdownExecutor();
             closeProducer();
             closeReceivers();
+            closeLvqBrowser();
+            closeQueueBrowser();
 
             log.info("Closing Solace Session");
             if(session != null && !session.isClosed()) {

@@ -74,4 +74,28 @@ public class SolaceSparkStreamingProperties {
 //    public static final String DATABRICKS_CLIENT_SECRET_LIFETIME = "DATABRICKS_CLIENT_SECRET_LIFETIME";
 //    public static final String DATABRICKS_ROTATE_CLIENT_SECRET = "DATABRICKS_ROTATE_CLIENT_SECRET";
 //    public static final String DATABRICKS_ROTATE_CLIENT_SECRET_DEFAULT = "false";
+    // Retries + backoff around the LVQ checkpoint publish in SolaceMicroBatch.commit(), so a
+    // transient broker disconnect ("Channel is closed by peer") does not fail the query fatally.
+    public static final String LVQ_PUBLISH_RETRIES = "lvqPublishRetries";
+    public static final String LVQ_PUBLISH_RETRIES_DEFAULT = "3";
+    public static final String LVQ_PUBLISH_RETRY_INTERVAL = "lvqPublishRetryIntervalInMillis";
+    public static final String LVQ_PUBLISH_RETRY_INTERVAL_DEFAULT = "1000";
+    // Retries + backoff when creating/re-creating the producer JCSMP session used by SolaceDataWriter,
+    // so a transient DNS/connect failure doesn't fail the write task immediately.
+    public static final String PRODUCER_SESSION_CREATE_RETRIES = "producerSessionCreateRetries";
+    public static final String PRODUCER_SESSION_CREATE_RETRIES_DEFAULT = "3";
+    public static final String PRODUCER_SESSION_CREATE_RETRY_INTERVAL = "producerSessionCreateRetryIntervalInMillis";
+    public static final String PRODUCER_SESSION_CREATE_RETRY_INTERVAL_DEFAULT = "1000";
+    // Bounded wait/retry used by SolaceBroker.isQueueFull() on each micro-batch's driver-side poll.
+    public static final String QUEUE_FULL_CHECK_WAIT_TIMEOUT = "queueFullCheckWaitTimeoutInMillis";
+    public static final String QUEUE_FULL_CHECK_WAIT_TIMEOUT_DEFAULT = "1000";
+    public static final String QUEUE_FULL_CHECK_RETRIES = "queueFullCheckRetries";
+    public static final String QUEUE_FULL_CHECK_RETRIES_DEFAULT = "5";
+    // Whether the LVQ and queue-full-check Browser flows are held open and reused across micro-batches
+    // (fewer broker-side flow provision/teardown round-trips, at the cost of 2 standing egress flows for
+    // the life of the query) or recreated on every poll (zero standing flows, more broker-side churn).
+    // Operators on a flow-constrained broker tier or running many concurrent queries against the same
+    // broker may prefer to disable reuse.
+    public static final String REUSE_BROWSER_CONNECTIONS = "reuseBrowserConnections";
+    public static final String REUSE_BROWSER_CONNECTIONS_DEFAULT = "false";
 }

@@ -166,6 +166,29 @@ a| Password for the JKS trust store file.
 | 10000
 | Maximum time to wait before submitting available messages to a Spark micro-batch.
 
+| queueFullCheckWaitTimeoutInMillis
+| int
+| positive integer
+| 1000
+| Maximum time to wait, per attempt, when checking whether the queue has messages available before starting a micro-batch.
+
+| queueFullCheckRetries
+| int
+| positive integer
+| 5
+| Number of polling attempts, each bounded by `queueFullCheckWaitTimeoutInMillis`, before concluding the queue is empty and skipping the micro-batch.
+
+| reuseBrowserConnections
+| boolean
+| true or false
+| true
+a| Controls whether the Browser connections used to check LVQ checkpoints and queue depth are held open and reused across micro-batches, or recreated on every check.
+
+* `true` — the two Browser flows are provisioned once and reused for the life of the query. Fewer broker-side flow provision/teardown round-trips, at the cost of 2 standing egress flows per query.
+* `false` — a new Browser is provisioned and torn down on every check. No standing flows between micro-batches, at the cost of additional broker-side provisioning overhead per micro-batch.
+
+Set to `false` if running many concurrent queries against a broker with a constrained egress flow limit (see your Solace service's client profile / service class limits).
+
 | batchSize
 | int
 | any
@@ -227,6 +250,18 @@ NOTE: Enable only when the downstream system has successfully processed data in 
 | valid solace topic
 | empty
 | Topic subscribed by the LVQ on the Solace broker. Each worker node publishes checkpoint information to this topic.
+
+| lvqPublishRetries
+| int
+| 0 or greater
+| 3
+| Number of retry attempts when publishing checkpoint data to the LVQ fails due to a transient connection issue (for example, a broker-side disconnect). 0 means no retries; the connector fails the query immediately on the first failure.
+
+| lvqPublishRetryIntervalInMillis
+| int
+| positive integer
+| 1000
+| Initial wait time in milliseconds before retrying a failed LVQ checkpoint publish. Doubles after each subsequent retry (exponential backoff).
 
 | ignoreCheckpointMessageIdComparisonError
 | boolean

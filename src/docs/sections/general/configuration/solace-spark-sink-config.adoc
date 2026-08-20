@@ -57,6 +57,18 @@
 | 3000
 | How much time in (MS) to wait between each attempt to connect or reconnect to a host. If a connect or reconnect attempt to host is not successful, the API waits for the amount of time set for reconnectRetryWaitInMillis, and then makes another connect or reconnect attempt.
 
+| producerSessionCreateRetries
+| int
+| 0 or greater
+| 3
+| Number of retry attempts if creating the producer session fails due to a transient issue (for example, a DNS resolution failure). The producer session is created once per partition and reused across micro-batches; this property only applies when that session needs to be (re)created. 0 means no retries; the connector fails the write task immediately on the first failure.
+
+| producerSessionCreateRetryIntervalInMillis
+| int
+| positive integer
+| 1000
+| Initial wait time in milliseconds before retrying a failed producer session creation. Doubles after each subsequent retry (exponential backoff).
+
 | solace.apiProperties.<Property>
 | any
 | any
