@@ -20,10 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.solace.Service;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -97,7 +94,7 @@ class SolaceDataWriterSessionReuseIT {
 
         MsgVpnClientsResponse response = sempV2Api.monitor().getMsgVpnClients(
                 solaceTestContainer.getVpn(), 100, null,
-                List.of("clientUsername==" + solaceTestContainer.getUsername(), "clientName==*producer*"),
+                Arrays.asList("clientUsername==" + solaceTestContainer.getUsername(), "clientName==*producer*"),
                 null);
 
         int connectedProducerClients = response.getData() == null ? 0 : response.getData().size();

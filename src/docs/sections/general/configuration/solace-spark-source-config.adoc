@@ -181,7 +181,7 @@ a| Password for the JKS trust store file.
 | reuseBrowserConnections
 | boolean
 | true or false
-| true
+| false
 a| Controls whether the Browser connections used to check LVQ checkpoints and queue depth are held open and reused across micro-batches, or recreated on every check.
 
 * `true` — the two Browser flows are provisioned once and reused for the life of the query. Fewer broker-side flow provision/teardown round-trips, at the cost of 2 standing egress flows per query.
