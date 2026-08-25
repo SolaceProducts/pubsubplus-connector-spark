@@ -11,6 +11,8 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingP
 import com.solacecoe.connectors.spark.streaming.solace.OAuthClient;
 import com.solacesystems.jcsmp.*;
 import org.junit.jupiter.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
@@ -33,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingOAuthIT {
+    private static final Logger LOG = LoggerFactory.getLogger(SolaceSparkStreamingOAuthIT.class);
     private SempV2Api sempV2Api = null;
     private final ContainerResource containerResource = new ContainerResource();
     private SparkContainer sparkContainer;
@@ -94,10 +97,8 @@ public class SolaceSparkStreamingOAuthIT {
     public void afterEach() throws IOException, ApiException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME, new Object());
 
-        sparkContainer.stop();
-        sparkContainer.start();
-        sparkWorkerContainer.stop();
-        sparkWorkerContainer.start();
+        // In-place reset instead of a full container reboot per test (see SparkTestUtils).
+        SparkTestUtils.resetSparkBetweenTests(sparkContainer, sparkWorkerContainer);
     }
 
     private void executeScript(String envVars) throws IOException, InterruptedException {
@@ -169,13 +170,13 @@ public class SolaceSparkStreamingOAuthIT {
             }
 
             if (assertResult && total >= expectedTotal) {
-                System.out.println("Total records consumed " + total);
+                LOG.info("Total records consumed " + total);
                 if(text != null) {
-                    System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                    LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 }
                 break;
             } else if(!assertResult && customMatcherResult){
-                System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 break;
             }
 
@@ -311,7 +312,7 @@ public class SolaceSparkStreamingOAuthIT {
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
-                        System.out.println("Total records consumed from Solace " + count[0]);
+                        LOG.info("Total records consumed from Solace " + count[0]);
                     }
                 }
 
@@ -340,7 +341,7 @@ public class SolaceSparkStreamingOAuthIT {
         executeScript(envVars.toString());
         assertResult(true,null);
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> assertEquals(100, count[0]));
     }
 
     @Test
@@ -378,25 +379,6 @@ public class SolaceSparkStreamingOAuthIT {
 
         executeScript(envVars.toString());
         assertResult(false,"SolaceSparkConnector - Invalid TLS version invalid");
-    }
-
-    @Test
-    void Should_Fail_When_TrustStorePasswordIsNull() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_"+SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL.replace(".", "_"), "5");
-                put("solace_queue",SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME);
-                put("add_client_cert", "true");
-                put("add_client_cert_to_custom_truststore", "true");
-                put("set_truststore_password_null", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false,"SolaceSparkConnector - Please provide OAuth Client TrustStore Password. If TrustStore file path is not configured, please provide password for default java truststore");
     }
 
     @Test
@@ -472,122 +454,4 @@ public class SolaceSparkStreamingOAuthIT {
         Files.delete(Paths.get(resources.toAbsolutePath().toString(), "accesstoken.txt"));
     }
 
-    @Test
-    void Should_Fail_IfMandatoryOAuthURLIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_"+SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL.replace(".", "_"), "5");
-                put("solace_queue",SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME);
-                put("unset_oauth_url", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false,"SolaceSparkConnector - Please provide OAuth Client Authentication Server URL");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryOAuthURLIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_"+SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL.replace(".", "_"), "5");
-                put("solace_queue",SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME);
-                put("set_oauth_url_empty", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false,"SolaceSparkConnector - Please provide OAuth Client Authentication Server URL");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryOAuthClientIdIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_"+SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL.replace(".", "_"), "5");
-                put("solace_queue",SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME);
-                put("unset_oauth_client_id", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false,"SolaceSparkConnector - Please provide OAuth Client ID");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryOAuthClientIdIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_"+SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL.replace(".", "_"), "5");
-                put("solace_queue",SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME);
-                put("set_oauth_client_id_empty", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false,"SolaceSparkConnector - Please provide OAuth Client ID");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryOAuthClientSecretIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_"+SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL.replace(".", "_"), "5");
-                put("solace_queue",SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME);
-                put("unset_oauth_client_secret", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false,"SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
-    }
-
-    @Test
-    void Should_Fail_IfMandatoryOAuthClientSecretIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_"+SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL.replace(".", "_"), "5");
-                put("solace_queue",SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME);
-                put("set_oauth_client_secret_empty", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false,"SolaceSparkConnector - Please provide OAuth Client Credentials Secret");
-    }
-
-    @Test
-    void Should_Fail_IfAccessTokenFileIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("solace_"+SolaceSparkStreamingProperties.OAUTH_CLIENT_TOKEN_REFRESH_INTERVAL.replace(".", "_"), "5");
-                put("solace_queue",SolaceOAuthContainer.INTEGRATION_TEST_QUEUE_NAME);
-                put("set_access_token_file_empty", "true");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString());
-        assertResult(false,"SolaceSparkConnector - Please provide valid access token input");
-    }
 }

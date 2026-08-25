@@ -26,7 +26,7 @@ public class ContainerResource {
         keyCloakContainer.start();
         keyCloakContainer.createHostsFile();
         await().until(() -> keyCloakContainer.isRunning());
-        solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:latest");
+        solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:10.11.1.147");
         solaceOAuthContainer.withCredentials("user", "pass")
                 .withClientCert(MountableFile.forClasspathResource("solace.pem"),
                         MountableFile.forClasspathResource("keycloak.crt"), false)

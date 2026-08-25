@@ -8,6 +8,7 @@ import org.junit.platform.suite.api.Suite;
         SolaceSparkStreamingMessageReplayIT.class,
         SolaceSparkStreamingSinkIT.class,
         SolaceSparkStreamingSourceIT.class,
+        SolaceSparkValidationIT.class,
         SolaceSparkStreamingTLSClientCertificateCNIT.class,
         SolaceSparkStreamingTLSUsernameAndPasswordAuthenticationIT.class,
         SolaceSparkStreamingTLSUsernameAuthenticationIT.class,

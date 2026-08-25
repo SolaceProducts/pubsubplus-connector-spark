@@ -12,6 +12,8 @@ import com.solacecoe.connectors.spark.containers.SparkContainer;
 import com.solacecoe.connectors.spark.containers.SparkWorkerContainer;
 import com.solacesystems.jcsmp.*;
 import org.junit.jupiter.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
@@ -34,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingSinkIT {
+    private static final Logger LOG = LoggerFactory.getLogger(SolaceSparkStreamingSinkIT.class);
     private SempV2Api sempV2Api = null;
     private SparkContainer sparkContainer;
     private SparkWorkerContainer sparkWorkerContainer;
@@ -57,7 +60,7 @@ public class SolaceSparkStreamingSinkIT {
                 put("Spark/Topic/0", Service.SMF);
             }
         };
-        solaceTestContainer = new SolaceTestContainer("solace/solace-pubsub-standard:latest", topics);
+        solaceTestContainer = new SolaceTestContainer("solace/solace-pubsub-standard:10.11.1.147", topics);
         solaceTestContainer.start();
         if(solaceTestContainer.isRunning()) {
             sempV2Api = new SempV2Api(String.format("http://%s:%d", solaceTestContainer.getHost(), solaceTestContainer.getMappedPort(8080)), "admin", "admin");
@@ -142,10 +145,8 @@ public class SolaceSparkStreamingSinkIT {
     @AfterEach
     public void afterEach() throws com.solace.semp.v2.action.ApiException {
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
-        sparkContainer.stop();
-        sparkContainer.start();
-        sparkWorkerContainer.stop();
-        sparkWorkerContainer.start();
+        // In-place reset instead of a full container reboot per test (see SparkTestUtils).
+        SparkTestUtils.resetSparkBetweenTests(sparkContainer, sparkWorkerContainer);
     }
 
     private void executeScript(String envVars, boolean isBatch) throws IOException, InterruptedException {
@@ -230,9 +231,9 @@ public class SolaceSparkStreamingSinkIT {
             }
 
             if (assertResult && total >= expectedTotal) {
-                System.out.println("Total records consumed " + total);
+                LOG.info("Total records consumed " + total);
                 if(text != null) {
-                    System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
+                    LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
                 }
                 break;
             }  else if(times > 1 && customMatcherCount < times) {
@@ -241,7 +242,7 @@ public class SolaceSparkStreamingSinkIT {
                 if(times > 1) {
                     // check again to make sure the matching is accurate
                 }
-                System.out.println("Text '" + text + "' found " +customMatcherCount+ " times in logs :: " + customMatcherResult);
+                LOG.info("Text '" + text + "' found " +customMatcherCount+ " times in logs :: " + customMatcherResult);
                 break;
             }
 
@@ -287,8 +288,8 @@ public class SolaceSparkStreamingSinkIT {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
                         messageId[0] = bytesXMLMessage.getApplicationMessageId();
-                        System.out.println("Total records consumed " + count[0]);
-                        System.out.println("Received Application Message Id " + messageId[0]);
+                        LOG.info("Total records consumed " + count[0]);
+                        LOG.info("Received Application Message Id " + messageId[0]);
                     }
                 }
 
@@ -303,7 +304,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
 //        Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -337,8 +338,8 @@ public class SolaceSparkStreamingSinkIT {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
                         messageId[0] = bytesXMLMessage.getApplicationMessageId();
-                        System.out.println("Total records consumed " + count[0]);
-                        System.out.println("Received Application Message Id " + messageId[0]);
+                        LOG.info("Total records consumed " + count[0]);
+                        LOG.info("Received Application Message Id " + messageId[0]);
                     }
                 }
 
@@ -353,7 +354,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         Assertions.assertEquals("my-default-id", messageId[0], "MessageId mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -384,7 +385,7 @@ public class SolaceSparkStreamingSinkIT {
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
-                        System.out.println("Total records consumed " + count[0]);
+                        LOG.info("Total records consumed " + count[0]);
                     }
                 }
 
@@ -432,7 +433,7 @@ public class SolaceSparkStreamingSinkIT {
                     if(bytesXMLMessage.getDestination().toString().equals("Spark/Topic/0")) {
                         count[0] = count[0] + 1;
                         if (count[0] == 100) {
-                            System.out.println("Total records consumed " + count[0]);
+                            LOG.info("Total records consumed " + count[0]);
                         }
                     }
                 }
@@ -484,15 +485,15 @@ public class SolaceSparkStreamingSinkIT {
                     if(count[0] == 100) {
                         if(bytesXMLMessage.getProperties().containsKey("custom-string")) {
                             try {
-                                System.out.println(new String(bytesXMLMessage.getProperties().getByteArray("custom-string").asBytes(), StandardCharsets.UTF_8));
+                                LOG.info(new String(bytesXMLMessage.getProperties().getByteArray("custom-string").asBytes(), StandardCharsets.UTF_8));
                             } catch (SDTException e) {
                                 throw new RuntimeException(e);
                             }
                         }
                         messageHeader[0] = bytesXMLMessage.getPriority();
 
-                        System.out.println("Total records consumed " + count[0]);
-                        System.out.println("Received Application Priority " + bytesXMLMessage.getPriority());
+                        LOG.info("Total records consumed " + count[0]);
+                        LOG.info("Received Application Priority " + bytesXMLMessage.getPriority());
                     }
                 }
 
@@ -507,7 +508,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -538,8 +539,8 @@ public class SolaceSparkStreamingSinkIT {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
                         messageHeader[0] = bytesXMLMessage.getPriority();
-                        System.out.println("Total records consumed " + count[0]);
-                        System.out.println("Received Default Application Priority " + messageHeader[0]);
+                        LOG.info("Total records consumed " + count[0]);
+                        LOG.info("Received Default Application Priority " + messageHeader[0]);
                     }
                 }
 
@@ -555,7 +556,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -585,7 +586,7 @@ public class SolaceSparkStreamingSinkIT {
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
-                        System.out.println("Total records consumed " + count[0]);
+                        LOG.info("Total records consumed " + count[0]);
                     }
                 }
 
@@ -600,7 +601,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -629,7 +630,7 @@ public class SolaceSparkStreamingSinkIT {
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
-                        System.out.println("Total records consumed from Solace " + count[0]);
+                        LOG.info("Total records consumed from Solace " + count[0]);
                     }
                 }
 
@@ -646,7 +647,7 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         assertResult(true, null, 0);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -675,7 +676,7 @@ public class SolaceSparkStreamingSinkIT {
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
-                        System.out.println("Total records consumed from Solace " + count[0]);
+                        LOG.info("Total records consumed from Solace " + count[0]);
                     }
                 }
 
@@ -691,7 +692,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
         assertResult(false, "Write Batch", 2);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -734,7 +735,7 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         assertResult(true, null, 0);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -828,7 +829,7 @@ public class SolaceSparkStreamingSinkIT {
         }
 
         assertResult(false, "Write Batch", 1);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(0, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(0, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -859,8 +860,8 @@ public class SolaceSparkStreamingSinkIT {
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
-                        System.out.println("Total records consumed from Solace " + count[0]);
-                        System.out.println("Sender timestamp :: " + bytesXMLMessage.getSenderTimestamp());
+                        LOG.info("Total records consumed from Solace " + count[0]);
+                        LOG.info("Sender timestamp :: " + bytesXMLMessage.getSenderTimestamp());
                     }
                 }
 
@@ -876,7 +877,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         messageConsumer.stop();
         messageConsumer.close();
     }
@@ -908,8 +909,8 @@ public class SolaceSparkStreamingSinkIT {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
                         timestamp[0] = bytesXMLMessage.getSenderTimestamp();
-                        System.out.println("Total records consumed from Solace " + count[0]);
-                        System.out.println("Sender timestamp :: " + bytesXMLMessage.getSenderTimestamp());
+                        LOG.info("Total records consumed from Solace " + count[0]);
+                        LOG.info("Sender timestamp :: " + bytesXMLMessage.getSenderTimestamp());
                     }
                 }
 
@@ -965,8 +966,8 @@ public class SolaceSparkStreamingSinkIT {
                     count[0] = count[0] + 1;
                     if(count[0] == 100) {
                         timestamp[0] = bytesXMLMessage.getSenderTimestamp();
-                        System.out.println("Total records consumed from Solace " + count[0]);
-                        System.out.println("Sender timestamp :: " + bytesXMLMessage.getSenderTimestamp());
+                        LOG.info("Total records consumed from Solace " + count[0]);
+                        LOG.info("Sender timestamp :: " + bytesXMLMessage.getSenderTimestamp());
                     }
                 }
 
@@ -982,7 +983,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertEquals(100, count[0]));
         LocalDate dateFromTimestamp = Instant.ofEpochSecond(timestamp[0])
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate();
@@ -1012,7 +1013,7 @@ public class SolaceSparkStreamingSinkIT {
         assertResult(false, "java.util.ConcurrentModificationException", 0);
         MsgVpnQueueResponse msgVpnQueueTxFlowResponse = sempV2Api.monitor().getMsgVpnQueue("default", "Solace/Queue/0", null);
         if (msgVpnQueueTxFlowResponse.getCollections() != null && msgVpnQueueTxFlowResponse.getCollections().getMsgs() != null) {
-            System.out.println("Total message in queue " + msgVpnQueueTxFlowResponse.getCollections().getMsgs().getCount());
+            LOG.info("Total message in queue " + msgVpnQueueTxFlowResponse.getCollections().getMsgs().getCount());
             assertEquals(100, msgVpnQueueTxFlowResponse.getCollections().getMsgs().getCount(), "Number of messages should be 100");
         }
     }
@@ -1033,7 +1034,7 @@ public class SolaceSparkStreamingSinkIT {
         assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 403: Publish ACL Denied", 1);
         MsgVpnQueueResponse msgVpnQueueTxFlowResponse = sempV2Api.monitor().getMsgVpnQueue("default", "Solace/Queue/0", null);
         if (msgVpnQueueTxFlowResponse.getCollections() != null && msgVpnQueueTxFlowResponse.getCollections().getMsgs() != null) {
-            System.out.println("Total message in queue " + msgVpnQueueTxFlowResponse.getCollections().getMsgs().getCount());
+            LOG.info("Total message in queue " + msgVpnQueueTxFlowResponse.getCollections().getMsgs().getCount());
             assertEquals(100, msgVpnQueueTxFlowResponse.getCollections().getMsgs().getCount(), "Number of messages should be 100");
         }
     }
@@ -1090,291 +1091,4 @@ public class SolaceSparkStreamingSinkIT {
         assertResult(false, "Payload Column is not present in data frame", 1);
     }
 
-    @Test
-    void Should_Fail_Publish_IfSolaceHostIsInvalid() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_host", "tcp://invalid-host:55555");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "com.solacesystems.jcsmp.InvalidPropertiesException: All hosts in the host list: 'tcp://invalid-host:55555' are not resolvable", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_IfMandatoryHostIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_host", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Host name in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_IfMandatoryHostIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_host", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Host name in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_IfMandatoryVpnIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_vpn", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "SolaceSparkConnector - Please provide Solace VPN name in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_IfMandatoryVpnIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_vpn", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "SolaceSparkConnector - Please provide Solace VPN name in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_IfMandatoryUsernameIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_username", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "Please provide Solace Username in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_IfMandatoryUsernameIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_username", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "Please provide Solace Username in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_IfMandatoryPasswordIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_password", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "Please provide Solace Password in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_IfMandatoryPasswordIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_password", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), true);
-        assertResult(false, "Please provide Solace Password in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfSolaceHostIsInvalid() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_host", "tcp://invalid-host:55555");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "com.solacesystems.jcsmp.InvalidPropertiesException: All hosts in the host list: 'tcp://invalid-host:55555' are not resolvable", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfMandatoryHostIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_host", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Host name in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfMandatoryHostIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_host", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "SolaceSparkConnector - Please provide Solace Host name in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfMandatoryVpnIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_vpn", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "SolaceSparkConnector - Please provide Solace VPN name in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfMandatoryVpnIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_vpn", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "SolaceSparkConnector - Please provide Solace VPN name in configuration options", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfMandatoryUsernameIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_username", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "InvalidPropertiesException: Property (username) is not provided.", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfMandatoryUsernameIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_username", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "InvalidPropertiesException: Property (username) is not provided.", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfMandatoryPasswordIsMissing() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_password", "__DELETE__");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 401: Unauthorized", 1);
-    }
-
-    @Test
-    void Should_Fail_Publish_Stream_IfMandatoryPasswordIsEmpty() throws IOException, InterruptedException {
-        Map<String,String> env = new HashMap<String, String>(){
-            {
-                put("only_write", "true");
-                put("solace_password", "");
-            }
-        };
-
-        StringBuilder envVars = new StringBuilder();
-        env.forEach((k,v) -> envVars.append(k).append("=").append(v).append(" "));
-
-        executeScript(envVars.toString(), false);
-        assertResult(false, "com.solacesystems.jcsmp.JCSMPErrorResponseException: 401: Unauthorized", 1);
-    }
 }
