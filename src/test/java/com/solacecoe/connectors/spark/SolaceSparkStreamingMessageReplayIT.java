@@ -12,8 +12,6 @@ import com.solacecoe.connectors.spark.containers.SparkWorkerContainer;
 import com.solacesystems.jcsmp.*;
 import com.solacesystems.jcsmp.Queue;
 import org.junit.jupiter.api.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.solace.Service;
@@ -34,7 +32,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SolaceSparkStreamingMessageReplayIT {
-    private static final Logger LOG = LoggerFactory.getLogger(SolaceSparkStreamingMessageReplayIT.class);
     private SempV2Api sempV2Api = null;
     private SparkContainer sparkContainer;
     private SparkWorkerContainer sparkWorkerContainer;
@@ -57,7 +54,7 @@ public class SolaceSparkStreamingMessageReplayIT {
                 put("solace/spark/connector/offset", Service.SMF);
             }
         };
-        solaceTestContainer = new SolaceTestContainer("solace/solace-pubsub-standard:10.11.1.147", topics);
+        solaceTestContainer = new SolaceTestContainer("solace/solace-pubsub-standard:latest", topics);
         solaceTestContainer.start();
 
         if(solaceTestContainer.isRunning()) {
@@ -125,7 +122,10 @@ public class SolaceSparkStreamingMessageReplayIT {
     public void afterEach() throws com.solace.semp.v2.action.ApiException {
         testIndex++;
         sempV2Api.action().doMsgVpnQueueDeleteMsgs("default", "Solace/Queue/0", new Object());
-        SparkTestUtils.resetSparkBetweenTests(sparkContainer, sparkWorkerContainer);
+        sparkContainer.stop();
+        sparkContainer.start();
+        sparkWorkerContainer.stop();
+        sparkWorkerContainer.start();
     }
 
     private void executeScript(String envVars) throws IOException, InterruptedException {
@@ -198,13 +198,13 @@ public class SolaceSparkStreamingMessageReplayIT {
             }
 
             if (assertResult && total >= expectedTotal) {
-                LOG.info("Total records consumed " + total);
+                System.out.println("Total records consumed " + total);
                 if(text != null) {
-                    LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
+                    System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
                 }
                 break;
             } else if(!assertResult && customMatcherResult){
-                LOG.info("Text '" + text + "' found in logs :: " + customMatcherResult);
+                System.out.println("Text '" + text + "' found in logs :: " + customMatcherResult);
                 break;
             }
 
@@ -235,7 +235,7 @@ public class SolaceSparkStreamingMessageReplayIT {
             public void onReceive(BytesXMLMessage bytesXMLMessage) {
                 if(replicationGroupMessageId == null || replicationGroupMessageId.isEmpty()) {
                     replicationGroupMessageId = bytesXMLMessage.getReplicationGroupMessageId().toString();
-                    LOG.info("Rep group id " + replicationGroupMessageId);
+                    System.out.println("Rep group id " + replicationGroupMessageId);
                 }
             }
 

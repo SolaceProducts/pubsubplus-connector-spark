@@ -1,6 +1,5 @@
 target
 .idea
-.flattened-pom.xml
 .DS_Store
 .gradle/*
 build/classes/*

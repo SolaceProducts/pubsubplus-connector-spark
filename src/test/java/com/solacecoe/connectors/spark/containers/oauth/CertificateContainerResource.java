@@ -28,7 +28,7 @@ public class CertificateContainerResource {
         writeKeyStore();
 
         if(!cnAsUsername) {
-            solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:10.11.1.147");
+            solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:latest");
             solaceOAuthContainer.withCredentials("user", "pass")
                     .withClientCert(MountableFile.forClasspathResource("serverCertCombined.pem"),
                             MountableFile.forClasspathResource("MyRootCaCert.pem"), true)
@@ -37,7 +37,7 @@ public class CertificateContainerResource {
                     .withPublishTopic("random/topic", SolaceOAuthContainer.Service.SMF)
                     .withPublishTopic("solace/spark/connector/offset", SolaceOAuthContainer.Service.SMF);
         } else {
-            solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:10.11.1.147");
+            solaceOAuthContainer = new SolaceOAuthContainer("solace/solace-pubsub-standard:latest");
             solaceOAuthContainer.withCredentials("user", "pass")
                     .withClientCert(MountableFile.forClasspathResource("serverCertCombined.pem"),
                             MountableFile.forClasspathResource("MyRootCaCert.pem"), true)

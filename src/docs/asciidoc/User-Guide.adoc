@@ -96,7 +96,7 @@ The connector supports multiple checkpoint storage options depending on the depl
 To enable this, the following must be configured:
 
 * <<spark-runtime-platform, Spark Runtime Platform>> — Set to DATABRICKS to enable Unity Catalog Volume support
-* <<databricks-secret-scope, Secret Scope>> — A https://docs.databricks.com/aws/en/security/secrets/?language=Databricks%C2%A0CLI#create-a-secret-scope[Databricks secret scope] containing the workspace level service principal credentials (<<databricks-host, databricksHost>>, <<databricks-client-id, databricksClientId>>, <<databricks-client-secret, databricksClientSecret>>)
+* <<databricks-secret-scope, Secret Scope>> — A https://docs.databricks.com/aws/en/security/secrets/?language=Databricks%C2%A0CLI#create-a-secret-scope[Databricks secret scope] containing the workspace level service principal credentials (<<databricks-host, databricks_host>>, <<databricks-client-id, databricks_client_id>>, <<databricks-client-secret, databricks_client_secret>>)
 * <<databricks-client-secret-refresh-interval, Client Secret Refresh Interval>> — Controls how frequently the connector fetches updated client secret from the secret scope to handle client secret rotation without requiring a restart
 
 IMPORTANT: Both client secret rotation and the connector's client secret refresh must complete before the secret expires. The refresh interval must be configured to trigger after rotation completes and before the existing secret expires. See the configuration section for detailed guidance on configuring the refresh interval correctly.
