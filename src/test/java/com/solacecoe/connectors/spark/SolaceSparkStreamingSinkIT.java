@@ -784,7 +784,6 @@ public class SolaceSparkStreamingSinkIT {
             assertEquals(3, msgVpnQueueTxFlowResponse.getData().size(), "Number of consumer flows should be 3");
         }
         Awaitility.await().atMost(90, TimeUnit.SECONDS).untilAsserted(() -> Assertions.assertTrue(count[0] >= 100));
-        System.out.println("Total records consumed from Solace " + count[0]);
         messageConsumer.stop();
         messageConsumer.close();
     }
