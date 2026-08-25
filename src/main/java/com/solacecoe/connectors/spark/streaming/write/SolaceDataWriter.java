@@ -184,6 +184,15 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
     @Override
     public WriterCommitMessage commit() {
         checkForException();
+        if (publishedMessages == 0) {
+            // Nothing was published in this micro-batch for this partition (e.g. an idle/empty
+            // partition - entirely normal in streaming). allAcksReceived is only ever completed
+            // from responseReceivedEx(), which fires per actual publish ack; with zero messages
+            // published it would never fire, so waiting on it below would always spuriously time
+            // out after the full ackTimeout for acks that were never going to arrive.
+            log.info("SolaceSparkConnector - No messages published in this batch. Skipping acknowledgement wait.");
+            return new SolaceDataWriterCommitMessage(SolacePublishStatus.SUCCESS, "");
+        }
         long ackTimeout = Long.parseLong(this.properties.getOrDefault(SolaceSparkStreamingProperties.PUBLISH_ACK_TIMEOUT, SolaceSparkStreamingProperties.PUBLISH_ACK_TIMEOUT_DEFAULT));
         boolean failOnTimeout = Boolean.parseBoolean(this.properties.getOrDefault(
                 SolaceSparkStreamingProperties.PUBLISH_ACK_TIMEOUT_FAIL_ON_ERROR,
@@ -202,6 +211,7 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
 
         } catch (TimeoutException e) {
             if (failOnTimeout) {
+                close();
                 // Fail the batch — throws exception and stops processing
                 throw new SolacePublishAckTimeoutException(
                         String.format("SolaceSparkConnector - Timed out after %dms waiting for " +
@@ -214,9 +224,11 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
                         ackTimeout, publishedMessages, this.commitMessages.size());
             }
         } catch (ExecutionException e) {
+            close();
             throw new SolacePublishAckInterruptedException(
                     "SolaceSparkConnector - Error while waiting for acknowledgements", e);
         } catch (InterruptedException e) {
+            close();
             Thread.currentThread().interrupt();
             throw new SolacePublishAckInterruptedException(
                     "SolaceSparkConnector - Interrupted while waiting for acknowledgements", e);

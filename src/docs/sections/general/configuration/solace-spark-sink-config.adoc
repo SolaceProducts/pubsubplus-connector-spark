@@ -69,6 +69,18 @@
 | 1000
 | Initial wait time in milliseconds before retrying a failed producer session creation. Doubles after each subsequent retry (exponential backoff).
 
+| connectIdleTimeoutInMillis[[connect-idle-timeout-in-millis]]
+| int
+| Timeout in Milliseconds
+| 0
+| Time in milliseconds before closing an idle connection to Solace. Useful in long-running clusters where Spark sessions do not terminate gracefully.
+
+| connectIdleTimeoutCheckInMillis[[connect-idle-timeout-check-in-millis]]
+| int
+| Timeout in Milliseconds
+| 0
+| Interval in milliseconds at which to check for idle connections. Connections idle beyond the configured timeout are closed automatically.
+
 | solace.apiProperties.<Property>
 | any
 | any

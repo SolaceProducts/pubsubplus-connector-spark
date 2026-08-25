@@ -718,16 +718,16 @@ public class SolaceBroker implements Serializable {
                 }
 
                 if (lastMessageTimestamp > 0 && (System.currentTimeMillis() - lastMessageTimestamp) > timeout) {
-                    log.info("SolaceSparkConnector - Inactivity timeout for consumer session {}. Last message processed at {}. Closing Session.", this.uniqueName, lastMessageTimestamp);
+                    log.info("SolaceSparkConnector - Inactivity timeout for session {}. Last message processed at {}. Closing Session.", this.uniqueName, lastMessageTimestamp);
                     close();
                 } else if(lastMessageTimestamp == 0){
-                    log.info("SolaceSparkConnector - No messages are processed yet by consumer session {}, skipping idle timeout check.", this.uniqueName);
+                    log.info("SolaceSparkConnector - No messages are processed yet by session {}, skipping idle timeout check.", this.uniqueName);
                 } else {
-                    log.info("SolaceSparkConnector - Last message is processed by consumer session {} at {} and current timestamp is {}", this.uniqueName, this.lastMessageTimestamp, System.currentTimeMillis());
+                    log.info("SolaceSparkConnector - Last message is processed by session {} at {} and current timestamp is {}", this.uniqueName, this.lastMessageTimestamp, System.currentTimeMillis());
                 }
             }, interval, interval, TimeUnit.MILLISECONDS); // initial delay, then interval
         } else {
-            log.info("SolaceSparkConnector - No connection idle timeout is configured. Micro Integration will not check for idle connections.");
+            log.info("SolaceSparkConnector - No connection idle timeout is configured. Idle connections will not be monitored.");
         }
     }
 

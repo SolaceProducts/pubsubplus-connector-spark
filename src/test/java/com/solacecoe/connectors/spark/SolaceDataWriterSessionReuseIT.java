@@ -10,6 +10,7 @@ import com.solace.semp.v2.monitor.client.model.MsgVpnClientsResponse;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.connector.write.DataWriter;
+import org.apache.spark.sql.connector.write.WriterCommitMessage;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import org.apache.spark.unsafe.types.UTF8String;
@@ -23,6 +24,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * DATAGO-149324 Finding 3: SolaceDataWriter previously constructed a brand-new SolaceBroker (a full
@@ -102,5 +105,36 @@ class SolaceDataWriterSessionReuseIT {
                 "Expected exactly 1 underlying producer connection after " + MICRO_BATCHES +
                         " simulated micro-batches for the same partition (session reuse), but found " +
                         connectedProducerClients + " - see DATAGO-149324 Finding 3");
+    }
+
+    /**
+     * commit() waits on a CompletableFuture that is only ever completed from
+     * responseReceivedEx() - which fires once per actual publish ack. When a partition receives no
+     * rows in a given micro-batch (a normal, common occurrence in streaming - e.g. an idle source
+     * partition), publishedMessages stays 0 and that future would never complete, so commit() would
+     * block for the full publishAckTimeout waiting for acknowledgements that were never going to
+     * arrive, then either fail the batch or log a spurious timeout warning every single empty batch.
+     */
+    @Test
+    void commitReturnsImmediatelyForAnEmptyBatch() throws Exception {
+        StructType schema = new StructType(SolaceSparkSchemaProperties.structFields(false));
+        Map<String, String> propertiesWithLongTimeout = new HashMap<>(properties);
+        // Deliberately long, so a passing test proves commit() didn't wait at all - a bug here
+        // would make this test take at least this long, not just eventually still pass.
+        propertiesWithLongTimeout.put(SolaceSparkStreamingProperties.PUBLISH_ACK_TIMEOUT, "8000");
+        SolaceStreamingDataWriterFactory factory = new SolaceStreamingDataWriterFactory(schema, propertiesWithLongTimeout, new CaseInsensitiveStringMap(Collections.emptyMap()));
+
+        // A distinct partitionId, isolated from the other test's cached connection/assertions.
+        DataWriter<InternalRow> writer = factory.createWriter(1, 0, 0);
+        long start = System.currentTimeMillis();
+        WriterCommitMessage result = writer.commit(); // no write() call at all - zero rows this batch
+        long elapsed = System.currentTimeMillis() - start;
+        writer.close();
+
+        assertNotNull(result, "commit() on an empty batch must still return a commit message, not throw");
+        assertTrue(elapsed < 2000,
+                "commit() on an empty batch took " + elapsed + "ms (publishAckTimeout was 8000ms) - " +
+                        "it should return immediately since there is nothing to acknowledge, not block " +
+                        "waiting for an ack that was never going to arrive");
     }
 }
