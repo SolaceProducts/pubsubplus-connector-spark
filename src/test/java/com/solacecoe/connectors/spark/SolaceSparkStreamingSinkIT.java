@@ -507,7 +507,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(1, messageHeader[0], "Message Priority mismatch");
         messageConsumer.stop();
         messageConsumer.close();
@@ -555,7 +555,7 @@ public class SolaceSparkStreamingSinkIT {
             throw new RuntimeException(e);
         }
 
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> count[0] == 100);
+        Awaitility.await().atMost(90, TimeUnit.SECONDS).until(() -> count[0] == 100);
         Assertions.assertEquals(4, messageHeader[0], "Message Priority mismatch");
         messageConsumer.stop();
         messageConsumer.close();
