@@ -76,7 +76,7 @@ jobs:
     name: FOSSA Scan
     needs: [check_admin]
     if: always() && inputs.skip_fossa == false
-    uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@main
+    uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@55aba02b3ed20d1ec61684f19d660425362c2cf4 # main
     with:
       git_ref: ${{ inputs.release_version }}
       use_vault: false
