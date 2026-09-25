@@ -140,7 +140,7 @@ jobs:
 
       - name: Publishing Test Results - PMD
         if: always()
-        uses: jwgmeligmeyling/pmd-github-action@master
+        uses: jwgmeligmeyling/pmd-github-action@1ad8208a5b2f710f350860e730ebe673e58666fa # master
         with:
           path: '**/pmd.xml'
 
@@ -170,7 +170,7 @@ jobs:
 
       - name: Publishing Test Results - SpotBugs
         if: always()
-        uses: jwgmeligmeyling/spotbugs-github-action@master
+        uses: jwgmeligmeyling/spotbugs-github-action@875e3b6fc5b97deadd8ea150948e53c2d40b13be # master
         with:
           path: '**/spotbugsXml.xml'
 
