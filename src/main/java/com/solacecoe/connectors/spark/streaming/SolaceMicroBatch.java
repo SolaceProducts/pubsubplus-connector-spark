@@ -57,7 +57,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
 //    private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> checkpoints;
     private Map<String, String> properties = new HashMap<>();
     private final SolaceBroker solaceBroker;
-    private String lastKnownMessageIds = "";
     private String queueName = "";
     private CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> currentCheckpoint = new CopyOnWriteArrayList<>();
     private final String checkpointLocation;
@@ -173,7 +172,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
         checkException();
         latestOffsetId+=batchSize;
         if(currentCheckpoint != null && !currentCheckpoint.isEmpty()) {
-            currentCheckpoint.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
             return new SolaceSourceOffset(latestOffsetId, currentCheckpoint);
         } else {
             currentCheckpoint = new CopyOnWriteArrayList<>();
@@ -274,7 +272,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
         CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> existingCheckpoints = this.getCheckpoint();
         if(existingCheckpoints != null && !existingCheckpoints.isEmpty()) {
             currentCheckpoint = existingCheckpoints;
-            existingCheckpoints.forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
             log.info("SolaceSparkConnector - Checkpoint available from LVQ {}", new Gson().toJson(existingCheckpoints));
             return new SolaceSourceOffset(lastKnownOffsetId, existingCheckpoints);
         }
@@ -292,7 +289,6 @@ public class SolaceMicroBatch implements MicroBatchStream {
         }
         lastKnownOffsetId = solaceSourceOffset.getOffset();
         currentCheckpoint = solaceSourceOffset.getCheckpoints();
-        solaceSourceOffset.getCheckpoints().forEach(checkpoint -> lastKnownMessageIds = String.join(",", lastKnownMessageIds, checkpoint.getMessageIDs()));
 
         return solaceSourceOffset;
     }

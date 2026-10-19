@@ -53,15 +53,16 @@ In case if you are using Shared compute cluster, make sure your cluster has http
 
 === Handling Idle Connections
 
-The connector provides the ability to terminate idle connections when there is no data available in queue for processing or if spark session is not gracefully terminated.
+The connector provides the ability to terminate idle connections when there is no data available in the queue for processing, when a solace producer has no data to publish, or if the Spark session is not gracefully terminated.
 
 To manage this, it is recommended to configure the following parameters:
 
 . <<connect-idle-timeout-in-millis, Idle Connection Timeout in Milliseconds>>: Specifies the maximum duration a connection can remain idle before being considered for closure.
 . <<connect-idle-timeout-check-in-millis, Idle Connection Timeout Check in Milliseconds>>: Defines the interval at which idle connections are checked.
-The Solace Spark Connector monitors the time since the last processed message. If this duration exceeds the configured idle timeout, the connector closes the idle connection.
 
-NOTE: Both configurations are disabled by default and must be explicitly set to enable this feature. Any pending messages to be acknowledged will be redelivered and the downstream should be idempotent to handle duplicates. The connection will be re-established in case of restart(job or notebook) or if new messages arrive in the queue(job or notebook should be up and running).
+The Solace Spark Connector monitors the time since the last processed or published message. If this duration exceeds the configured idle timeout, the connector closes the idle connection. This applies to both consumer connections (when no messages are available in the queue) and solace producer connections (when there are no messages to publish).
+
+NOTE: Both configurations are disabled by default and must be explicitly set to enable this feature. Any pending unacknowledged messages will be redelivered, so downstream processing should be idempotent to handle duplicates. The connection is re-established on restart (job or notebook), when new messages arrive in the queue for consumption, or when a solace producer has new messages to publish (provided the job or notebook is up and running).
 
 === Checkpointing & Acknowledgement
 
