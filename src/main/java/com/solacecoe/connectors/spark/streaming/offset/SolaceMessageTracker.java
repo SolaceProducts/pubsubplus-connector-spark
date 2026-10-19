@@ -1,14 +1,10 @@
 package com.solacecoe.connectors.spark.streaming.offset;
 
-import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingProperties;
 import com.solacecoe.connectors.spark.streaming.solace.SolaceMessage;
-import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
-import com.solacesystems.jcsmp.SDTException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,7 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class SolaceMessageTracker implements Serializable {
     private static ConcurrentHashMap<String, String> lastBatchId = new ConcurrentHashMap<>();
-    private static final Logger logger = LogManager.getLogger(SolaceMessageTracker.class);
+    private static final Logger logger = LoggerFactory.getLogger(SolaceMessageTracker.class);
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<SolaceMessage>> messages = new ConcurrentHashMap<>();
     private static ConcurrentHashMap<String, String> lastProcessedMessageId = new ConcurrentHashMap<>();
     private static ConcurrentHashMap<String, CopyOnWriteArrayList<String>> processedMessageIds = new ConcurrentHashMap<>();

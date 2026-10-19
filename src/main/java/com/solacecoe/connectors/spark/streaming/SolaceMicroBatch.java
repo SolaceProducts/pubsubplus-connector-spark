@@ -15,8 +15,8 @@ import com.solacecoe.connectors.spark.streaming.properties.SolaceSparkStreamingP
 import com.solacecoe.connectors.spark.streaming.solace.SolaceBroker;
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidPropertyException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.spark.SparkEnv;
 import org.apache.spark.scheduler.ExecutorCacheTaskLocation;
 import org.apache.spark.sql.connector.read.InputPartition;
@@ -26,7 +26,7 @@ import org.apache.spark.sql.connector.read.streaming.Offset;
 import org.apache.spark.storage.BlockManager;
 import org.apache.spark.storage.BlockManagerId;
 import org.apache.spark.storage.BlockManagerMaster;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 import scala.collection.Seq;
 
 import java.io.BufferedReader;
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class SolaceMicroBatch implements MicroBatchStream {
-    private static final Logger log = LogManager.getLogger(SolaceMicroBatch.class);
+    private static final Logger log = LoggerFactory.getLogger(SolaceMicroBatch.class);
     private int lastKnownOffsetId = 0;
     private int latestOffsetId = 0;
     private final Map<String, SolaceInputPartition> inputPartitionsList = new HashMap<>();
@@ -211,7 +211,7 @@ public class SolaceMicroBatch implements MicroBatchStream {
         Seq<BlockManagerId> peersSeq = master.getPeers(bm.blockManagerId());
 
         // Convert Scala Seq to a Java List
-        List<BlockManagerId> peers = JavaConverters.seqAsJavaList(peersSeq);
+        List<BlockManagerId> peers = CollectionConverters.asJava(peersSeq);
 
         List<ExecutorCacheTaskLocation> executorList = new ArrayList<>();
 

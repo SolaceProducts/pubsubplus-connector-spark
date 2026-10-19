@@ -21,7 +21,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 import scala.collection.Seq;
 
 import java.io.IOException;
@@ -192,10 +192,10 @@ public class SolaceDataWriter implements DataWriter<InternalRow> {
     private UnsafeProjection createProjection() {
         List<Attribute> attributeList = new ArrayList<>();
         this.schema.foreach(field -> attributeList.add(DataTypeUtils.toAttribute(field)));
-        Seq<Attribute> attributes = JavaConverters.asScalaIteratorConverter(attributeList.iterator()).asScala().toSeq();
+        Seq<Attribute> attributes = CollectionConverters.asScala(attributeList.iterator()).toSeq();
 
-        return UnsafeProjection.create(JavaConverters.asScalaIteratorConverter(Arrays.stream(getExpressions(attributes)).iterator()).asScala().toSeq(),
-                JavaConverters.asScalaIteratorConverter(attributeList.iterator()).asScala().toSeq()
+        return UnsafeProjection.create(CollectionConverters.asScala(Arrays.stream(getExpressions(attributes)).iterator()).toSeq(),
+                CollectionConverters.asScala(attributeList.iterator()).toSeq()
         );
     }
 

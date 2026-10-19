@@ -10,7 +10,7 @@ import java.time.Duration;
 
 public class SparkWorkerContainer extends GenericContainer<SparkWorkerContainer> {
     public SparkWorkerContainer(boolean copyKeyCloakCerts, boolean copySolaceCerts) {
-        super("apache/spark:3.5.2");
+        super("apache/spark:4.0.0");
         addFixedExposedPort(8087, 8081);
         addEnv("SPARK_MASTER_URL", "spark://spark-master:7077");
         addEnv("SPARK_WORKER_MEMORY", "16G");

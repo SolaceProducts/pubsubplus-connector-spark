@@ -7,8 +7,8 @@ import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceConsumer
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.XMLMessageListener;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 
 public class LVQEventListener implements XMLMessageListener, Serializable {
-    private static final Logger log = LogManager.getLogger(LVQEventListener.class);
+    private static final Logger log = LoggerFactory.getLogger(LVQEventListener.class);
     private transient CopyOnWriteArrayList<SolaceSparkPartitionCheckpoint> lastKnownOffset = new CopyOnWriteArrayList<>();
     private SolaceBroker solaceBroker;
     @Override

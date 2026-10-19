@@ -31,11 +31,42 @@ This guide assumes you are familiar with Spark set up and Spark Structured Strea
 === Prerequisites
 
 * https://solace.com/products/event-broker/[Solace PubSub+ Event Broker]
-* Apache Spark 3.5.2 and Scala 2.12
+* Apache Spark 4.0.0 with Scala 2.13
+* Java 17 or later
 
 === Supported Platforms
 
-The connector is built on the Spark Structured Streaming API and has been tested on Azure Databricks(15.4 LTS (includes Apache Spark 3.5.0, Scala 2.12) with photon acceleration disabled and 16.4 LTS(includes Apache Spark 3.5.2, Scala 2.12)). Since the Databricks runtime is consistent across all supported cloud platforms(AWS & Google Cloud), it is expected to behave similarly in other Databricks environments. Additionally, the connector has been validated on vanilla Apache Spark, ensuring compatibility with any platform that supports standard Spark deployments.
+The connector is built on the Spark Structured Streaming API. The 4.x line targets Apache Spark 4.0.0 (Scala 2.13, Java 17) and has been validated on vanilla Apache Spark, ensuring compatibility with any platform that supports standard Spark deployments.
+
+On Databricks, the target runtime is **Databricks Runtime 17.3 LTS** (Apache Spark 4.0.0, Scala 2.13) — the current LTS runtime for that combination. Since the Databricks runtime is consistent across all supported cloud platforms(AWS & Google Cloud), it is expected to behave similarly across Databricks environments.
+
+CAUTION: Deploy the 4.x connector only on a Databricks runtime that ships Spark 4.0 with Scala 2.13. Earlier runtimes such as 15.4 LTS and 16.4 LTS ship Spark 3.5.x with Scala 2.12 and cannot load a 4.x build.
+
+NOTE: For clusters still running Apache Spark 3.5.x with Scala 2.12, use the 3.x maintenance line of the connector. Spark 4.0.0 dropped Java 8/11 and Scala 2.12 upstream, so a 4.x connector build cannot be loaded by a 3.5.x runtime.
+
+=== Upgrading from 3.x to 4.x
+
+The 4.x release is a platform baseline change. No connector configuration options were added, removed, or renamed, and no read or write behavior changed. What changes is the runtime the connector requires, and one Spark default that affects your pipelines.
+
+[cols="1,2", options="header"]
+|===
+| Change
+| What it means for you
+
+| Java 17 required
+| Spark 4.0.0 dropped JDK 8 and 11 (`SPARK-45315`). The connector is compiled to Java 17 bytecode and will not load on an earlier JVM.
+
+| Scala 2.13 required
+| Spark 4.0.0 dropped Scala 2.12 (`SPARK-45314`). The cluster's Scala version must match the connector's; a Scala 2.12 runtime cannot load this build.
+
+| ANSI SQL mode is enabled by default
+| A Spark 4 default, not a connector change, but it applies to every pipeline that reads from or writes to this connector. Invalid casts, arithmetic overflow, and division by zero now raise errors instead of silently returning `NULL`. If a pipeline relies on the previous lenient behavior, set `spark.sql.ansi.enabled=false`. See https://spark.apache.org/releases/spark-release-4-0-0.html[the Spark 4.0.0 release notes].
+
+| OAuth token-request errors carry more detail
+| The connector now requests `application/json` from the authorization server's token endpoint. When the server returns a response that is not a parseable OAuth error (for example an HTML error page), the connector reports the HTTP status and response body instead of the literal text `null`. Messages for well-formed OAuth error responses are unchanged.
+|===
+
+IMPORTANT: Before installing the 4.x connector, make sure earlier versions are completely removed from the cluster, so that no Scala 2.12 build of the connector remains on the classpath.
 
 === Quick Start common steps
 

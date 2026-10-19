@@ -1,8 +1,8 @@
 package com.solacecoe.connectors.spark.streaming.solace;
 
 import com.solacecoe.connectors.spark.streaming.offset.SolaceMessageTracker;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.spark.util.ShutdownHookManager;
 import scala.runtime.BoxedUnit;
 
@@ -10,7 +10,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SolaceConnectionManager {
-    private static final Logger logger = LogManager.getLogger(SolaceConnectionManager.class);
+    private static final Logger logger = LoggerFactory.getLogger(SolaceConnectionManager.class);
     private static final ConcurrentHashMap<String, SolaceBroker> brokerConnections = new ConcurrentHashMap<>();
 
     static {

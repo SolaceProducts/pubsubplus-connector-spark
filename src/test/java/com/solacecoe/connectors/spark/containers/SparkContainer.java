@@ -15,7 +15,7 @@ import java.util.Optional;
 public class SparkContainer extends GenericContainer<SparkContainer> {
     public static Network network = Network.newNetwork();
     public SparkContainer(boolean copyKeyCloakCerts, boolean copySolaceCerts) throws IOException {
-        super("apache/spark:3.5.2");
+        super("apache/spark:4.0.0");
         addFixedExposedPort(8080, 8080);
         addFixedExposedPort(7077, 7077);
         addFixedExposedPort(4040, 4040);
