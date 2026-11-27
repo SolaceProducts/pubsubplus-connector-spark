@@ -14,7 +14,6 @@ import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceInvalidT
 import com.solacecoe.connectors.spark.streaming.solace.exceptions.SolaceSecurityException;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustManagerDelegate;
 import com.solacecoe.connectors.spark.streaming.solace.utils.SolaceTrustSelfSignedStrategy;
-import org.apache.hadoop.shaded.org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -160,7 +159,8 @@ public class OAuthClient implements Serializable {
 
                 SSLContext sslContext = SSLContext.getInstance(tlsVersion);
                 sslContext.init(null, trustManagers.toArray(new TrustManager[]{}), new SecureRandom());
-                httpRequest.setHostnameVerifier(new NoopHostnameVerifier());
+                // Hostname verification is intentionally disabled when certificate validation is turned off.
+                httpRequest.setHostnameVerifier((hostname, session) -> true);
                 httpRequest.setSSLSocketFactory(sslContext.getSocketFactory());
             }
         } catch (Exception e) {
