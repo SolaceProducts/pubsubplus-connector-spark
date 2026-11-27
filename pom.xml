@@ -421,15 +421,6 @@
                         </execution>
                     </executions>
                 </plugin>
-                <plugin>
-                    <groupId>org.codehaus.mojo</groupId>
-                    <artifactId>flatten-maven-plugin</artifactId>
-                    <version>1.6.0</version>
-                    <configuration>
-                        <flattenMode>bom</flattenMode>
-                        <updatePomFile>true</updatePomFile>
-                    </configuration>
-                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
